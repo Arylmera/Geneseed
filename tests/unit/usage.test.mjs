@@ -397,17 +397,50 @@ test('the global install stands its count down beside a wired project install', 
   } finally { sb.cleanup(); }
 });
 
+// ONE COUNT PER CALL, summed over both ledgers. The same pair of installs, both hooks fired as
+// Claude Code fires them, the project with its own `notebook/`. `/nas` is a skill only the GLOBAL
+// holds (`$CLAUDE_CONFIG_DIR/skills`, the user's own): the global stands down beside the project,
+// so the project's hook must still find it there, or the call is counted by neither. Expected:
+// the global ledger empty, the project ledger one Skill-tool line and one slash line.
+test('beside a project install, every call is counted once, a global-only skill included', () => {
+  const sb = makeSandbox('usage-');
+  try {
+    const global = path.join(sb.path, 'home', '.claude');
+    const proj = path.join(sb.path, 'proj');
+    const projCfg = path.join(proj, '.claude');
+    fs.mkdirSync(path.join(global, 'notebook'), { recursive: true });
+    fs.mkdirSync(path.join(projCfg, 'notebook'), { recursive: true });
+    skillAt(path.join(global, 'skills'), 'nas');
+    const groups = ['context', 'tool-gate', 'activity']
+      .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } }));
+    fs.writeFileSync(path.join(projCfg, '.geneseed-manifest.json'), JSON.stringify({ managed: { settings_hooks: groups } }));
+    fs.writeFileSync(path.join(projCfg, 'settings.json'), JSON.stringify({ hooks: { X: groups.map((g) => g.group) } }));
+    const env = hookEnv({ CLAUDE_PROJECT_DIR: proj, CLAUDE_CONFIG_DIR: global });
+    for (const root of [global, projCfg]) {
+      runHook(['tool-gate', '--root', root], { hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: 'plan' } }, env);
+      runHook(['activity', '--root', root], { hook_event_name: 'UserPromptSubmit', session_id: 's', prompt: '/nas restart' }, env);
+    }
+    assert.deepEqual(lines(path.join(global, USAGE_LEDGER)), [], 'the global stands down');
+    assert.deepEqual(noTs(path.join(projCfg, USAGE_LEDGER)),
+      [{ kind: 'skill', name: 'plan' }, { kind: 'skill', name: 'nas', via: 'slash' }], 'the project counts each call once');
+  } finally { sb.cleanup(); }
+});
+
 // An OpenCode PROJECT install keeps its plugins in `<repo>/.opencode/plugins` and its notebook at
 // `<repo>/notebook`, the dir the console reads (`activeInstalls` -> the root). The plugin used to
 // look only beside plugins/ (`<repo>/.opencode/notebook`), which no emit creates, so a project
 // install counted nothing. And beside it, the GLOBAL plugin loads too (OpenCode dedups npm
 // plugins, not local files): it must stand down, or each call is counted twice. Driven on V1:
-// one skill call and three `command.execute.before` commands — `develop` (a skill in the project's
-// layer) counts as `via: "slash"`, `clear` (no skill) and `a/b` (a path) do not.
+// one skill call and four `command.execute.before` commands — `develop` (a skill in the project's
+// layer) and `nas` (a skill only the global config holds, `$OPENCODE_CONFIG_DIR/skills`, which the
+// project copy must still find since the global stands down) count as `via: "slash"`; `clear`
+// (no skill) and `a/b` (a path) do not.
 test('the OpenCode plugin counts into a project install, and the global copy stands down', async () => {
   const sb = makeSandbox('usage-');
   const saved = process.env.GENESEED_STACK_GLOBAL;
+  const savedCfg = process.env.OPENCODE_CONFIG_DIR;
   delete process.env.GENESEED_STACK_GLOBAL;
+  process.env.OPENCODE_CONFIG_DIR = path.join(sb.path, 'cfg');
   try {
     const repo = path.join(sb.path, 'repo');
     const cfg = path.join(sb.path, 'cfg');
@@ -419,19 +452,21 @@ test('the OpenCode plugin counts into a project install, and the global copy sta
     fs.mkdirSync(path.join(repo, 'notebook'));
     fs.mkdirSync(path.join(cfg, 'notebook'));
     skillAt(path.join(repo, '.opencode', 'skills'), 'develop');
+    skillAt(path.join(cfg, 'skills'), 'nas');
     const load = async (dir) => (await import(pathToFileURL(path.join(dir, 'geneseed-guard.js')).href))
       .default.server({ directory: repo, worktree: repo });
     for (const hooks of [await load(path.join(repo, '.opencode', 'plugins')), await load(path.join(cfg, 'plugins'))]) {
       await hooks['tool.execute.before']({ tool: 'skill' }, { args: { name: 'plan' } });
-      for (const command of ['develop', 'clear', 'a/b']) {
+      for (const command of ['develop', 'nas', 'clear', 'a/b']) {
         await hooks['command.execute.before']({ command, sessionID: 's', arguments: 'secret' });
       }
     }
-    assert.deepEqual(noTs(path.join(repo, USAGE_LEDGER)),
-      [{ kind: 'skill', name: 'plan' }, { kind: 'skill', name: 'develop', via: 'slash' }], 'the project install counts once');
+    assert.deepEqual(noTs(path.join(repo, USAGE_LEDGER)), [{ kind: 'skill', name: 'plan' },
+      { kind: 'skill', name: 'develop', via: 'slash' }, { kind: 'skill', name: 'nas', via: 'slash' }], 'the project install counts once');
     assert.deepEqual(lines(path.join(cfg, USAGE_LEDGER)), [], 'the global copy beside a project guard counts nothing');
   } finally {
     if (saved !== undefined) process.env.GENESEED_STACK_GLOBAL = saved;
+    if (savedCfg === undefined) delete process.env.OPENCODE_CONFIG_DIR; else process.env.OPENCODE_CONFIG_DIR = savedCfg;
     sb.cleanup();
   }
 });

@@ -29,6 +29,21 @@ test('STAND_DOWN_VERBS is exactly the verbs the hooks pass to globalHookStanding
   assert.deepEqual([...verbs].sort(), [...STAND_DOWN_VERBS].sort());
 });
 
+// The usage COUNT stands down on its own, through `usageStandingDown` (js/hosts/hosts.mjs): only
+// the count, never the verb, so these verbs stay out of `STAND_DOWN_VERBS` (`gateRunsInProject`
+// reads that list, and Bob's `tool-gate` still gates beside a project install). The written list
+// is the two verbs that count a call: `tool-gate` (a Skill or subagent call) and `activity` (a
+// typed `/skill`). The arguments may span lines and hold one level of nested call
+// (`hookProjectDir(...)`), so a wrapped call is still seen.
+test('the usage count stands down on exactly tool-gate and activity', () => {
+  const verbs = new Set();
+  for (const f of fs.readdirSync(path.join(ROOT, 'js', 'hosts')).filter((n) => n.endsWith('.mjs'))) {
+    const text = fs.readFileSync(path.join(ROOT, 'js', 'hosts', f), 'utf8');
+    for (const m of text.matchAll(/usageStandingDown\((?:[^'()]|\([^()]*\))*'([a-z-]+)'\)/g)) verbs.add(m[1]);
+  }
+  assert.deepEqual([...verbs].sort(), ['activity', 'tool-gate']);
+});
+
 const ALL_OFF = GATE_SWITCHES.filter((g) => g.flag.startsWith('--no-')).map((g) => g.flag);
 
 /** Every hook command string in `file`'s `hooks` object. */

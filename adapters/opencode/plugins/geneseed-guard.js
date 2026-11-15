@@ -2545,8 +2545,8 @@ async function recordUse(tool, args, here) {
   } catch { /* a counter never fails a tool call */ }
 }
 // A V1 slash command that runs an installed skill: `command.execute.before` names the command,
-// and it counts when `<layer>/skills/<name>/SKILL.md` exists — the plugin's own layer, then the
-// project's `.opencode/skills`. The twin of the hook's `recordSlash` (js/hosts/usage.mjs); a
+// and it counts when `<layer>/skills/<name>/SKILL.md` exists — the plugin's own layer, the host's
+// global config dir, then the project's `.opencode/skills`. The twin of the hook's `recordSlash` (js/hosts/usage.mjs); a
 // command is a name, never its arguments. Not on V2: it has no command hook, and its prompt hook
 // sees the expanded template, with no name to count. A renamed command (`/code-review` runs
 // `geneseed-code-review`) or an alias counts only where a skill of that name exists.
@@ -2555,7 +2555,9 @@ async function recordSlash(command, here) {
     if (process.env.GENESEED_NO_USAGE || typeof command !== "string") return
     const name = command.trim().replace(/^\/+/, "")
     if (/[/\\:]|\.\./.test(name) || !NAME_RE.test(name)) return
-    const layers = [path.dirname(PLUGIN_DIR), ...(here || []).filter(Boolean).map((d) => path.join(d, ".opencode"))]
+    // The host's global config too: beside a project install the global copy stands down, so a
+    // skill only the global holds would otherwise be counted by neither.
+    const layers = [path.dirname(PLUGIN_DIR), hostConfigDir(), ...(here || []).filter(Boolean).map((d) => path.join(d, ".opencode"))]
     if (!layers.some((l) => existsSync(path.join(l, "skills", name, "SKILL.md")))) return
     await appendUse({ kind: "skill", name, via: "slash" }, here)
   } catch { /* a counter never fails a command */ }

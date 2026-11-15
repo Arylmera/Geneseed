@@ -553,8 +553,8 @@ export function activityOn(root) {
  * only a slash prompt loads the counter and `./hosts.mjs`. It stands down where the tool counter
  * does: an excluded folder, a model-CLI child `learn` spawned, a terminal, and beside a live
  * project install of the same host (`globalHookStandingDown` on `activity`, the verb that
- * install's own UserPromptSubmit runs). Skills resolve in the install's `skills/` and in the
- * project's own `<marker>/skills/`. Bob: its UserPromptSubmit payload is read as Claude's
+ * install's own UserPromptSubmit runs). Skills resolve in the install's `skills/`, the host's
+ * global config dir's `skills/`, and the project's own `<marker>/skills/`. Bob: its UserPromptSubmit payload is read as Claude's
  * (`prompt`), unverified on a live Bob. Always 0: on UserPromptSubmit exit 2 erases the prompt.
  */
 const SLASH_PROMPT_RE = /"prompt"\s*:\s*"\s*\//;
@@ -569,9 +569,14 @@ export async function cmdActivity(args) {
     const [{ recordSlash }, hosts] = await Promise.all([import('./usage.mjs'), import('./hosts.mjs')]);
     if (hosts.sovereignBypass(args.root)) return 0;
     const projectDir = hosts.hookProjectDir(payload.cwd);
-    const marker = (hosts.HOSTS.find((h) => h.host === (args.host || 'claude')) || {}).projectMarker;
+    const row = hosts.HOSTS.find((h) => h.host === (args.host || 'claude'));
     const skillDirs = [path.join(args.root, 'skills')];
-    if (marker) skillDirs.push(path.join(projectDir, marker, 'skills'));
+    if (row) {
+      // The host's global skills too: beside a project install the global hook stands down, so a
+      // skill only the global holds (the user's own, say) would otherwise be counted by neither.
+      try { skillDirs.push(path.join(row.configDir(), 'skills')); } catch { /* no resolvable global */ }
+      skillDirs.push(path.join(projectDir, row.projectMarker, 'skills'));
+    }
     recordSlash(args.root, payload, {
       skillDirs,
       standingDown: () => hosts.usageStandingDown(args.root, projectDir, args.host, 'activity'),
