@@ -58,9 +58,9 @@ the design is skipped.
    explicit "looks right" after each; cut anything YAGNI. For a non-design ask, skip
    this step.
 5. **Write the spec.** One file the next session can find — `SPEC.md` beside the work,
-   or the project's own spec home (e.g. `docs/specs/`). In a worktree, or where that home
-   is git-ignored, write it in the main checkout or another tracked home and say where: a
-   spec left in a worktree vanishes with it. The spec holds the goal in one line, the
+   or the project's own spec home (e.g. `docs/specs/`). In a worktree, commit the spec on
+   the worktree's branch; where the spec home is git-ignored, use another tracked home, and
+   say where. The spec holds the goal in one line, the
    confirmed decision ledger, then — when there is a design — the approaches weighed
    (trade-offs, the pick and why) and the design. Then run the builder
    check: read [brainstorm/builder-check.md](brainstorm/builder-check.md) and follow it.
