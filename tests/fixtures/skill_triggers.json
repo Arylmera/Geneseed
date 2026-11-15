@@ -139,5 +139,40 @@
   "plan": [
     { "query": "Before you start this five-step refactor across the auth module, write a plan to a file", "should_trigger": true },
     { "query": "Fix the typo in README line 3", "should_trigger": false }
+  ],
+  "release": [
+    { "query": "Cut release 2.4.0: bump the version, update the changelog and tag it", "should_trigger": true },
+    { "query": "Publish a new patch release of this package", "should_trigger": true },
+    { "query": "We are ready to ship v1.3 to users, do the release", "should_trigger": true },
+    { "query": "The export feature is done and merged, nice work", "should_trigger": false },
+    { "query": "What version is this package at right now, and what was the last tag?", "should_trigger": false }
+  ],
+  "pipeline": [
+    { "query": "Run a pipeline on this task: add rate limiting to the public API", "should_trigger": true },
+    { "query": "Spin up a crew, an analyst then a developer then a tester, to build the CSV export", "should_trigger": true },
+    { "query": "This is a big task that needs a security review, an architect and a developer in turn, use a crew", "should_trigger": true },
+    { "query": "Why is the GitHub Actions deploy pipeline failing on the build step?", "should_trigger": false },
+    { "query": "Fix the lint errors in package a, the doc typos in package b and the flaky test in package c, each independent, side by side", "should_trigger": false }
+  ],
+  "parallel-agents": [
+    { "query": "Three independent jobs: fix the lint errors in api, correct the doc typos, and de-flake the cli test. Fan them out to parallel agents", "should_trigger": true },
+    { "query": "Update the copyright year in each of these eight packages, they don't touch each other, run them side by side with separate agents", "should_trigger": true },
+    { "query": "Research the three candidate libraries at the same time, one agent each, and bring me the results", "should_trigger": true },
+    { "query": "Have an analyst scope this, then a developer implement it, then a tester verify it, each handed the previous one's output", "should_trigger": false },
+    { "query": "Rename the variable tmp to buffer in utils.js", "should_trigger": false }
+  ],
+  "refactor": [
+    { "query": "Extract the validation logic in handleSubmit into its own function, behaviour must not change", "should_trigger": true },
+    { "query": "Rename getUsr to getUser across the codebase", "should_trigger": true },
+    { "query": "utils.js has grown to 900 lines, split it into smaller modules without changing what it does", "should_trigger": true },
+    { "query": "Add a --verbose flag to the CLI that prints each step", "should_trigger": false },
+    { "query": "The app crashes with a TypeError when the config file is empty, fix it", "should_trigger": false }
+  ],
+  "deck": [
+    { "query": "Make me a presentation about our Q3 roadmap", "should_trigger": true },
+    { "query": "I need slides for Friday's talk on our new architecture", "should_trigger": true },
+    { "query": "Build a pitch deck for the migration proposal, about ten slides", "should_trigger": true },
+    { "query": "Create a .pptx file of the quarterly sales report", "should_trigger": false },
+    { "query": "Write a README section that describes the architecture", "should_trigger": false }
   ]
 }
