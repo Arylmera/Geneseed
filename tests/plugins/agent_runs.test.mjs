@@ -98,6 +98,85 @@ test("recordAgentRun: one line per child, none when switched off or with nowhere
   } finally { if (saved === undefined) delete process.env.GENESEED_NO_USAGE; else process.env.GENESEED_NO_USAGE = saved }
 })
 
+/** Run `fn` with `vars` set (undefined deletes one), then put the environment back. */
+async function withEnv(vars, fn) {
+  const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]))
+  for (const [k, v] of Object.entries(vars)) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+  try { return await fn() } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+  }
+}
+const SANDBOX_ENV = (d) => ({ XDG_CONFIG_HOME: path.join(d, "xdg"), OPENCODE_CONFIG_DIR: path.join(d, "cfg"),
+  GENESEED_HARNESS: undefined, GENESEED_NO_USAGE: undefined, GENESEED_STACK_GLOBAL: undefined })
+/** A project install as the emit lays it out: `<d>/repo/.opencode` holds the manifest, agents/ and plugins/, `<d>/repo/notebook` the ledgers. */
+async function projectOf(d) {
+  const repo = path.join(d, "repo")
+  const oc = path.join(repo, ".opencode")
+  await fs.mkdir(path.join(oc, "agents"), { recursive: true })
+  await fs.mkdir(path.join(oc, "plugins"), { recursive: true })
+  await fs.mkdir(path.join(repo, "notebook"))
+  await fs.writeFile(path.join(oc, "agents", "tester.md"), "# project tester\n")
+  await fs.writeFile(path.join(oc, ".geneseed-manifest.json"), JSON.stringify({ owned: ["agents/tester.md"] }))
+  return repo
+}
+
+// WHERE THE RUN AND THE NOTES GO. The emit writes a PROJECT install's bundle, notebook/ included,
+// at the repo root (js/build/bundle.mjs) and its host layer in `<repo>/.opencode`; the console and
+// `catalog agents --scores` read the root's notebook. So the plugin, in `<repo>/.opencode/plugins`,
+// records into `<repo>/notebook`, never `<repo>/.opencode/notebook` (which no emit makes), and the
+// spec hash still comes from `<repo>/.opencode`, where the manifest and agents/ are. A GLOBAL install
+// keeps both beside plugins/: `<cfg>/notebook`, `<cfg>/agents`. The notes root (no shared tier
+// here) is the same notebook.
+test("recordAgentRun and notesRootOf: <repo>/notebook for a project install, <cfg>/notebook for a global one", async () => {
+  const d = makeSandbox("gs-runs-").path
+  await withEnv(SANDBOX_ENV(d), async () => {
+    const repo = await projectOf(d)
+    const cfg = await cfgOf(d)
+    assert.equal(await GeneseedLearn.notesRootOf(path.join(repo, ".opencode", "plugins")), path.join(repo, "notebook"))
+    assert.equal(await GeneseedLearn.notesRootOf(path.join(cfg, "plugins")), path.join(cfg, "notebook"))
+    await recordAgentRun("p1", "tester", MESSAGES, path.join(repo, ".opencode"))
+    await recordAgentRun("g1", "tester", MESSAGES, cfg)
+    assert.deepEqual(await ledger(repo), [
+      `{"ts":"${TODAY()}","agent":"tester","spec":"${hookHash("# project tester\n")}","done":null,"blocks":null,"tools":1,"refused":0,"feedback":1,"report":true}`,
+    ], "the project's run, its spec hashed from .opencode/agents")
+    assert.deepEqual(await ledger(cfg), [
+      `{"ts":"${TODAY()}","agent":"tester","spec":"${hookHash("# tester\n")}","done":null,"blocks":null,"tools":1,"refused":0,"feedback":1,"report":true}`,
+    ], "the global's run")
+    assert.deepEqual(await fs.readdir(path.join(repo, ".opencode")).then((l) => l.sort()), [".geneseed-manifest.json", "agents", "plugins"],
+      "no .opencode/notebook is made")
+    await fs.writeFile(path.join(repo, ".usage-off"), "")
+    await recordAgentRun("p2", "tester", MESSAGES, path.join(repo, ".opencode"))
+    assert.equal((await ledger(repo)).length, 1, "a project's .usage-off is read at the repo root")
+  })
+})
+
+// A GLOBAL AND A PROJECT INSTALL BOTH LOAD (OpenCode loads the global plugins and every project
+// `.opencode/plugins`, deduping npm plugins, not local files), so both learn plugins see the same
+// child end. One records it, the nearest live project's, as for usage.jsonl (`countingCopy`, whose
+// home is geneseed-guard.js): `catalog agents --scores` lists each install, and would show the run
+// twice. Each copy is its own module (its own file), so each has its own PLUGIN_DIR.
+test("recordAgentRun: beside a live project install, the project records the run and the global does not", async () => {
+  const d = makeSandbox("gs-runs-").path
+  await withEnv(SANDBOX_ENV(d), async () => {
+    const repo = await projectOf(d)
+    const cfg = await cfgOf(d)
+    await fs.mkdir(path.join(cfg, "plugins"))
+    const learn = path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js")
+    const guard = path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js")
+    for (const plugins of [path.join(repo, ".opencode", "plugins"), path.join(cfg, "plugins")]) {
+      await fs.copyFile(learn, path.join(plugins, "geneseed-learn.js"))
+      await fs.copyFile(guard, path.join(plugins, "geneseed-guard.js"))
+    }
+    const here = [repo, repo]
+    for (const plugins of [path.join(repo, ".opencode", "plugins"), path.join(cfg, "plugins")]) {
+      const { GeneseedLearn: copy } = await import(pathToFileURL(path.join(plugins, "geneseed-learn.js")).href)
+      await copy.recordAgentRun("c1", "tester", MESSAGES, undefined, here)
+    }
+    assert.equal((await ledger(repo)).length, 1, "the project records the run once")
+    assert.deepEqual(await ledger(cfg), [], "the global copy stands down")
+  })
+})
+
 /** The plugin copied into `<d>/cfg/plugins/`, freshly imported, with its env; `restore` puts it back. */
 async function sandboxPlugin() {
   const d = makeSandbox("gs-runs-").path

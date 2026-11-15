@@ -19,7 +19,7 @@
 //     the developer's personal `.geneseed/ownership.md` holds `Setup: declined <date>`.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
 // (.env edits) are WARNED, not blocked. Every block is recorded in the gate
-// ledger (`<cfg>/notebook/gates.jsonl`) under the hook's rule key (`law-1`, `rigor-5`,
+// ledger (the install's `notebook/gates.jsonl`, `notebookHome`) under the hook's rule key (`law-1`, `rigor-5`,
 // `law-4`, `ops-2`, `process-1`, `wiki`, `ownership`); every skill or subagent call, blocked or not, is
 // counted in the install's `notebook/usage.jsonl` (`usageHome`) when that `notebook/` exists and
 // `.usage-off` does not, and so is a V1 `/skill` command.
@@ -211,13 +211,16 @@ function say(msg, level = "warn") {
 const log = (msg) => say(msg)
 
 // ---- the gate ledger ------------------------------------------------------------
-// The twin of `ledger()` in js/hosts/hooks.mjs: one JSON line per BLOCK into
-// `<cfg>/notebook/gates.jsonl`, the rule and never the content, so `geneseed status` can
-// count what the boundary actually caught on an OpenCode install too. Until this the
-// recommended install was the one with no gate evidence at all. A warning is not recorded
-// (nothing was refused) and neither is `GENESEED_GUARD=warn`. `notebook/` is never created
-// here — an install without one (or a test importing this file) records nothing. Capped
-// at the newest MAX_LEDGER_LINES like the hook's; never throws, never decides.
+// The twin of `ledger()` in js/hosts/hooks.mjs: one JSON line per BLOCK into the install's
+// `notebook/gates.jsonl` (`notebookHome`: `<cfg>/notebook` for a global install,
+// `<repo>/notebook` for a project one), the rule and never the content, so `geneseed status`
+// and the console can count what the boundary actually caught on an OpenCode install too. A
+// warning is not recorded (nothing was refused) and neither is `GENESEED_GUARD=warn`.
+// `notebook/` is never created here — an install without one (or a test importing this file)
+// records nothing. Each loaded copy records its OWN refusals, with no stand-down: a global and a
+// project copy judge a call each from its own carrier AGENT.md (gates, packs, excluded rules), so
+// the copy that can record is not always the copy that refused. Capped at the newest
+// MAX_LEDGER_LINES like the hook's; never throws, never decides.
 const MAX_LEDGER_LINES = 1000
 async function ledger(rule) {
   // `geneseed doctor --probe` blocks on purpose; its blocks are not the user's (the twin of
@@ -226,7 +229,8 @@ async function ledger(rule) {
   try {
     const bases = []
     if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
-    bases.push(path.dirname(PLUGIN_DIR))
+    const own = notebookHome()
+    if (own) bases.push(own)
     for (const base of bases) {
       const dir = path.join(base, "notebook")
       if (!(await isDir(dir))) continue
@@ -2489,7 +2493,7 @@ function argPaths(v, key = "", out = [], depth = 0) {
 
 // Usage counting: the same rules as js/hosts/usage.mjs, inline because a plugin cannot import
 // from the repo (V2 loads every .js in plugins/ as a plugin). One line per skill or subagent
-// call, the day and the name only, under <cfg>/notebook/usage.jsonl. Silent and never throws:
+// call, the day and the name only, under the install's notebook/usage.jsonl. Silent and never throws:
 // a counter must not change, slow or fail a tool call. tests/unit/usage.test.mjs holds this
 // copy and the hook's to one table. `usageOf` is by hand (no Bob shapes here); `NAME_RE` is the
 // hook's line, kept by `node tests/twins.mjs --write`.
@@ -2505,16 +2509,22 @@ function usageOf(tool, args) {
   name = name.trim().replace(/^\/+/, "")
   return NAME_RE.test(name) ? { kind, name } : null
 }
-// WHERE THE LEDGER IS: the install's own `notebook/`. A global install keeps it beside plugins/
+// WHERE EVERY LEDGER IS: the dir that holds the install's own `notebook/` (usage.jsonl,
+// gates.jsonl, agent-runs.jsonl, the agent notes). A global install keeps it beside plugins/
 // (`<cfg>/notebook`); a PROJECT install keeps its plugins in `<repo>/.opencode/plugins` and its
-// notebook at `<repo>/notebook`, the root the console reads (js/web/usage-api.mjs). Only the first
-// was tried once, and a project install counted nothing. null: no notebook, or `.usage-off` there.
-// Sync, because `countingCopy` asks it of other installs' dirs too.
-function usageHome(cfg = path.dirname(PLUGIN_DIR)) {
+// notebook at `<repo>/notebook`, where the bundle writes it (js/build/bundle.mjs) and the console
+// reads it (js/web/api.mjs `activeInstalls` -> the root). Only the first was tried once, and a
+// project install recorded nothing. null: no notebook. Sync and `statSync`-only, because
+// `countingCopy` asks it of other installs' dirs and geneseed-learn.js carries a copy.
+function notebookHome(cfg = path.dirname(PLUGIN_DIR)) {
   const isDirSync = (p) => { try { return statSync(p).isDirectory() } catch { return false } }
-  let home = null
-  if (isDirSync(path.join(cfg, "notebook"))) home = cfg
-  else if (path.basename(cfg) === ".opencode" && isDirSync(path.join(path.dirname(cfg), "notebook"))) home = path.dirname(cfg)
+  if (isDirSync(path.join(cfg, "notebook"))) return cfg
+  if (path.basename(cfg) === ".opencode" && isDirSync(path.join(path.dirname(cfg), "notebook"))) return path.dirname(cfg)
+  return null
+}
+// The notebook home when counting is on there: null with no notebook, or `.usage-off` in it.
+function usageHome(cfg = path.dirname(PLUGIN_DIR)) {
+  const home = notebookHome(cfg)
   return home && !existsSync(path.join(home, ".usage-off")) ? home : null
 }
 // The twin of `globalHookStandingDown` for the counter only. OpenCode loads the global plugins/

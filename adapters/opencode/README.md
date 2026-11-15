@@ -397,7 +397,8 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   `.env` writes. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings. Every **block** appends one line to the install's
   `notebook/gates.jsonl` (rule `law-1` / `law-4` / `process-1` / `wiki` / `ownership`, a timestamp,
-  never the path or command) — the same ledger the Claude-family hooks write, so
+  never the path or command; `<repo>/notebook` for a project install) — the same ledger the
+  Claude-family hooks write, so
   `geneseed status` counts what the boundary caught on every host. Warnings are not
   recorded.
 - **Invisible context injection** (the default). The context plugin delivers via
