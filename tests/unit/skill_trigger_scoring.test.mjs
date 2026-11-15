@@ -44,9 +44,19 @@ test('claude: a clean result with no skill call is a plain miss', () => {
   assert.deepEqual(run(claudeScorer(WANT), lines), { hit: false, other: null });
 });
 
-test('claude: running out of turns (is_error false) is a miss, not an error', () => {
-  const lines = [init, { type: 'result', subtype: 'error_max_turns', is_error: false }];
-  assert.deepEqual(run(claudeScorer(WANT), lines), { hit: false, other: null });
+// Claude Code 2.1.302 flags a --max-turns stop `is_error: true`, but the model ran and did not call
+// the skill: a miss. Every probe case runs with --max-turns, so scoring it as an error would void
+// most no-fire runs.
+test('claude: a max-turns or max-budget result is a miss even though it is flagged is_error', () => {
+  const turns = [init, { type: 'result', subtype: 'error_max_turns', is_error: true, num_turns: 4 }];
+  assert.deepEqual(run(claudeScorer(WANT), turns), { hit: false, other: null });
+  const budget = [init, skillCall('commit'), { type: 'result', subtype: 'error_max_budget_usd', is_error: true }];
+  assert.deepEqual(run(claudeScorer(WANT), budget), { hit: false, other: 'commit' });
+});
+
+test('claude: error_during_execution is an error', () => {
+  assert.deepEqual(run(claudeScorer(WANT), [init, { type: 'result', subtype: 'error_during_execution', is_error: true }]),
+    { error: 'error_during_execution' });
 });
 
 test('claude: a 429 usage-limit result is an error naming the cause, never a miss', () => {
@@ -97,7 +107,7 @@ test('scoreCase: the winning neighbour is reported', () => {
   assert.deepEqual(scoreCase([{ hit: false, other: 'commit' }, miss, miss], false).others, ['commit']);
 });
 
-test('fixture: every case is well formed, and the five routing-sibling skills have positives and near-misses', () => {
+test('fixture: every case is well formed, and the six routing-sibling skills have positives and near-misses', () => {
   const f = JSON.parse(fs.readFileSync(new URL('../fixtures/skill_triggers.json', import.meta.url), 'utf8'));
   for (const [skill, cases] of Object.entries(f)) {
     assert.ok(cases.length > 0, `${skill} has no cases`);
@@ -107,7 +117,7 @@ test('fixture: every case is well formed, and the five routing-sibling skills ha
       assert.deepEqual(Object.keys(c).sort(), ['query', 'should_trigger'], skill);
     }
   }
-  for (const skill of ['release', 'pipeline', 'parallel-agents', 'refactor', 'deck']) {
+  for (const skill of ['release', 'pipeline', 'parallel-agents', 'workflow', 'refactor', 'deck']) {
     const cases = f[skill] ?? [];
     assert.ok(cases.filter((c) => c.should_trigger).length >= 2, `${skill}: fewer than 2 positives`);
     assert.ok(cases.filter((c) => !c.should_trigger).length >= 1, `${skill}: no near-miss negative`);

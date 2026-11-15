@@ -143,7 +143,7 @@
   "release": [
     { "query": "Cut release 2.4.0: bump the version, update the changelog and tag it", "should_trigger": true },
     { "query": "Publish a new patch release of this package", "should_trigger": true },
-    { "query": "We are ready to ship v1.3 to users, do the release", "should_trigger": true },
+    { "query": "Tag and publish 1.3.0 with the changelog and version bump", "should_trigger": true },
     { "query": "The export feature is done and merged, nice work", "should_trigger": false },
     { "query": "What version is this package at right now, and what was the last tag?", "should_trigger": false }
   ],
@@ -157,9 +157,15 @@
   "parallel-agents": [
     { "query": "Three independent jobs: fix the lint errors in api, correct the doc typos, and de-flake the cli test. Fan them out to parallel agents", "should_trigger": true },
     { "query": "Update the copyright year in each of these eight packages, they don't touch each other, run them side by side with separate agents", "should_trigger": true },
-    { "query": "Research the three candidate libraries at the same time, one agent each, and bring me the results", "should_trigger": true },
+    { "query": "Add input validation to the signup, billing and profile handlers; they share no files, so give each its own agent and run them at once", "should_trigger": true },
     { "query": "Have an analyst scope this, then a developer implement it, then a tester verify it, each handed the previous one's output", "should_trigger": false },
     { "query": "Rename the variable tmp to buffer in utils.js", "should_trigger": false }
+  ],
+  "workflow": [
+    { "query": "Write a workflow script that fans the lint check out across all twelve packages and verifies each result in code", "should_trigger": true },
+    { "query": "Use a workflow to run a find stage then a verify stage over every module, the control flow must be exact and repeatable", "should_trigger": true },
+    { "query": "Run these three independent fixes in parallel with separate agents, no script needed", "should_trigger": false },
+    { "query": "Spin up a crew, an analyst then a developer then a tester, to build the CSV export", "should_trigger": false }
   ],
   "refactor": [
     { "query": "Extract the validation logic in handleSubmit into its own function, behaviour must not change", "should_trigger": true },

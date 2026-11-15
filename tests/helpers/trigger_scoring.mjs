@@ -21,7 +21,12 @@ function reasonOf(ev) {
 export function claudeScorer(want) {
   let other = null;
   return (ev) => {
-    if (ev.type === 'result') return ev.is_error ? { error: reasonOf(ev) } : { hit: false, other };
+    // Decide on the SUBTYPE, not the flag: Claude Code 2.1.302 flags a --max-turns stop
+    // (`error_max_turns`) and a budget stop (`error_max_budget_usd`) `is_error: true` too, yet the
+    // run reached the model and simply did not call the skill — a miss. Every case runs with
+    // --max-turns, so counting those as errors would void most no-fire runs. An error is an API
+    // failure (`subtype: "success"`, `is_error: true`, `api_error_status`) or `error_during_execution`.
+    if (ev.type === 'result') return ev.is_error && !/^error_max_/.test(ev.subtype ?? '') ? { error: reasonOf(ev) } : { hit: false, other };
     if (ev.type !== 'assistant') return null;
     for (const b of ev.message?.content ?? []) {
       if (b.type !== 'tool_use' || b.name !== 'Skill') continue;

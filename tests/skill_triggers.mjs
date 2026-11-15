@@ -17,7 +17,7 @@
 // 4), stopped at the first skill call. Not one turn: the bundle's own AGENT.md opens every
 // session by reading `context.json` and `user-rules.md`, and a one-turn budget spends itself on
 // that ritual before any skill can load. The tree is also made to look like the project it would
-// be installed into (a git repo with a `context.json`), or the ritual never ends. A case passes when the skill fired in at least half its runs and was supposed to, or in fewer than
+// be installed into (a git repo with a `context.json`), or the ritual never ends. A case passes when the skill fired in at least half its valid runs and was supposed to, or in fewer than
 // half and was not. The negatives are the half that matters: a description widened until every
 // prompt matches passes every positive.
 //
