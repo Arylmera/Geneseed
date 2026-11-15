@@ -21,7 +21,9 @@ function scratch(t) {
   return { dir: sb.path, lock: path.join(sb.path, 'heavy.lock') };
 }
 
-function wrapped(lock, args, extraEnv = {}) {
+// `onStderr` sees the stderr gathered so far after each chunk: a row reacts to what the wrapper
+// SAYS, never to a timer, because under load node can take longer to start than any timer.
+function wrapped(lock, args, extraEnv = {}, onStderr = () => {}) {
   const env = { ...process.env, GENESEED_HEAVY_LOCK: lock, GENESEED_HEAVY_POLL_MS: '50', ...extraEnv };
   if (!('GENESEED_HEAVY_HELD' in extraEnv)) delete env.GENESEED_HEAVY_HELD;
   return new Promise((resolve) => {
@@ -29,7 +31,7 @@ function wrapped(lock, args, extraEnv = {}) {
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
+    child.stderr.on('data', (d) => { stderr += d; onStderr(stderr); });
     child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
 }
@@ -75,15 +77,18 @@ test('a stale lock is taken over', async (t) => {
 });
 
 // A fresh lock is a live holder: the wrapper names it and waits, and runs once it is gone. The
-// child records when it ran, which must be after the holder released.
+// holder releases only once the wrapper has said it is waiting, and the child records when it
+// ran, which must be after that release.
 test('a fresh foreign lock is waited on, then the run goes ahead', async (t) => {
   const { dir, lock } = scratch(t);
   foreignLock(lock, 0);
   const ran = path.join(dir, 'ran');
   let released = 0;
-  setTimeout(() => { released = Date.now(); fs.rmSync(lock); }, 400);
-  const r = await wrapped(lock, ['--', '-e', `require('fs').writeFileSync(${JSON.stringify(ran)}, String(Date.now()))`]);
-  assert.equal(r.code, 0);
+  const r = await wrapped(lock, ['--', '-e', `require('fs').writeFileSync(${JSON.stringify(ran)}, String(Date.now()))`],
+    {}, (stderr) => {
+      if (released === 0 && stderr.includes('waiting for')) { released = Date.now(); fs.rmSync(lock); }
+    });
+  assert.equal(r.code, 0, r.stderr);
   assert.match(r.stderr, /waiting for pid 4242 in \/elsewhere running "golden"/);
   assert.ok(released > 0 && Number(fs.readFileSync(ran, 'utf8')) >= released, 'ran after the release');
 });
@@ -111,6 +116,29 @@ test('a queue timeout exits 75 and does not run the command', async (t) => {
   assert.match(r.stderr, /QUEUE TIMEOUT — not a test failure/);
   assert.equal(fs.existsSync(ran), false);
   assert.equal(fs.existsSync(lock), true, 'the holder\'s lock is left in place');
+});
+
+// `GENESEED_HEAVY_WAIT_S=0` means no wait: one try, then the timeout, not the 30-minute default.
+test('a zero wait gives up after one try', { timeout: 60_000 }, async (t) => {
+  const { lock } = scratch(t);
+  foreignLock(lock, 0);
+  const started = Date.now();
+  const r = await wrapped(lock, ['--', '-e', 'process.exit(0)'], { GENESEED_HEAVY_WAIT_S: '0' });
+  assert.equal(r.code, 75);
+  assert.ok(Date.now() - started < 60_000, 'returned without waiting');
+});
+
+// A lock that cannot be made is neither a queue nor a red run: exit 71, the real error named.
+// The lock's directory sits under a plain FILE, so creating it fails on every platform.
+test('a lock that cannot be made exits 71 with the real error', async (t) => {
+  const { dir } = scratch(t);
+  fs.writeFileSync(path.join(dir, 'file'), '');
+  const ran = path.join(dir, 'ran');
+  const r = await wrapped(path.join(dir, 'file', 'sub', 'heavy.lock'),
+    ['--', '-e', `require('fs').writeFileSync(${JSON.stringify(ran)}, 'x')`]);
+  assert.equal(r.code, 71);
+  assert.match(r.stderr, /SETUP ERROR — not a test failure: cannot make the lock .*E(NOTDIR|EXIST|NOENT)/);
+  assert.equal(fs.existsSync(ran), false);
 });
 
 // The child's exit code is the wrapper's, its stdout passes through untouched, and it carries
