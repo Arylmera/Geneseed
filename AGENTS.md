@@ -39,7 +39,8 @@ node tests/heavy.mjs suite
 eight-shard `golden.mjs --cli` at once: the PC stopped answering, and a suite went red on load
 timeouts. A second heavy proof now waits its turn and then runs, printing the holder as it waits.
 After 30 minutes (`GENESEED_HEAVY_WAIT_S`) it gives up with exit **75** and `QUEUE TIMEOUT — not a
-test failure`: nothing ran, so nothing is red. Because it may queue, launch a heavy proof with
+test failure`: nothing ran, so nothing is red. A lock it cannot make (an unwritable `~/.cache`)
+exits **71** with `SETUP ERROR — not a test failure`. Because it may queue, launch a heavy proof with
 `run_in_background` (it counts for the done gate once its notification says it finished) or with
 a long timeout. `-- <node args…>` passes any other command through verbatim. CI keeps the raw
 commands below: it runs one job per machine.
