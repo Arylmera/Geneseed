@@ -60,7 +60,7 @@ import { markerLines } from '../lib/managed-block.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, HOSTS, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
-  resolvePath, sovereignBypass,
+  resolvePath, sovereignBypass, usageStandingDown,
 } from './hosts.mjs';
 import {
   currentBranch, gitCommonDirOf, gitRootOf, loopLaunched, mainWorktreeOf, protectedBranches,
@@ -1614,7 +1614,7 @@ function toolGate(args) {
   // Claude/OpenClaude route their `Skill|Agent|Task` matcher here (js/hosts/usage.mjs). Only the
   // COUNT stands down beside a live project install, whose own tool-gate counts the call; the
   // gates below still run once per install, as before.
-  recordUse(args.root, payload, undefined, () => globalHookStandingDown(args.root,
+  recordUse(args.root, payload, undefined, () => usageStandingDown(args.root,
     hookProjectDir(payload && payload.cwd), args.host, 'tool-gate'));
   const ti = (payload && payload.tool_input) || {};
   return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);

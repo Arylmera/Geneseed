@@ -197,6 +197,16 @@ export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
   }
 }
 
+/**
+ * The usage counter's stand-down (js/hosts/usage.mjs): the same test, for the COUNT only. Not a
+ * `globalHookStandingDown` call with a literal verb, so `STAND_DOWN_VERBS`
+ * (js/maintain/profile-scope.mjs) stays the verbs whose whole hook stands down: `tool-gate` still
+ * judges every call on Bob beside a project install, and `activity` still records the turn.
+ */
+export function usageStandingDown(hookRoot, projectDir, host, verb) {
+  return globalHookStandingDown(hookRoot, projectDir, host, verb);
+}
+
 // The marker lives in the shim's FILENAME, not its directory: GENESEED_HOME relocates the dir,
 // and a relocated install's hooks must stay recognisable to `GENESEED_HOOK_SNIFF`. Declared here
 // rather than in ./shim.mjs because `ownHookVerb` below reads it, and shim.mjs imports this module.

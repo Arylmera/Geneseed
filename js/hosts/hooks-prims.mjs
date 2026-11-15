@@ -574,7 +574,7 @@ export async function cmdActivity(args) {
     if (marker) skillDirs.push(path.join(projectDir, marker, 'skills'));
     recordSlash(args.root, payload, {
       skillDirs,
-      standingDown: () => hosts.globalHookStandingDown(args.root, projectDir, args.host, 'activity'),
+      standingDown: () => hosts.usageStandingDown(args.root, projectDir, args.host, 'activity'),
     });
   } catch { /* a counter never fails a prompt */ }
   return 0;

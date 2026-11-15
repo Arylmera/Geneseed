@@ -390,7 +390,9 @@ test("permission.ask: the guard registers no dead permission hook", async () => 
   const hooks = await GeneseedGuard({ directory: tmp })
   assert.equal(hooks["permission.ask"], undefined)
   // `event` and `tool.execute.after` only listen: an "always" on an edit, and the change report.
-  assert.deepEqual(Object.keys(hooks).sort(), ["event", "tool.execute.after", "tool.execute.before"])
+  // `command.execute.before` only counts a `/skill` command (V1 triggers it: the ponytail plugin
+  // switches on it too); it judges nothing.
+  assert.deepEqual(Object.keys(hooks).sort(), ["command.execute.before", "event", "tool.execute.after", "tool.execute.before"])
 })
 
 // ---- protected checks (External Gate) ------------------------------------------
