@@ -40,7 +40,7 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 import { createHash } from "node:crypto"
-import { readdirSync, statSync, writeFileSync as writeLogSync, mkdirSync, readFileSync as readLogSync } from "node:fs"
+import { readdirSync, statSync, existsSync, writeFileSync as writeLogSync, mkdirSync, readFileSync as readLogSync } from "node:fs"
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
 // writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
@@ -122,6 +122,41 @@ function machineDir() {
 async function readsTier(dir) {
   try { if ((await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global")) return true } catch { /* no marker */ }
   return isHostConfigDir(dir)
+}
+// Where the install's notebook is, and which loaded copy records: geneseed-guard.js is their home
+// and carries the reasons (`node tests/twins.mjs --write` keeps these copies).
+function notebookHome(cfg = path.dirname(PLUGIN_DIR)) {
+  const isDirSync = (p) => { try { return statSync(p).isDirectory() } catch { return false } }
+  if (isDirSync(path.join(cfg, "notebook"))) return cfg
+  if (path.basename(cfg) === ".opencode" && isDirSync(path.join(path.dirname(cfg), "notebook"))) return path.dirname(cfg)
+  return null
+}
+function usageHome(cfg = path.dirname(PLUGIN_DIR)) {
+  const home = notebookHome(cfg)
+  return home && !existsSync(path.join(home, ".usage-off")) ? home : null
+}
+function countingCopy(here, live = usageHome) {
+  const [directory, worktree] = here || []
+  if (!directory) return null
+  const start = path.resolve(directory)
+  const top = worktree ? path.resolve(worktree) : start
+  const rel = path.relative(top, start)
+  // Nearest first. `directory` not under `worktree`: test the two and walk nothing.
+  const dirs = [start]
+  if (rel.startsWith("..") || path.isAbsolute(rel)) dirs.push(top)
+  else for (let d = start; norm(d) !== norm(top) && path.dirname(d) !== d;) { d = path.dirname(d); dirs.push(d) }
+  for (const dir of dirs) {
+    const plugins = path.join(dir, ".opencode", "plugins")
+    if (existsSync(path.join(plugins, "geneseed-guard.js")) && live(path.join(dir, ".opencode"))) return norm(plugins)
+  }
+  return null
+}
+function anotherCopyCounts(here, live = usageHome) {
+  if (process.env.GENESEED_STACK_GLOBAL) return false
+  try {
+    const winner = countingCopy(here, live)
+    return winner !== null && winner !== norm(PLUGIN_DIR)
+  } catch { return false /* cannot tell: count */ }
 }
 async function sovereignBypass(cwd) {
   try {
@@ -404,13 +439,15 @@ const FEEDBACK_SECRET_RE =
   /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/
 
 // The notes root this install's agents read (PATH_NOTES as the render spells it): the tier's
-// notes/ for a global install once the shared store exists, else <install>/notebook. The twin of
-// js/hosts/hooks-learn.mjs `notesRootOf`, which reads the same answer off `--memory` after
-// `sharedStoreFor`. Never the repo's: a notes file is the install's, whatever the cwd holds.
+// notes/ for a global install once the shared store exists, else the install's notebook
+// (`notebookHome`: <cfg>/notebook, or <repo>/notebook for a project install, whose plugins sit
+// in <repo>/.opencode). The twin of js/hosts/hooks-learn.mjs `notesRootOf`, which reads the same
+// answer off `--memory` after `sharedStoreFor`. Never the cwd's: a notes file is the install's.
+// With no notebook found, <plugins>/../notebook, as before.
 async function notesRootOf(pluginDir = PLUGIN_DIR) {
   const own = path.resolve(pluginDir, "..")
   if ((await readsTier(own)) && (await isDir(path.join(machineDir(), "memory")))) return path.join(machineDir(), "notes")
-  return path.join(own, "notebook")
+  return path.join(notebookHome(own) ?? own, "notebook")
 }
 
 // The file lock, a twin of js/hosts/spec-feedback.mjs `withLock` (async here): `<file>.lock` made
@@ -600,21 +637,25 @@ async function ownedSpec(cfg, agent) {
 }
 
 // `done` and `blocks` are null here: this host's done gate is geneseed-context.js, whose verdict
-// this plugin cannot read. Off as usage.jsonl is (GENESEED_NO_USAGE, `.usage-off`), and only when
-// <cfg>/notebook exists. Once per child per process: a child idles more than once. Never throws.
+// this plugin cannot read. Into the install's notebook, as usage.jsonl (`usageHome`: <cfg> for a
+// global install, <repo> for a project one) and off as it is (GENESEED_NO_USAGE, `.usage-off`);
+// the spec hash still comes from the plugin's own layer, `cfg` (<repo>/.opencode holds a project
+// install's manifest and agents/). Beside a live project install the global copy sees the child
+// too: one copy records it, the one `countingCopy` names (`here` is [directory, worktree]). Once
+// per child per process: a child idles more than once. Never throws.
 const recordedRuns = new Set()
-async function recordAgentRun(sid, agent, messages, cfg = path.dirname(PLUGIN_DIR)) {
+async function recordAgentRun(sid, agent, messages, cfg = path.dirname(PLUGIN_DIR), here = null) {
   try {
     if (!agent || recordedRuns.has(sid) || process.env.GENESEED_NO_USAGE) return null
-    if (await fs.stat(path.join(cfg, ".usage-off")).then(() => true, () => false)) return null
-    if (!(await isDir(path.join(cfg, "notebook")))) return null
+    const home = usageHome(cfg)
+    if (!home || anotherCopyCounts(here)) return null
     recordedRuns.add(sid)
     const report = finalAssistantText(messages)
     const line = agentRunLine({
       agent, spec: await ownedSpec(cfg, agent), done: null, blocks: null, ...toolCounts(messages),
       feedback: specFeedbackOf(report, FEEDBACK_SECRET_RE).length, report: Boolean(report.trim()),
     })
-    const file = path.join(cfg, "notebook", "agent-runs.jsonl")
+    const file = path.join(home, "notebook", "agent-runs.jsonl")
     return (await withFeedbackLock(file, async () => { await fs.appendFile(file, line); return line })) || null
   } catch { return null }
 }
@@ -945,7 +986,7 @@ export const GeneseedLearn = async (ctx) => {
       if (isChild) {
         messages = await fetchMessages()
         await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
-        await recordAgentRun(sid, agentName, messages)
+        await recordAgentRun(sid, agentName, messages, undefined, [ctx?.directory, ctx?.worktree])
       }
 
       const memDir = await resolveMemoryDir()
@@ -1092,7 +1133,7 @@ async function setupV2(ctx) {
       if (isChild) {
         messages = await ctx.session.context({ sessionID: sid })
         await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
-        await recordAgentRun(sid, agentName, messages)
+        await recordAgentRun(sid, agentName, messages, undefined, [ctx?.location?.directory, ctx?.location?.project?.directory])
       }
 
       const memDir = await resolveMemoryDir()

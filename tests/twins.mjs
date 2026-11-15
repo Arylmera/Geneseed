@@ -41,6 +41,10 @@ const PLUGIN_HELPERS = {
   machineDir: ['context', 'learn'],
   readsTier: ['context', 'learn'],
   storeScan: ['learn'],
+  notebookHome: ['learn'],
+  usageHome: ['learn'],
+  countingCopy: ['learn'],
+  anotherCopyCounts: ['learn'],
 };
 
 /**

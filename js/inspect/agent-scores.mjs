@@ -85,8 +85,9 @@ export function scoreLines(rows) {
 
 /**
  * The folders an install's ledger may sit in: the Claude-style project's marker folder, else the
- * root; for OpenCode also `<root>/.opencode`, where a project install's plugins write (their
- * `<plugins>/..`).
+ * root. For OpenCode also `<root>/.opencode`, a LEGACY read: a project install's learn plugin
+ * wrote there (its `<plugins>/..`) until it learned `notebookHome`, and now writes `<root>/notebook`
+ * like every other ledger. Kept so the runs recorded before that still show.
  */
 function ledgerDirs(host, scope, root) {
   if (scope === 'project' && CLAUDE_STYLE.includes(host)) return [path.join(root, HOSTS.find((h) => h.host === host).projectMarker)];
