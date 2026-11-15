@@ -17,9 +17,16 @@
 // 4), stopped at the first skill call. Not one turn: the bundle's own AGENT.md opens every
 // session by reading `context.json` and `user-rules.md`, and a one-turn budget spends itself on
 // that ritual before any skill can load. The tree is also made to look like the project it would
-// be installed into (a git repo with a `context.json`), or the ritual never ends. A case passes when the skill fired in at least half its runs and was supposed to, or in fewer than
+// be installed into (a git repo with a `context.json`), or the ritual never ends. A case passes when the skill fired in at least half its valid runs and was supposed to, or in fewer than
 // half and was not. The negatives are the half that matters: a description widened until every
 // prompt matches passes every positive.
+//
+// A RUN THAT COULD NOT REACH A MODEL IS NOT A MISS (an HTTP 429 `result` with `is_error`, a
+// timeout, a host that would not start). It would pass every negative and fail every positive, so
+// it leaves the count: the verdict is over the valid runs, a case left with fewer than half its
+// runs valid is INCONCLUSIVE (and fails the probe), and the summary names how many runs errored
+// and why. The scoring is `tests/helpers/trigger_scoring.mjs`, covered by
+// `tests/unit/skill_trigger_scoring.test.mjs`.
 //
 // ONE ADAPTER PER HOST (`HOSTS` below): what to emit, how to strip the hooks, how to launch the
 // session, and which event in its JSON stream counts as "the skill fired". Only hosts that load
@@ -66,6 +73,7 @@ import { parseArgs } from 'node:util';
 
 import { ensureContextStub } from '../js/build/stubs.mjs';
 import { cellEnv, makeSandbox } from './helpers/sandbox.mjs';
+import { claudeScorer, opencodeScorer, scoreCase } from './helpers/trigger_scoring.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TIMEOUT_MS = 240_000;
@@ -156,17 +164,7 @@ const HOSTS = {
       const args = ['-p', query, '--output-format', 'stream-json', '--verbose', '--max-turns', opt.turns,
         '--strict-mcp-config', '--model', opt.model, '--disallowedTools', 'Bash,Write,Edit,WebFetch',
         ...(opt.ambient ? [] : ['--setting-sources', 'project'])];
-      let other = null;
-      return session('claude', args, { cwd: out, env }, (ev) => {
-        if (ev.type === 'result') return { hit: false, other };
-        if (ev.type !== 'assistant') return null;
-        for (const b of ev.message?.content ?? []) {
-          if (b.type !== 'tool_use' || b.name !== 'Skill') continue;
-          if (want.test(b.input?.skill ?? '')) return { hit: true, other: null };
-          other ??= b.input?.skill;
-        }
-        return null;
-      });
+      return session('claude', args, { cwd: out, env }, claudeScorer(want));
     },
   },
 
@@ -207,18 +205,8 @@ const HOSTS = {
       return env;
     },
     fired(query, want, out, env) {
-      let other = null;
-      let steps = 0;
-      return session('opencode', ['run', '--format', 'json', '-m', opt.model, query], { cwd: out, env }, (ev) => {
-        if (ev.type === 'error') return { error: ev.error?.data?.message ?? ev.error?.name ?? 'error event' };
-        if (ev.type === 'step_finish' && ++steps >= Number(opt.turns)) return { hit: false, other };
-        const p = ev.part;
-        if (p?.type !== 'tool' || p.tool !== 'skill') return null;
-        const name = p.state?.input?.name ?? '';
-        if (want.test(name)) return { hit: true, other: null };
-        other ??= name;
-        return null;
-      });
+      return session('opencode', ['run', '--format', 'json', '-m', opt.model, query], { cwd: out, env },
+        opencodeScorer(want, opt.turns));
     },
   },
 };
@@ -269,23 +257,31 @@ try {
   const tasks = cases.flatMap((c) => Array.from({ length: RUNS }, () => () => host.fired(c.query, c.want, out, env)));
   const hits = await pool(tasks, Number(opt.jobs));
 
+  // Errored runs (usage limit, timeout, a host that would not start) leave the count; a case with
+  // too few valid runs left is INCONCLUSIVE and fails the probe — see `scoreCase`.
+  const errorReasons = new Map();
+  let errored = 0;
+  let inconclusive = 0;
   cases.forEach((c, i) => {
     const runs = hits.slice(i * RUNS, (i + 1) * RUNS);
-    const errors = [...new Set(runs.map((r) => r.error).filter(Boolean))];
-    if (errors.length) {
-      failed++;
-      console.log(`ERR  ${c.skill.padEnd(12)} ${c.query}  [${errors.join('; ')}]`);
+    const s = scoreCase(runs, c.should_trigger);
+    for (const e of s.errors) { errored++; errorReasons.set(e, (errorReasons.get(e) ?? 0) + 1); }
+    if (s.status !== 'pass') failed++;
+    // The skill that won instead: "why did it not fire" is usually answered by a neighbour.
+    const won = s.others.length ? `  [instead: ${s.others.join(', ')}]` : '';
+    const err = s.errors.length ? `  [${s.errors.length} errored run(s)]` : '';
+    if (s.status === 'inconclusive') {
+      inconclusive++;
+      console.log(`INCONCLUSIVE ${c.skill.padEnd(12)} ${s.valid}/${RUNS} valid runs ${c.query}${err}`);
       return;
     }
-    const n = runs.filter((r) => r.hit).length;
-    const ok = (n / RUNS >= 0.5) === c.should_trigger;
-    if (!ok) failed++;
-    // The skill that won instead: "why did it not fire" is usually answered by a neighbour.
-    const others = [...new Set(runs.map((r) => r.other).filter(Boolean))];
-    const won = others.length ? `  [instead: ${others.join(', ')}]` : '';
-    console.log(`${ok ? 'PASS' : 'FAIL'} ${c.skill.padEnd(12)} ${n}/${RUNS} want=${String(c.should_trigger).padEnd(5)} ${c.query}${won}`);
+    console.log(`${s.pass ? 'PASS' : 'FAIL'} ${c.skill.padEnd(12)} ${s.hits}/${s.valid} want=${String(c.should_trigger).padEnd(5)} ${c.query}${won}${err}`);
   });
   console.log(`\n${cases.length - failed}/${cases.length} cases pass (${opt.host}, ${opt.model}, ${RUNS} runs, ${opt.footprint}, ${opt.ambient ? 'ambient' : 'isolated'})`);
+  if (errored) {
+    console.log(`${errored}/${cases.length * RUNS} runs errored and were not scored; ${inconclusive} case(s) inconclusive:`);
+    for (const [why, n] of errorReasons) console.log(`  ${n} x ${why}`);
+  }
 } finally {
   sb.cleanup();
 }
