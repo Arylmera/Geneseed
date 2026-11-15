@@ -44,14 +44,17 @@ task that would block it to one background task worker, and keeps answering the 
   A correction, follow-up or verifier finding on a task goes to that task's worker, which
   resumes with its full context: by `SendMessage` on Claude Code (on OpenClaude only in its
   agent-teams mode); on OpenCode by the `subagent` tool with that worker's `sessionID` (V1:
-  `task` with `task_id`). Bob has no resume. Start a new worker only when the old one
-  cannot be resumed — the host has no resume, or its context is spent — and hand it a
-  note: the ask, the diff so far, the findings, what was tried. A new task gets a new
-  worker by default. It may go to an idle worker whose own task is settled (merged or
-  dropped) when it works in the same files or context and that worker's context is still
-  light: the worker starts it on a new branch from the current BASE, and the ledger gets a
-  new line for it. A worker never holds two live tasks; one whose context is heavy, or
-  whose last task touched other code, retires.
+  `task` with `task_id`); the same call without `sessionID` (V1: `task_id`) starts a fresh
+  worker. Bob has no resume. Start a new worker only when the old one cannot be resumed —
+  the host has no resume, or its context is spent — and hand it a note: the ask, the diff
+  so far, the findings, what was tried. A new task gets a new worker by default. It may go
+  to an idle worker whose own task is settled (merged or dropped) when it works in the
+  same files or context and that worker's context is still light: the worker starts it on
+  a new branch from the current BASE, with the full brief of *One worker per task* (BASE,
+  write set, proof commands, the Brief checklist) and its write set checked against every
+  task in flight. Light or heavy is a judgement call, not a number: write the reason (same
+  files, context used) in the task's new ledger line. A worker never holds two live tasks;
+  one whose context is heavy, or whose last task touched other code, retires.
 - **Merge on proof you re-ran.** A worker hands back its branch, its local commits and any
   uncommitted work, with raw test + lint output. The parent re-runs those commands itself —
   a worker's log is the worker's account, not the state — merges the branch into its own,

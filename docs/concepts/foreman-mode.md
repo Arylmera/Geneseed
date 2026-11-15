@@ -48,13 +48,13 @@ The session keeps a ledger in its notebook (`notebook/foreman-ledger.md`), one l
 | Host | How the session resumes a worker |
 | --- | --- |
 | Claude Code | `SendMessage` with the worker's id or name |
-| OpenCode | the `subagent` tool with the worker's `sessionID` (V1: the `task` tool with `task_id`); the TUI shows `↳` on such a call |
+| OpenCode | the `subagent` tool with the worker's `sessionID` (V1: the `task` tool with `task_id`); the TUI shows `↳` on such a call. The same call without `sessionID` (V1: `task_id`) starts a fresh worker |
 | OpenClaude | `SendMessage`, only in its agent-teams mode (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` or `--agent-teams`); otherwise no resume |
 | Bob | no resume: each `spawn_subagent` call starts a fresh subagent |
 
 A new worker starts only when the old one cannot be resumed, and it receives a note of the ask, the diff so far and what was tried.
 
-A new task gets a new worker by default. The session may give it to an idle worker whose own task is already merged or dropped, when the new task works in the same files or context and that worker has used little of its context. The worker then starts the new task on a new branch from the current base, and the ledger gets a new line for it. A worker never holds two live tasks at once. A worker whose context is heavy, or whose last task touched other code, retires.
+A new task gets a new worker by default. The session may give it to an idle worker whose own task is already merged or dropped, when the new task works in the same files or context and that worker has used little of its context. The worker then starts the new task on a new branch from the current BASE. It gets the full brief that any new worker gets (BASE, write set, proof commands, the Brief checklist), and the session checks its write set against every task in flight. Whether a context is light or heavy is a judgement call, not a number: the session writes its reason (same files, context used) in the new task's ledger line. A worker never holds two live tasks at once. A worker whose context is heavy, or whose last task touched other code, retires.
 
 ### Status lines
 
