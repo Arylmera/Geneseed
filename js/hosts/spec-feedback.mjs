@@ -6,6 +6,8 @@
  * read off the main session's final reply on Stop (`turnReply`) and off a sub-agent's report on
  * SubagentStop, into `<notes>/skill-notes/<name>.md` or `skill-notes/_general.md`: the skills'
  * notes stayed empty the same way (73 runs in 30 days, 20 with friction, no note written).
+ * Each line also names its scope: the machine notes (the tier) or this project's
+ * (`<project>/notebook`), `PROJECT_NOTES_DIR` below.
  *
  * WHY A HOOK AND NOT THE CALLER. The include used to tell the caller to write the line down. That
  * is model discipline, and it never happened: the tier's `agent-notes/` stayed empty for weeks
@@ -38,10 +40,14 @@ import { SECRET_RE, splitLines } from './hooks-prims.mjs';
 const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
 const FENCE_RE = /^[ \t]*(?:```|~~~)/;
 // A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
-const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+// `[agent:project]` (or bare `agent:project`) is the agent's own line kept for this repo only. The
+// project scope has no shared file, so `[general:project]` is the agent's own project line too:
+// filed into the machine notes it would reach every repo, which is what its writer ruled out.
+const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(?:\[[ \t]*(?:agent|general)[ \t]*:[ \t]*(project)[ \t]*\]|agent:(project)(?![\w-]))|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 /**
  * A skill's scope, which always names the skill: `[skill:<name>]` for that skill's own notes,
- * `[skill:<name>:general]` (or `, general` / ` general`) for the notes every skill shares. The
+ * `[skill:<name>:general]` (or `, general` / ` general`) for the notes every skill shares, and
+ * `[skill:<name>:project]` for its own notes in this repo only. The
  * name is required because the main session's reply, where a skill's line is read, also relays
  * sub-agents' `[agent]` and `[general]` lines: only a line naming a skill is a skill's. A `|`
  * before `general` is the template's unchosen alternative, as `[agent|general]` is: own notes.
@@ -49,7 +55,7 @@ const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t
  * path) drops the line rather than letting `[skill:…]` fall through into an agent's notes. The
  * brackets may be dropped (`skill:debug — …`), as reports drop them around `agent`.
  */
-const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general|project)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 const SKILL_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 // What opens a skill's tag at all, parsed or not.
 const SKILL_OPENING_RE = /^(?:\[[ \t]*skill\b|skill[ \t]*:)/i;
@@ -69,6 +75,20 @@ export const MAX_NOTE_FILE_CHARS = 8000;
 export const MAX_FEEDBACK_CHARS = 500;
 /** The general file's name. `_` keeps it apart from every agent: an agent name starts with a letter. */
 export const GENERAL_NOTES = '_general.md';
+/**
+ * TWO SCOPES, chosen by the line, never by the install (the owner's ruling, 2026-11-15). A flaw of
+ * the spec is true in every repo: `[agent]`, `[general]`, `[skill:<id>]`, `[skill:<id>:general]` go
+ * to the MACHINE notes, the tier's `notes/`. A fact true only in this repo, `[agent:project]` or
+ * `[skill:<id>:project]`, goes to the PROJECT notes, `<project root>/notebook/`, one folder for every
+ * host. The render names this folder relative to the project root (`{{PATH_PROJECT_NOTES}}`).
+ */
+export const PROJECT_NOTES_DIR = 'notebook';
+/**
+ * What a project notebook this capture CREATES holds first: the notebook's own ignore rule
+ * (src/notebook/gitignore, whose rules a unit test holds equal to these), so a note never reaches
+ * a commit. Never written into a folder that was already there: a repo's own `notebook/` is not ours.
+ */
+export const PROJECT_NOTEBOOK_GITIGNORE = '# Geneseed notes: personal and local, never committed.\n*\n!.gitignore\n';
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 // A bullet in the shape this capture writes: the only kind the caps may drop.
@@ -80,8 +100,9 @@ const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\([a-z][a-z0-9-]*, \d{4
 
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
- * I's pattern: a line that carries a credential is dropped whole, never written to a note. A
- * skill's line also carries `skill: <name>`, its scope `skill` (own notes) or `general`.
+ * I's pattern: a line that carries a credential is dropped whole, never written to a note. An
+ * agent's scope is `agent`, `general` or `project`. A skill's line also carries `skill: <name>`,
+ * its scope `skill` (own notes), `general` or `project`.
  */
 export function specFeedbackOf(text, secret) {
   const found = [];
@@ -104,13 +125,14 @@ export function specFeedbackOf(text, secret) {
       // format), not the reply's own line: the main session discusses the format, an agent's
       // report does not. A whole-line `spec-feedback:` in backticks stays an agent's line.
       if (m[1] === '`') continue;
-      scope = k[3] && k[2] !== '|' ? 'general' : 'skill';
+      scope = k[3] && k[2] !== '|' ? k[3].toLowerCase() : 'skill';
       body = body.slice(k[0].length);
     } else if (SKILL_OPENING_RE.test(body)) {
       continue; // a skill tag that does not parse (`[skill:a:b]`, `[skill:a, b]`) is no agent's line
     } else {
       const s = FEEDBACK_SCOPE_RE.exec(body);
-      if (s && (s[1] || s[2])) scope = (s[1] || s[2]).toLowerCase();
+      if (s && (s[2] || s[3])) scope = 'project';
+      else if (s && (s[1] || s[4])) scope = (s[1] || s[4]).toLowerCase();
       if (s) body = body.slice(s[0].length);
     }
     body = body.replace(/\s+/g, ' ').trim();
@@ -130,9 +152,12 @@ export function specFeedbackOf(text, secret) {
  */
 export function feedbackBullets(items, agent, day) {
   const mine = items.filter((f) => !f.skill);
+  const own = (scope) => mine.filter((f) => f.scope === scope).map((f) => `- [agent] ${f.body} (${agent}, ${day})`);
   return {
-    own: mine.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${agent}, ${day})`),
+    own: own('agent'),
     general: mine.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
+    // The same bullet shape in the project's file: where it sits says its scope.
+    project: own('project'),
   };
 }
 
@@ -145,14 +170,38 @@ export function feedbackBullets(items, agent, day) {
  */
 export function skillBullets(items, day) {
   const own = new Map();
+  const project = new Map();
   const general = [];
   for (const f of items) {
     if (!f.skill) continue;
     if (f.scope === 'general') { general.push(`- [general] ${f.body} (${f.skill}, ${day})`); continue; }
-    if (!own.has(f.skill)) own.set(f.skill, []);
-    own.get(f.skill).push(`- [skill] ${f.body} (${f.skill}, ${day})`);
+    const into = f.scope === 'project' ? project : own;
+    if (!into.has(f.skill)) into.set(f.skill, []);
+    into.get(f.skill).push(`- [skill] ${f.body} (${f.skill}, ${day})`);
   }
-  return { own, general };
+  return { own, general, project };
+}
+
+/**
+ * Every file one report writes, `{ root, sub, name, bullets, cap }` in the order the capture
+ * writes them: `root` is `machine` (the tier's notes) or `project` (`<project>/notebook`). A Stop
+ * passes no agent, so an agent's line there (relayed from a sub-agent) has no target. The one
+ * routing table: the hook and the OpenCode plugin both write what this returns.
+ */
+export function feedbackTargets(items, agent, day) {
+  const targets = [];
+  const put = (root, sub, name, bullets, cap) => { if (bullets.length) targets.push({ root, sub, name, bullets, cap }); };
+  if (agent) {
+    const { own, general, project } = feedbackBullets(items, agent, day);
+    put('machine', 'agent-notes', `${agent}.md`, own, MAX_FEEDBACK_BULLETS);
+    put('machine', 'agent-notes', GENERAL_NOTES, general, MAX_GENERAL_BULLETS);
+    put('project', 'agent-notes', `${agent}.md`, project, MAX_FEEDBACK_BULLETS);
+  }
+  const skills = skillBullets(items, day);
+  for (const [skill, bullets] of skills.own) put('machine', 'skill-notes', `${skill}.md`, bullets, MAX_FEEDBACK_BULLETS);
+  put('machine', 'skill-notes', GENERAL_NOTES, skills.general, MAX_GENERAL_BULLETS);
+  for (const [skill, bullets] of skills.project) put('project', 'skill-notes', `${skill}.md`, bullets, MAX_FEEDBACK_BULLETS);
+  return targets;
 }
 
 /** What a bullet says, for the duplicate check: its date and agent off, spacing and case folded. */
@@ -373,36 +422,61 @@ export function liveSkill(skillsDir, name) {
 }
 
 /**
- * The capture: the feedback lines in `report` into the notes under `notesRoot`. An agent's lines
- * go to `agent-notes/` when `agent` names one (a SubagentStop); a skill's lines go to
- * `skill-notes/` either way, a sub-agent's or the main session's (a Stop passes no agent, so a
- * relayed `[agent]` or `[general]` line there is no note). A skill line is kept only for a
- * `liveSkill` of `skillsDir`, the install's own `skills/`, whose `{{PATH_NOTES}}` is this notes
- * root, so an invented or misspelt name, an alias, or a skill another install serves writes no
- * file nobody reads. Writes nothing when the notes root's parent does not exist (no install or tier
- * there to serve), and returns the files it changed.
+ * The project notebook, made on first use: a folder this call creates gets the notebook's ignore
+ * file at once (`PROJECT_NOTEBOOK_GITIGNORE`); one that was already there is left as it is.
  */
-export function captureSpecFeedback(agent, report, notesRoot, day = today(), skillsDir = null) {
-  if (!notesRoot || !existsSync(path.dirname(notesRoot))) return [];
+function ensureProjectNotebook(root) {
+  if (existsSync(root)) return;
+  mkdirSync(root, { recursive: true });
+  try { writeFileSync(path.join(root, '.gitignore'), PROJECT_NOTEBOOK_GITIGNORE, { flag: 'wx' }); } catch { /* raced: someone made it */ }
+}
+
+/**
+ * The capture: the feedback lines in `report` into the notes `feedbackTargets` names. `roots` is
+ * `{ machine, project }`, each a notes root or null (that scope writes nothing), or one string for
+ * both. An agent's lines are kept when `agent` names one (a SubagentStop); a skill's either way, a
+ * sub-agent's or the main session's (a Stop passes no agent, so a relayed `[agent]` or `[general]`
+ * line there is no note). A skill line is kept only for a `liveSkill` of `skillsDir`, the install's
+ * own `skills/`, so an invented or misspelt name, an alias, or a skill another install serves
+ * writes no file nobody reads. A root whose parent does not exist (no tier, no project there)
+ * writes nothing. Returns the files it changed.
+ */
+export function captureSpecFeedback(agent, report, roots, day = today(), skillsDir = null) {
+  const at = typeof roots === 'string' ? { machine: roots, project: roots } : (roots || {});
+  const usable = (dir) => Boolean(dir) && existsSync(path.dirname(dir));
+  if (!usable(at.machine) && !usable(at.project)) return [];
   const items = specFeedbackOf(report, SECRET_RE)
     .filter((f) => (f.skill ? liveSkill(skillsDir, f.skill) : Boolean(agent)));
   if (!items.length) return [];
   const written = [];
-  const add = (dir, name, bullets, cap) => {
-    if (!bullets.length) return;
+  for (const t of feedbackTargets(items, agent, day)) {
+    const root = at[t.root];
+    if (!usable(root)) continue;
+    if (t.root === 'project' && typeof roots !== 'string') ensureProjectNotebook(root);
+    const dir = path.join(root, t.sub);
     mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, name);
-    if (addTo(file, bullets, cap)) written.push(file);
-  };
-  if (agent) {
-    const dir = path.join(notesRoot, 'agent-notes');
-    const { own, general } = feedbackBullets(items, agent, day);
-    add(dir, `${agent}.md`, own, MAX_FEEDBACK_BULLETS);
-    add(dir, GENERAL_NOTES, general, MAX_GENERAL_BULLETS);
+    const file = path.join(dir, t.name);
+    if (addTo(file, t.bullets, t.cap)) written.push(file);
   }
-  const dir = path.join(notesRoot, 'skill-notes');
-  const skills = skillBullets(items, day);
-  for (const [skill, bullets] of skills.own) add(dir, `${skill}.md`, bullets, MAX_FEEDBACK_BULLETS);
-  add(dir, GENERAL_NOTES, skills.general, MAX_GENERAL_BULLETS);
   return written;
+}
+
+/**
+ * The migration's merge (`js/build/notes-migrate.mjs`): `source`'s lines appended to `target`'s
+ * where `target` does not already say them (`feedbackKey`, so a hook bullet and the same words by
+ * hand are one note). NO cap and no budget: a moved note is never dropped. null when nothing is new.
+ */
+export function mergeNotesText(target, source) {
+  const text = String(target || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+  const lines = text ? text.split('\n') : [];
+  const seen = new Set(lines.filter((l) => l.trim()).map(feedbackKey));
+  const add = [];
+  for (const l of String(source || '').replace(/\r\n?/g, '\n').split('\n')) {
+    if (!l.trim()) continue;
+    const k = feedbackKey(l);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    add.push(l);
+  }
+  return add.length ? `${[...lines, ...add].join('\n')}\n` : null;
 }

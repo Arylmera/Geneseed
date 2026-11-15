@@ -125,15 +125,17 @@ async function projectOf(d) {
 // `catalog agents --scores` read the root's notebook. So the plugin, in `<repo>/.opencode/plugins`,
 // records into `<repo>/notebook`, never `<repo>/.opencode/notebook` (which no emit makes), and the
 // spec hash still comes from `<repo>/.opencode`, where the manifest and agents/ are. A GLOBAL install
-// keeps both beside plugins/: `<cfg>/notebook`, `<cfg>/agents`. The notes root (no shared tier
-// here) is the same notebook.
-test("recordAgentRun and notesRootOf: <repo>/notebook for a project install, <cfg>/notebook for a global one", async () => {
+// keeps both beside plugins/: `<cfg>/notebook`, `<cfg>/agents`. The notes have their own two roots:
+// the machine notes are the tier's for both, and the project notes are `<repo>/notebook` for the
+// project install, and for the global one the session root's git root (none given here: no project).
+test("recordAgentRun and notesRootsOf: <repo>/notebook for a project install, <cfg>/notebook for a global one", async () => {
   const d = makeSandbox("gs-runs-").path
   await withEnv(SANDBOX_ENV(d), async () => {
     const repo = await projectOf(d)
     const cfg = await cfgOf(d)
-    assert.equal(await GeneseedLearn.notesRootOf(path.join(repo, ".opencode", "plugins")), path.join(repo, "notebook"))
-    assert.equal(await GeneseedLearn.notesRootOf(path.join(cfg, "plugins")), path.join(cfg, "notebook"))
+    const tier = path.join(d, "xdg", "geneseed", "notes")
+    assert.deepEqual(await GeneseedLearn.notesRootsOf(path.join(repo, ".opencode", "plugins")), { machine: tier, project: path.join(repo, "notebook") })
+    assert.deepEqual(await GeneseedLearn.notesRootsOf(path.join(cfg, "plugins")), { machine: tier, project: null })
     await recordAgentRun("p1", "tester", MESSAGES, path.join(repo, ".opencode"))
     await recordAgentRun("g1", "tester", MESSAGES, cfg)
     assert.deepEqual(await ledger(repo), [
@@ -183,8 +185,10 @@ async function sandboxPlugin() {
   const plugins = path.join(d, "cfg", "plugins")
   await fs.mkdir(plugins, { recursive: true })
   await fs.mkdir(path.join(d, "memory"))
+  // The install's notebook, as the emit makes it: the ledger is written only where one exists.
+  await fs.mkdir(path.join(d, "cfg", "notebook"))
   await fs.copyFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js"), path.join(plugins, "geneseed-learn.js"))
-  const keys = ["GENESEED_LEARN_DEBOUNCE_MS", "GENESEED_MEMORY", "GENESEED_HARNESS", "XDG_CONFIG_HOME", "OPENCODE_CONFIG_DIR", "GENESEED_NO_USAGE"]
+  const keys =["GENESEED_LEARN_DEBOUNCE_MS", "GENESEED_MEMORY", "GENESEED_HARNESS", "XDG_CONFIG_HOME", "OPENCODE_CONFIG_DIR", "GENESEED_NO_USAGE"]
   const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]))
   Object.assign(process.env, { GENESEED_LEARN_DEBOUNCE_MS: "0", GENESEED_MEMORY: path.join(d, "memory"),
     XDG_CONFIG_HOME: path.join(d, "xdg"), OPENCODE_CONFIG_DIR: path.join(d, "elsewhere") })
@@ -201,7 +205,7 @@ const waitText = async (file) => {
 }
 
 // Through each plugin API, as OpenCode runs it: a named child's end writes its line into the
-// plugin's own <cfg>/notebook (here created by the spec-feedback capture just before it).
+// plugin's own <cfg>/notebook.
 test("V1: a named child session's idle writes one ledger line", async () => {
   const { mod, restore, file } = await sandboxPlugin()
   try {

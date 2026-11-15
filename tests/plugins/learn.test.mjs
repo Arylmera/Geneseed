@@ -221,7 +221,10 @@ async function sandboxPlugin() {
   const { pathToFileURL } = await import("node:url")
   const mod = (await import(pathToFileURL(path.join(plugins, "geneseed-learn.js")).href)).default
   const restore = () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v } }
-  return { d, mod, restore, note: path.join(d, "cfg", "notebook", "agent-notes", "tester.md") }
+  // The machine folder, as any emit leaves it: a machine line goes to its notes/, whatever the install.
+  await fs.mkdir(path.join(d, "xdg", "geneseed"), { recursive: true })
+  const tier = path.join(d, "xdg", "geneseed", "notes")
+  return { d, mod, restore, tier, note: path.join(tier, "agent-notes", "tester.md") }
 }
 const waitFor = async (p) => { for (let i = 0; i < 200; i += 1) { try { return await fs.readFile(p, "utf8") } catch { await new Promise((r) => setTimeout(r, 25)) } } return null }
 // The folder once no lock or temp file is left, polled up to 5 s; the listing as it stands after that.
@@ -235,7 +238,7 @@ const settled = async (dir) => {
 }
 const REPORT = "done\nspec-feedback: [agent] say which runner the brief expects — seen: a refusal"
 
-test("spec-feedback: V1 captures a named child session's report into <install>/notebook", async () => {
+test("spec-feedback: V1 captures a named child session's report into the machine notes", async () => {
   const { mod, restore, note } = await sandboxPlugin()
   try {
     const client = { session: {
@@ -338,7 +341,7 @@ const SKILL_GENERAL = /^- \[general\] say the runner — seen: a wrong one \(deb
 async function withSkills(sb, name = "debug", notesOf = name) {
   await fs.mkdir(path.join(sb.d, "cfg", "skills", name), { recursive: true })
   await fs.writeFile(path.join(sb.d, "cfg", "skills", name, "SKILL.md"), `Read \`notebook/skill-notes/${notesOf}.md\` first.\n`)
-  return path.join(sb.d, "cfg", "notebook", "skill-notes")
+  return path.join(sb.tier, "skill-notes")
 }
 
 // One message per turn, not the session: the newest assistant message `message.updated` named is
@@ -465,6 +468,106 @@ test("skill feedback: a child session's [skill:…] line goes to skill-notes, no
     assert.deepEqual(got.map((f) => path.relative(notes, f).replaceAll("\\", "/")),
       ["agent-notes/tester.md", "skill-notes/debug.md", "skill-notes/_general.md"])
     assert.equal(await fs.readFile(path.join(notes, "agent-notes", "tester.md"), "utf8"), "- [agent] relayed — seen: y (tester, 2026-11-14)\n")
+  } finally { sb.restore() }
+})
+
+// ---- the two scopes (twin of js/hosts/hooks-learn.mjs `notesRootsOf`) ----------------------------
+// Machine lines to the tier's notes for every install; project lines to `<project>/notebook`, where
+// the project is a project install's parent (`<repo>/.opencode/plugins` → `<repo>`) and a global
+// install's session root's git root. A notebook the capture creates gets its ignore file.
+const SCOPES_REPORT = "STATUS: OK\nspec-feedback: [agent] name the base — seen: drift\n"
+  + "spec-feedback: [agent:project] this repo needs --jobs 2 — seen: a timeout\n"
+  + "spec-feedback: [skill:debug:project] this repo pins node 20 — seen: a wrong runtime"
+const PROJECT_AGENT = /^- \[agent\] this repo needs --jobs 2 — seen: a timeout \(tester, \d{4}-\d{2}-\d{2}\)\n$/
+const PROJECT_SKILL = /^- \[skill\] this repo pins node 20 — seen: a wrong runtime \(debug, \d{4}-\d{2}-\d{2}\)\n$/
+
+/** A copy of the plugin in `pluginsDir`, imported fresh (its PLUGIN_DIR is that folder). */
+async function copyAt(pluginsDir, tag) {
+  await fs.mkdir(pluginsDir, { recursive: true })
+  await fs.copyFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js"), path.join(pluginsDir, "geneseed-learn.js"))
+  const { pathToFileURL } = await import("node:url")
+  return (await import(`${pathToFileURL(path.join(pluginsDir, "geneseed-learn.js")).href}?${tag}`)).default.server
+}
+
+test("two scopes: V1 and V2 child sessions send each line to its scope, for a project and a global install", async () => {
+  const sb = await sandboxPlugin()
+  try {
+    const specSkill = "debug"
+    const repo = path.join(sb.d, "repo")
+    await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+    const project = await copyAt(path.join(repo, ".opencode", "plugins"), "proj")
+    const shipped = async (pluginsDir) => {
+      await fs.mkdir(path.join(pluginsDir, "..", "skills", specSkill), { recursive: true })
+      await fs.writeFile(path.join(pluginsDir, "..", "skills", specSkill, "SKILL.md"), "Read `notebook/skill-notes/debug.md` first.\n")
+    }
+    await shipped(path.join(repo, ".opencode", "plugins"))
+    // V1, a project install: its parent is the project, whatever the session root.
+    const v1 = await project({ client: { session: {
+      get: async () => ({ data: { parentID: "p", agent: "tester" } }),
+      messages: async () => [{ info: { role: "assistant" }, parts: [{ type: "text", text: SCOPES_REPORT }] }],
+    } }, directory: repo, worktree: repo })
+    await v1.event({ event: { type: "session.idle", properties: { sessionID: "c1" } } })
+    assert.match((await waitFor(path.join(repo, "notebook", "agent-notes", "tester.md"))) ?? "", PROJECT_AGENT)
+    assert.match((await waitFor(path.join(repo, "notebook", "skill-notes", "debug.md"))) ?? "", PROJECT_SKILL)
+    assert.match((await waitFor(sb.note)) ?? "", /^- \[agent\] name the base — seen: drift \(tester, \d{4}-\d{2}-\d{2}\)\n$/)
+    assert.equal(await fs.readFile(path.join(repo, "notebook", ".gitignore"), "utf8"),
+      "# Geneseed notes: personal and local, never committed.\n*\n!.gitignore\n")
+    await assert.rejects(fs.stat(path.join(repo, ".opencode", "notebook")), "a note went to the plugin layer's notebook")
+
+    // V2, a global install (its marker says so): the session root's git root is the project.
+    const gcfg = path.join(sb.d, "gcfg")
+    const global = await copyAt(path.join(gcfg, "plugins"), "glob")
+    await fs.writeFile(path.join(gcfg, ".geneseed-emit"), "opencode-global\n")
+    const other = path.join(sb.d, "other")
+    await fs.mkdir(path.join(other, ".git"), { recursive: true })
+    await fs.mkdir(path.join(other, "src"))
+    const roots = await global.notesRootsOf(path.join(gcfg, "plugins"), path.join(other, "src"))
+    assert.deepEqual(roots, { machine: sb.tier, project: path.join(other, "notebook") })
+    assert.deepEqual(await global.notesRootsOf(path.join(gcfg, "plugins"), sb.d), { machine: sb.tier, project: null },
+      "a global session outside any repo has no project")
+    const queue = []
+    let wake = null
+    const controller = { aborted: false }
+    const cleanup = await (await import(`${(await import("node:url")).pathToFileURL(path.join(gcfg, "plugins", "geneseed-learn.js")).href}?glob`)).default.setup({
+      location: { directory: path.join(other, "src"), project: { directory: other } },
+      session: {
+        get: async () => ({ parentID: "p", agent: "tester" }),
+        context: async () => [{ type: "assistant", content: [{ type: "text", text: SCOPES_REPORT }] }],
+      },
+      generate: { text: async () => ({ text: "NOTHING" }) },
+      event: { subscribe: () => ({ async *[Symbol.asyncIterator]() {
+        while (!controller.aborted) { if (queue.length) { yield queue.shift(); continue } await new Promise((r) => { wake = r }) }
+      } }) },
+    })
+    queue.push({ type: "session.execution.succeeded", data: { sessionID: "named" } })
+    wake?.()
+    assert.match((await waitFor(path.join(other, "notebook", "agent-notes", "tester.md"))) ?? "", PROJECT_AGENT)
+    controller.aborted = true
+    wake?.()
+    cleanup()
+  } finally { sb.restore() }
+})
+
+// A global and a project copy loaded together both see a child's end and both capture it: each
+// bullet lands once, in the one machine file and the one project file (the duplicate check runs
+// under the lock).
+test("two scopes: a global and a project copy capturing the same report write each bullet once", async () => {
+  const sb = await sandboxPlugin()
+  try {
+    const repo = path.join(sb.d, "repo")
+    await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+    const project = await copyAt(path.join(repo, ".opencode", "plugins"), "p2")
+    const gcfg = path.join(sb.d, "gcfg")
+    const global = await copyAt(path.join(gcfg, "plugins"), "g2")
+    await fs.writeFile(path.join(gcfg, ".geneseed-emit"), "opencode-global\n")
+    const pr = await project.notesRootsOf(path.join(repo, ".opencode", "plugins"), repo)
+    const gr = await global.notesRootsOf(path.join(gcfg, "plugins"), repo)
+    assert.deepEqual(pr, gr)
+    await Promise.all([project.captureSpecFeedback("tester", SCOPES_REPORT, pr, "2026-11-15"),
+      global.captureSpecFeedback("tester", SCOPES_REPORT, gr, "2026-11-15")])
+    assert.equal(await fs.readFile(path.join(repo, "notebook", "agent-notes", "tester.md"), "utf8"),
+      "- [agent] this repo needs --jobs 2 — seen: a timeout (tester, 2026-11-15)\n")
+    assert.equal(await fs.readFile(sb.note, "utf8"), "- [agent] name the base — seen: drift (tester, 2026-11-15)\n")
   } finally { sb.restore() }
 })
 

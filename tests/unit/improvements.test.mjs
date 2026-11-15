@@ -174,6 +174,18 @@ test('the export notice says nothing when there is nothing fresh', () => {
 // both collected, sorted by path; a blank or whitespace-only file is skipped (cleared notes
 // have nothing to back-port); a non-`.md` file is ignored.
 test('the self-improvement notes are collected and carried into the report', () => {
+  // Every install's queue lists the tier's notes too: the tier is pointed at an empty sandbox, or
+  // this machine's own notes would join the list.
+  const xdg = process.env.XDG_CONFIG_HOME;
+  const sb = makeSandbox('impr-xdg-');
+  process.env.XDG_CONFIG_HOME = sb.path;
+  try { notesReport(); } finally {
+    if (xdg === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = xdg;
+    sb.cleanup();
+  }
+});
+
+function notesReport() {
   withDir((d) => {
     const put = (rel, body) => {
       const p = path.join(d, 'notebook', ...rel.split('/'));
@@ -202,4 +214,4 @@ test('the self-improvement notes are collected and carried into the report', () 
   assert.equal(improvementsMd('/cfg', 'neutral', FILES, 'w'),
     improvementsMd('/cfg', 'neutral', FILES, 'w', []));
   assert.ok(!improvementsMd('/cfg', 'neutral', FILES, 'w').includes('Self-improvement notes'));
-});
+}

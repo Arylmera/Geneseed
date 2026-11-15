@@ -19,6 +19,7 @@ import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
 import { foldOnEmit } from './fold.mjs';
+import { migrateProjectNotes } from './notes-migrate.mjs';
 import { pruneRetiredSkills } from './retired-skills.mjs';
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
@@ -154,6 +155,8 @@ export function emitClaudeRender(cfg, job) {
   ensureMemoryStore(path.join(cfgDir, 'memory'));
   const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
   ensureNotebookIndex(path.join(cfgDir, 'notebook'));
+  // A project's notes live in `<repo>/notebook` now, whatever the host (js/build/notes-migrate.mjs).
+  if (scope === 'project') migrateProjectNotes(cfgDir, path.dirname(cfgDir));
   // context.json too: the root names it as the project's own manifest, and until 2026-10 this
   // emit never seeded one — the bundle and OpenCode did — so §9 pointed at a file that was not
   // there. The context hook reads it from this dir (`resolveContextSets`' last candidate).

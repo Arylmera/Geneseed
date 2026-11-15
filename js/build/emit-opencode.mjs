@@ -22,6 +22,7 @@ import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
 import { foldOnEmit } from './fold.mjs';
+import { migrateProjectNotes } from './notes-migrate.mjs';
 import { pruneRetiredSkills } from './retired-skills.mjs';
 import { renderAll } from './render.mjs';
 import {
@@ -161,6 +162,8 @@ export function emitOpencodeRender(cfg, job) {
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
     oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes, oldGates, oldKeptHashes,
   });
+  // Notes an install older than #590 kept in `.opencode/notebook` (js/build/notes-migrate.mjs).
+  migrateProjectNotes(oc, root);
 
   return {
     owned,

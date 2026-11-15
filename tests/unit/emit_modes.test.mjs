@@ -569,9 +569,10 @@ test('the foreman mode body carries the ownership delegation rule, and only fore
 
 test('a notebook path names where the notebook is: .claude/notebook/ on a Claude project', () => {
   // A Claude project's CLAUDE.md sits at the repo root and its notebook in `.claude/notebook/`,
-  // and the agent opens every path from the repo root. So the Foreman ledger (MODE_BODY), the
-  // Scriptorium link (§6) and the notes file of a skill's and an agent's self-improvement loop all
-  // say `.claude/notebook/`. A plain bundle keeps its notebook beside AGENT.md: `notebook/`.
+  // and the agent opens every path from the repo root. So the Foreman ledger (MODE_BODY) and the
+  // Scriptorium link (§6) say `.claude/notebook/`. The self-improvement notes are not the
+  // notebook's any more: the test below holds their two paths. A plain bundle keeps its notebook
+  // beside AGENT.md: `notebook/`.
   withDir((d) => {
     quiet(() => emitProjectInto('claude', {
       theme: 'neutral', out: path.join(d, 'bundle'), root: d, footprint: 'full', mode: 'foreman',
@@ -581,16 +582,48 @@ test('a notebook path names where the notebook is: .claude/notebook/ on a Claude
       'the Foreman ledger lost the .claude/ prefix');
     assert.ok(carrier.includes('[`.claude/notebook/`](.claude/notebook/)'));
     assert.ok(!carrier.includes('`notebook/foreman'), 'an unprefixed Foreman path is left');
-    // A skill's notes path names the skill itself (`{{SKILL_NAME}}`, rendered from its id).
-    assert.ok(read(d, '.claude', 'skills', 'develop', 'SKILL.md')
-      .includes('`.claude/notebook/skill-notes/develop.md`'), "a skill's notes path is unprefixed");
-    assert.ok(read(d, '.claude', 'agents', 'developer.md')
-      .includes('`.claude/notebook/agent-notes/<name>.md`'), "an agent's notes path is unprefixed");
   });
   withDir((d) => {
     quiet(() => buildInto({ theme: 'neutral', out: d, footprint: 'full', mode: 'foreman' }));
     assert.ok(read(d, 'AGENT.md').includes('`notebook/foreman-ledger.md`, one line per live task'));
-    assert.ok(read(d, 'skills', 'develop.md').includes('`notebook/skill-notes/develop.md`'));
+  });
+});
+
+// THE STEP-0 PATHS, per host, install kind and footprint. Machine notes: the tier's, absolute on a
+// global emit, and on any other emit the portable `~/.config/geneseed/notes` (a project's files may
+// be committed and read on another machine, so they never carry this one's path). Project notes:
+// `notebook/…` from the project root, the same on every host and never prefixed: OpenClaude's
+// skills read `notebook/` while its hook wrote `.openclaude/notebook/` until the prefix went (T10).
+// Each skill names its own id in both paths and in the project tag.
+test('the notes paths a skill and an agent read: machine then project, the same on every host', () => {
+  const MACHINE = '~/.config/geneseed/notes';
+  const LAYOUT = { claude: '.claude', openclaude: '.openclaude', bob: '.bob', opencode: '.opencode' };
+  const skillAt = (d, host) => (host === 'opencode' ? read(d, '.opencode', 'skills', 'develop', 'SKILL.md')
+    : read(d, LAYOUT[host], 'skills', 'develop', 'SKILL.md'));
+  for (const footprint of ['full', 'lean']) {
+    for (const host of Object.keys(LAYOUT)) {
+      withDir((d) => {
+        quiet(() => emitProjectInto(host, { theme: 'neutral', out: host === 'opencode' ? d : path.join(d, 'bundle'), root: d, footprint }));
+        const skill = skillAt(d, host).replace(/\s+/g, ' ');
+        const what = `${host} ${footprint}`;
+        assert.ok(skill.includes(`\`${MACHINE}/skill-notes/develop.md\``), `${what}: machine skill notes`);
+        assert.ok(skill.includes(`\`${MACHINE}/skill-notes/_general.md\``), `${what}: machine general notes`);
+        assert.ok(skill.includes('`notebook/skill-notes/develop.md` at the project root'), `${what}: project skill notes`);
+        assert.ok(skill.includes('`[skill:develop:project]`'), `${what}: the project tag`);
+        assert.ok(!skill.includes(`${LAYOUT[host]}/notebook/skill-notes`), `${what}: a prefixed notes path is left`);
+        const agent = read(d, LAYOUT[host], 'agents', 'developer.md').replace(/\s+/g, ' ');
+        assert.ok(agent.includes(`\`${MACHINE}/agent-notes/<your-name>.md\` and \`${MACHINE}/agent-notes/_general.md\`, `
+          + "then this repo's `notebook/agent-notes/<your-name>.md`, which wins where they disagree"), `${what}: agent step 0`);
+        assert.ok(agent.includes('`[agent:project]`'), `${what}: the agent's project tag`);
+      });
+    }
+  }
+  withDir((d) => {
+    const cfgDir = path.join(d, 'cfg');
+    quiet(() => emitGlobalInto('claude', { theme: 'neutral', out: null, cfgDir, footprint: 'lean', sharedRoot: 'C:/T/geneseed' }));
+    const skill = read(cfgDir, 'skills', 'develop', 'SKILL.md').replace(/\s+/g, ' ');
+    assert.ok(skill.includes('`C:/T/geneseed/notes/skill-notes/develop.md`'), 'a global emit names the tier absolutely');
+    assert.ok(skill.includes('`notebook/skill-notes/develop.md` at the project root'), 'a global emit names the project notes');
   });
 });
 
