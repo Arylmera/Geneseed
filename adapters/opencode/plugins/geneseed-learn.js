@@ -349,6 +349,8 @@ const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t
  */
 const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 const SKILL_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
+// What opens a skill's tag at all, parsed or not.
+const SKILL_OPENING_RE = /^(?:\[[ \t]*skill\b|skill[ \t]*:)/i;
 // "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
 const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
 /** The include's own template, which a report may quote: never a note. */
@@ -368,7 +370,11 @@ const GENERAL_NOTES = '_general.md';
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 // A bullet in the shape this capture writes: the only kind the caps may drop.
-const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+// Every bullet the hook writes names its writer beside the date, `(<agent or skill>, date)`: that
+// is what tells it from a line written by hand (the notes were hand-written as `- [skill] … (date)`
+// before the hook), and a hand-written line is never dropped (the owner's ruling, 2026-11-15).
+// `[agent]` bullets written before the name was added read as hand lines now: kept, never pruned.
+const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\([a-z][a-z0-9-]*, \d{4}-\d{2}-\d{2}\)[ \t]*$/;
 
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
@@ -392,8 +398,14 @@ function specFeedbackOf(text, secret) {
     if (k) {
       skill = (k[1] ?? k[4]).toLowerCase();
       if (!SKILL_NAME_RE.test(skill)) continue;
+      // A skill line wrapped in inline code is an example the reply quotes (a summary of this very
+      // format), not the reply's own line: the main session discusses the format, an agent's
+      // report does not. A whole-line `spec-feedback:` in backticks stays an agent's line.
+      if (m[1] === '`') continue;
       scope = k[3] && k[2] !== '|' ? 'general' : 'skill';
       body = body.slice(k[0].length);
+    } else if (SKILL_OPENING_RE.test(body)) {
+      continue; // a skill tag that does not parse (`[skill:a:b]`, `[skill:a, b]`) is no agent's line
     } else {
       const s = FEEDBACK_SCOPE_RE.exec(body);
       if (s && (s[1] || s[2])) scope = (s[1] || s[2]).toLowerCase();
@@ -417,15 +429,17 @@ function specFeedbackOf(text, secret) {
 function feedbackBullets(items, agent, day) {
   const mine = items.filter((f) => !f.skill);
   return {
-    own: mine.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${day})`),
+    own: mine.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${agent}, ${day})`),
     general: mine.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
   };
 }
 
 /**
- * The same for the skills' lines, into `skill-notes/`: `own` maps each skill to its bullets, in
- * the `- [skill] … (date)` shape the notes held when they were written by hand; a general line
- * goes to `skill-notes/_general.md` with the skill's name, which every skill reads.
+ * The same for the skills' lines, into `skill-notes/`: `own` maps each skill to its bullets,
+ * `- [skill] … (<skill>, date)`; a general line goes to `skill-notes/_general.md`, which every
+ * skill reads, in the same shape as `[general]`. The name beside the date is what tells a hook
+ * bullet from the `- [skill] … (date)` lines written by hand before the hook: those are never
+ * dropped, and the duplicate check reads past both tails, so the same words are one note.
  */
 function skillBullets(items, day) {
   const own = new Map();
@@ -434,7 +448,7 @@ function skillBullets(items, day) {
     if (!f.skill) continue;
     if (f.scope === 'general') { general.push(`- [general] ${f.body} (${f.skill}, ${day})`); continue; }
     if (!own.has(f.skill)) own.set(f.skill, []);
-    own.get(f.skill).push(`- [skill] ${f.body} (${day})`);
+    own.get(f.skill).push(`- [skill] ${f.body} (${f.skill}, ${day})`);
   }
   return { own, general };
 }
@@ -562,16 +576,23 @@ async function addFeedback(file, bullets, cap) {
   })
 }
 
+// A skill this install serves under that name: its SKILL.md names its own notes file. The twin of
+// js/hosts/spec-feedback.mjs `liveSkill`, which says why (an alias folder or an older render does not).
+async function liveSkill(skillsDir, name) {
+  if (!skillsDir) return false
+  try { return (await fs.readFile(path.join(skillsDir, name, "SKILL.md"), "utf8")).includes(`skill-notes/${name}.md`) } catch { return false }
+}
+
 // `report` is a child session's final assistant text (`agent` named), or a session's last reply
 // at a turn's end (`agent` null: only `[skill:<name>]` lines count there). A skill line is kept
-// only when `skillsDir` holds that skill. The twin of js/hosts/spec-feedback.mjs
+// only for a `liveSkill` of `skillsDir`. The twin of js/hosts/spec-feedback.mjs
 // `captureSpecFeedback`, which says why. Never throws.
 async function captureSpecFeedback(agent, report, notesRoot, day = new Date().toISOString().slice(0, 10), skillsDir = null) {
   try {
     if (!notesRoot || !(await isDir(path.dirname(notesRoot)))) return []
     const items = []
     for (const f of specFeedbackOf(report, FEEDBACK_SECRET_RE)) {
-      if (f.skill ? skillsDir && (await isDir(path.join(skillsDir, f.skill))) : agent) items.push(f)
+      if (f.skill ? await liveSkill(skillsDir, f.skill) : agent) items.push(f)
     }
     if (!items.length) return []
     const written = []
@@ -1034,6 +1055,7 @@ export const GeneseedLearn = async (ctx) => {
   const ours = new Set()       // throwaway distil sessions — never mine our own output
   const timers = new Map()     // sid -> debounce timer, re-armed on each idle
   const inFlight = new Set()   // sid currently being distilled (guards against overlap)
+  const lastReply = new Map()  // sid -> id of its newest assistant message (captureTurn)
   let warnedNoDir = false
 
   // The session root, as guard and context use it — not process.cwd(), which is the
@@ -1134,17 +1156,33 @@ export const GeneseedLearn = async (ctx) => {
         event.payload?.info?.id
       // A deleted session must not distil later from a stale timer (and its entry
       // must not leak in the maps for the life of the process).
+      // The newest assistant message per session, for the turn's capture (`message.updated`'s
+      // `info` is the Message: `id`, `role`, `sessionID`).
+      if (event.type === "message.updated") {
+        const info = event.properties?.info
+        if (info?.role === "assistant" && info.sessionID && info.id) lastReply.set(info.sessionID, info.id)
+        return
+      }
       if (event.type === "session.deleted") {
         const t = timers.get(sid)
         if (t) clearTimeout(t)
         timers.delete(sid)
         ours.delete(sid)
+        lastReply.delete(sid)
         return
       }
       if (event.type !== "session.idle") return
       if (!sid || ours.has(sid)) return
       // A skill's feedback line, now (captureTurn): not behind the debounce below.
+      // One message, not the session: the newest assistant message `message.updated` named, read
+      // by `session.message`. With none seen (a plugin loaded mid-turn), the whole history once.
       void captureTurn(async () => {
+        const mid = lastReply.get(sid)
+        if (mid && client.session.message) {
+          const one = await client.session.message({ path: { id: sid, messageID: mid } })
+          const m = one?.data ?? one
+          return m ? [m] : []
+        }
         const res = await client.session.messages({ path: { id: sid } })
         return Array.isArray(res) ? res : res?.data ?? []
       }, root)

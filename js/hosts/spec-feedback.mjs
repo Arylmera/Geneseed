@@ -51,6 +51,8 @@ const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t
  */
 const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 const SKILL_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
+// What opens a skill's tag at all, parsed or not.
+const SKILL_OPENING_RE = /^(?:\[[ \t]*skill\b|skill[ \t]*:)/i;
 // "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
 const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
 /** The include's own template, which a report may quote: never a note. */
@@ -70,7 +72,11 @@ export const GENERAL_NOTES = '_general.md';
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 // A bullet in the shape this capture writes: the only kind the caps may drop.
-const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+// Every bullet the hook writes names its writer beside the date, `(<agent or skill>, date)`: that
+// is what tells it from a line written by hand (the notes were hand-written as `- [skill] … (date)`
+// before the hook), and a hand-written line is never dropped (the owner's ruling, 2026-11-15).
+// `[agent]` bullets written before the name was added read as hand lines now: kept, never pruned.
+const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\([a-z][a-z0-9-]*, \d{4}-\d{2}-\d{2}\)[ \t]*$/;
 
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
@@ -94,8 +100,14 @@ export function specFeedbackOf(text, secret) {
     if (k) {
       skill = (k[1] ?? k[4]).toLowerCase();
       if (!SKILL_NAME_RE.test(skill)) continue;
+      // A skill line wrapped in inline code is an example the reply quotes (a summary of this very
+      // format), not the reply's own line: the main session discusses the format, an agent's
+      // report does not. A whole-line `spec-feedback:` in backticks stays an agent's line.
+      if (m[1] === '`') continue;
       scope = k[3] && k[2] !== '|' ? 'general' : 'skill';
       body = body.slice(k[0].length);
+    } else if (SKILL_OPENING_RE.test(body)) {
+      continue; // a skill tag that does not parse (`[skill:a:b]`, `[skill:a, b]`) is no agent's line
     } else {
       const s = FEEDBACK_SCOPE_RE.exec(body);
       if (s && (s[1] || s[2])) scope = (s[1] || s[2]).toLowerCase();
@@ -119,15 +131,17 @@ export function specFeedbackOf(text, secret) {
 export function feedbackBullets(items, agent, day) {
   const mine = items.filter((f) => !f.skill);
   return {
-    own: mine.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${day})`),
+    own: mine.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${agent}, ${day})`),
     general: mine.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
   };
 }
 
 /**
- * The same for the skills' lines, into `skill-notes/`: `own` maps each skill to its bullets, in
- * the `- [skill] … (date)` shape the notes held when they were written by hand; a general line
- * goes to `skill-notes/_general.md` with the skill's name, which every skill reads.
+ * The same for the skills' lines, into `skill-notes/`: `own` maps each skill to its bullets,
+ * `- [skill] … (<skill>, date)`; a general line goes to `skill-notes/_general.md`, which every
+ * skill reads, in the same shape as `[general]`. The name beside the date is what tells a hook
+ * bullet from the `- [skill] … (date)` lines written by hand before the hook: those are never
+ * dropped, and the duplicate check reads past both tails, so the same words are one note.
  */
 export function skillBullets(items, day) {
   const own = new Map();
@@ -136,7 +150,7 @@ export function skillBullets(items, day) {
     if (!f.skill) continue;
     if (f.scope === 'general') { general.push(`- [general] ${f.body} (${f.skill}, ${day})`); continue; }
     if (!own.has(f.skill)) own.set(f.skill, []);
-    own.get(f.skill).push(`- [skill] ${f.body} (${day})`);
+    own.get(f.skill).push(`- [skill] ${f.body} (${f.skill}, ${day})`);
   }
   return { own, general };
 }
@@ -344,19 +358,34 @@ function addTo(file, bullets, cap) {
 }
 
 /**
+ * A skill this install serves under that name: `<skillsDir>/<name>/SKILL.md` names its OWN notes
+ * file, `skill-notes/<name>.md`, which the render writes from the skill's id
+ * (`{{SKILL_NAME}}`, src/skills/_self-improvement.md). An alias folder an older build rendered
+ * (`deps-audit/`, whose body is `dependencies`'), a skill rendered before the id was, or any folder
+ * that is not a Geneseed skill names another file or `<name>`, so no note is kept for it: nothing
+ * would read it. Read only when a line names a skill, which is rare.
+ */
+export function liveSkill(skillsDir, name) {
+  if (!skillsDir) return false;
+  try {
+    return readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf8').includes(`skill-notes/${name}.md`);
+  } catch { return false; }
+}
+
+/**
  * The capture: the feedback lines in `report` into the notes under `notesRoot`. An agent's lines
  * go to `agent-notes/` when `agent` names one (a SubagentStop); a skill's lines go to
  * `skill-notes/` either way, a sub-agent's or the main session's (a Stop passes no agent, so a
- * relayed `[agent]` or `[general]` line there is no note). A skill line is kept only when
- * `skillsDir` holds that skill: the install's own `skills/<name>/`, whose `{{PATH_NOTES}}` is this
- * notes root, so an invented or misspelt name, or a skill another install serves, writes no file
- * nobody reads. Writes nothing when the notes root's parent does not exist (no install or tier
+ * relayed `[agent]` or `[general]` line there is no note). A skill line is kept only for a
+ * `liveSkill` of `skillsDir`, the install's own `skills/`, whose `{{PATH_NOTES}}` is this notes
+ * root, so an invented or misspelt name, an alias, or a skill another install serves writes no
+ * file nobody reads. Writes nothing when the notes root's parent does not exist (no install or tier
  * there to serve), and returns the files it changed.
  */
 export function captureSpecFeedback(agent, report, notesRoot, day = today(), skillsDir = null) {
   if (!notesRoot || !existsSync(path.dirname(notesRoot))) return [];
   const items = specFeedbackOf(report, SECRET_RE)
-    .filter((f) => (f.skill ? Boolean(skillsDir) && existsSync(path.join(skillsDir, f.skill)) : Boolean(agent)));
+    .filter((f) => (f.skill ? liveSkill(skillsDir, f.skill) : Boolean(agent)));
   if (!items.length) return [];
   const written = [];
   const add = (dir, name, bullets, cap) => {

@@ -244,7 +244,7 @@ test("spec-feedback: V1 captures a named child session's report into <install>/n
     } }
     const hooks = await mod.server({ client, directory: process.cwd() })
     await hooks.event({ event: { type: "session.idle", properties: { sessionID: "c1" } } })
-    assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(\d{4}-\d{2}-\d{2}\)\n$/)
+    assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(tester, \d{4}-\d{2}-\d{2}\)\n$/)
   } finally { restore() }
 })
 
@@ -269,7 +269,7 @@ test("spec-feedback: V2 captures a named child session's report, and skips an un
     const push = (sessionID) => { queue.push({ type: "session.execution.succeeded", data: { sessionID } }); wake?.() }
     push("unnamed")
     push("named")
-    assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(\d{4}-\d{2}-\d{2}\)\n$/)
+    assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(tester, \d{4}-\d{2}-\d{2}\)\n$/)
     // The note appears at the atomic rename, INSIDE the lock; the lock goes at release, a few awaits
     // later (up to ~400 ms seen under a 4-way load). So wait for the capture to settle, then require
     // that only the note is left: a lock that outlived its write would still fail here, after 5 s.
@@ -332,12 +332,49 @@ test("spec-feedback: V1 fetches a top-level session's messages only once a store
 // after the debounce, and its `[skill:<name>]` lines go to `skill-notes/` for a skill the install ships.
 const SKILL_REPLY = "Done.\nspec-feedback: [skill:debug] read the stack trace first — seen: a guess\n"
   + "spec-feedback: [skill:debug:general] say the runner — seen: a wrong one\nspec-feedback: [agent] relayed — seen: y"
-const SKILL_NOTE = /^- \[skill\] read the stack trace first — seen: a guess \(\d{4}-\d{2}-\d{2}\)\n$/
+const SKILL_NOTE = /^- \[skill\] read the stack trace first — seen: a guess \(debug, \d{4}-\d{2}-\d{2}\)\n$/
 const SKILL_GENERAL = /^- \[general\] say the runner — seen: a wrong one \(debug, \d{4}-\d{2}-\d{2}\)\n$/
-async function withSkills(sb) {
-  await fs.mkdir(path.join(sb.d, "cfg", "skills", "debug"), { recursive: true })
+// The install ships `debug` as a render does: its SKILL.md names its own notes file (`liveSkill`).
+async function withSkills(sb, name = "debug", notesOf = name) {
+  await fs.mkdir(path.join(sb.d, "cfg", "skills", name), { recursive: true })
+  await fs.writeFile(path.join(sb.d, "cfg", "skills", name, "SKILL.md"), `Read \`notebook/skill-notes/${notesOf}.md\` first.\n`)
   return path.join(sb.d, "cfg", "notebook", "skill-notes")
 }
+
+// One message per turn, not the session: the newest assistant message `message.updated` named is
+// read with `session.message`, and the whole history is read only when no such event was seen.
+test("skill feedback: V1 reads only the newest assistant message once message.updated named it", async () => {
+  const sb = await sandboxPlugin()
+  try {
+    const dir = await withSkills(sb)
+    const calls = []
+    const client = { session: {
+      get: async () => ({ data: { title: "work" } }),
+      message: async ({ path: p }) => { calls.push(`message ${p.messageID}`); return { data: { info: { role: "assistant" }, parts: [{ type: "text", text: SKILL_REPLY }] } } },
+      messages: async () => { calls.push("messages"); return [] },
+    } }
+    const hooks = await sb.mod.server({ client, directory: process.cwd() })
+    await hooks.event({ event: { type: "message.updated", properties: { info: { id: "u1", role: "user", sessionID: "top" } } } })
+    await hooks.event({ event: { type: "message.updated", properties: { info: { id: "a2", role: "assistant", sessionID: "top" } } } })
+    await hooks.event({ event: { type: "message.updated", properties: { info: { id: "x9", role: "assistant", sessionID: "other" } } } })
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+    assert.match((await waitFor(path.join(dir, "debug.md"))) ?? "", SKILL_NOTE)
+    await settled(dir)
+    assert.deepEqual(calls.filter((c) => c.startsWith("message ")), ["message a2"])
+    assert.equal(calls.filter((c) => c === "messages").length <= 1, true, "the debounced distil may read once; the capture never")
+  } finally { sb.restore() }
+})
+
+// An alias folder an older build left reads another skill's notes: not live, no note.
+test("skill feedback: an alias folder is not a live skill", async () => {
+  const sb = await sandboxPlugin()
+  try {
+    const dir = await withSkills(sb, "debug", "dependencies")
+    const fetch = async () => [{ info: { role: "assistant" }, parts: [{ type: "text", text: SKILL_REPLY }] }]
+    assert.deepEqual(await sb.mod.server.captureTurn(fetch, process.cwd()), [])
+    await assert.rejects(fs.stat(dir))
+  } finally { sb.restore() }
+})
 
 test("skill feedback: V1 copies a top-level session's last reply at session.idle, before any debounce", async () => {
   const sb = await sandboxPlugin()
@@ -427,7 +464,7 @@ test("skill feedback: a child session's [skill:…] line goes to skill-notes, no
     const got = await sb.mod.server.captureSpecFeedback("tester", SKILL_REPLY, notes, "2026-11-14", path.join(sb.d, "cfg", "skills"))
     assert.deepEqual(got.map((f) => path.relative(notes, f).replaceAll("\\", "/")),
       ["agent-notes/tester.md", "skill-notes/debug.md", "skill-notes/_general.md"])
-    assert.equal(await fs.readFile(path.join(notes, "agent-notes", "tester.md"), "utf8"), "- [agent] relayed — seen: y (2026-11-14)\n")
+    assert.equal(await fs.readFile(path.join(notes, "agent-notes", "tester.md"), "utf8"), "- [agent] relayed — seen: y (tester, 2026-11-14)\n")
   } finally { sb.restore() }
 })
 

@@ -399,6 +399,12 @@ function readSource(cfg, p) {
   return text;
 }
 
+/** A skill spec's id, `skills/<id>.md` (a `_` file is a partial, not a skill), else null. */
+function skillIdOf(file) {
+  const stem = path.basename(file, '.md');
+  return path.basename(path.dirname(file)) === 'skills' && file.endsWith('.md') && !stem.startsWith('_') ? stem : null;
+}
+
 /**
  * `_build_render.render_file`.
  *
@@ -426,6 +432,11 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
       .replace(/\n+$/, '');                              // `.rstrip("\n")`
   });
 
+  // A skill's own id, for the notes path and the feedback tag its self-improvement include names
+  // (src/skills/_self-improvement.md): literal, so the model never guesses it from an alias it
+  // was run under. On the top-level file only, once the includes are flattened into it; any
+  // other file (the include itself, the template) keeps the `<name>` placeholder.
+  if (!visiting.size) text = text.replaceAll('{{SKILL_NAME}}', skillIdOf(here) ?? '<name>');
   text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? [], cfg);
   text = resolveLean(text, footprint);
   if (footprint === 'lean') text = leanVoice(text, cfg.src);
