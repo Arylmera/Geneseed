@@ -1,6 +1,6 @@
 import React from 'react'
 import { hostInfo, installName } from '../../lib/hosts.js'
-import { PickSelects, Switch } from './controls.jsx'
+import { PickSelects, Sel, Switch } from './controls.jsx'
 import ExclusionsCard from './ExclusionsCard.jsx'
 
 // The trade of letting a project read the machine tier. The wording is js/inspect/cost.mjs's
@@ -9,6 +9,15 @@ const TIER_BENEFIT =
   'This project sees your machine-wide rules, profile and memory map, so what you taught one tool or repo applies here too.'
 const TIER_COST =
   "About 1 500 tokens at every session start, growing with your rules. The hook budget is fixed at 9 000 characters, and the tier loads before this project's docs, so a large tier can push them down to a lazy listing."
+
+// `--context-window`: what each value writes into Claude Code's settings.json (CONTEXT_WINDOWS in
+// js/build/source.mjs). Offered on Claude Code only: no other host reads the keys.
+const CONTEXT_WINDOW_OPTIONS = ['200k', '1m']
+const CONTEXT_WINDOW_NOTE = {
+  '200k':
+    'For a 200k-token model: each skill description is cut to 80 characters and the listing budget is 1.3% of the window, so every skill keeps its description.',
+  '1m': 'For a 1M-token model: each skill description is cut to 120 characters, at the default budget of 1% of the window.',
+}
 
 // The MCP servers an active install's config already holds, read-only. Which servers to wire
 // depends on the user and on the host, so this shows what is there and where the file lives;
@@ -219,6 +228,20 @@ export default function InstallPanel({
               : 'Full footprint: every rule’s complete text inline, the largest context.'}{' '}
             Every rule stays in force. <a href="#/docs/footprint">Learn more →</a>
           </p>
+        </div>
+      ) : null}
+      {(active || absent) && canAct && inst.host === 'claude' ? (
+        <div className="ip-block">
+          <label className="dp-field">
+            <span>Context window</span>
+            <Sel
+              label={`context window for ${who}`}
+              value={choice.contextWindow || '200k'}
+              options={CONTEXT_WINDOW_OPTIONS}
+              onChange={(v) => onPick('contextWindow', v)}
+            />
+          </label>
+          <p className="sub">{CONTEXT_WINDOW_NOTE[choice.contextWindow || '200k']}</p>
         </div>
       ) : null}
       {(active || absent) && canAct && inst.scope !== 'global' ? (

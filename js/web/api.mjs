@@ -23,8 +23,8 @@ import { CLAUDE_STYLE, VERSION_MARKER } from '../hosts/hosts.mjs';
 import { factCount } from '../hosts/memory-files.mjs';
 import { autostartState } from '../hosts/shim.mjs';
 import {
-  footprintOfDir, gatesOfDir, installState, installTargets, leftoversOf, modeOfDir,
-  trustOfDir, sharedTierOfDir, strandedGatesOf,
+  footprintOfDir, gatesOfDir, installedDefaults, installState, installTargets, leftoversOf, modeOfDir,
+  trustOfDir, sharedTierOfDir, contextWindowOfDir, strandedGatesOf,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -234,6 +234,8 @@ export function apiInstalls(state) {
   // The row marked `default` must be the install an unnamed request reads, so the daemon state
   // follows the marker here, where the console reads it, rather than only on a full refresh.
   followDefault(state, def);
+  let machineCw = null;
+  const machineWindow = () => (machineCw ??= installedDefaults().contextWindow);
   for (const [host, scope, root] of targets) {
     out.push({
       ...installRowBase(host, scope, root, installState(root, host, scope)),
@@ -242,6 +244,9 @@ export function apiInstalls(state) {
       trust: trustOfDir(root, host),
       // A project install's switch for reading the machine tier (a global install owns it).
       sharedTier: scope === 'global' ? false : sharedTierOfDir(root, host),
+      // The context window the install is built for (`--context-window`); it writes settings on
+      // Claude Code only. A row not installed yet offers the machine's, as a new install takes it.
+      contextWindow: installState(root, host, scope) === 'absent' ? machineWindow() : contextWindowOfDir(root, host),
       // Files here that are the user's where Geneseed ships one, and retired leftovers: what a
       // forced rebuild would replace or remove (`leftoversOf`). Read off the emit's own record.
       leftovers: leftoversOf(root, host, scope),

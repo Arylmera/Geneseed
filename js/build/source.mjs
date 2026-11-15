@@ -647,6 +647,41 @@ export const GATE_SWITCHES = [
 ];
 
 /**
+ * `--context-window 200k|1m`: the model context the install is built for, and the Claude Code
+ * settings it writes for the skill listing. ONE table, so the flag, the carrier marker, the
+ * rebuild argv, the profile and the console read the same two values.
+ *
+ * WHY. Claude Code builds its skill listing under a character budget: context window x bytes
+ * per token (3, or 4 for some older models) x `skillListingBudgetFraction` (default 0.01). That
+ * is about 6 000 characters on a 200k model and 30 000 on a 1M one. Over budget, a skill with
+ * low usage loses its description, so a fresh install on a 200k model listed none of
+ * Geneseed's descriptions (measured 2026-11-15: a fresh neutral emit plus the 14 bundled skills
+ * is 11 482 characters at the default 1 536-character cap, the bundled skills' long texts most
+ * of it, even with Geneseed's own lines at 80 characters or less).
+ *
+ * THE VALUES (simulated 2026-11-15 on a fresh emit, no usage; the docs keep the table):
+ * - `200k`: `skillListingMaxDescChars` 80 fits all 46 descriptions in 5 605 of 6 000
+ *   characters. That 395-character slack is too thin: with one shipped kit (spring-boot) it is
+ *   113, and five third-party skills push descriptions out. `skillListingBudgetFraction` 0.013
+ *   (7 800 characters) keeps all of them with twenty third-party skills beside them. The
+ *   fraction is a ceiling, not a cost: a listing that fits uses only its own length, so the
+ *   extra 1 800 characters (about 600 tokens, 0.3 % of the window) are spent only when filled.
+ * - `1m`: a fresh install fits even at the default cap (11 482 of 30 000), so the fraction stays
+ *   at its default. The cap 120 is for a machine with many skills: this laptop's 143-skill
+ *   listing (47 617 characters) fits whole at 19 427 with it, where today 53 lose their text.
+ *
+ * Claude Code only: OpenClaude (checked on 0.31) and Bob read neither key, and OpenCode does
+ * not cap its list. Those emits record the choice and write nothing.
+ */
+export const CONTEXT_WINDOWS = Object.freeze({
+  '200k': Object.freeze({ skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.013 }),
+  '1m': Object.freeze({ skillListingMaxDescChars: 120 }),
+});
+export const DEFAULT_CONTEXT_WINDOW = '200k';
+/** The carrier marker, written only when the value is not the default (the kits line's contract). */
+export const CONTEXT_WINDOW_MARKER = 'Context window';
+
+/**
  * `_build_core.js_cfg()`, originated rather than received.
  *
  * `posture` and `mode` are `_build_core`'s module defaults (`peer` / `direct`) unless a
@@ -661,7 +696,7 @@ export const GATE_SWITCHES = [
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
   excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false),
-  pruneGates = false, force = false, ...switches
+  contextWindow = DEFAULT_CONTEXT_WINDOW, pruneGates = false, force = false, ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -693,6 +728,8 @@ export function makeCfg({
     kits: Array.isArray(kits) ? [...kits] : [],
     // The shared tier read by a PROJECT install (`--shared-tier on`); `on` from the flag, a boolean from a read-back.
     sharedTier: sharedTier === true || sharedTier === 'on',
+    // The context window the install is built for (`CONTEXT_WINDOWS`); anything unknown is the default.
+    contextWindow: Object.hasOwn(CONTEXT_WINDOWS, contextWindow) ? contextWindow : DEFAULT_CONTEXT_WINDOW,
     // `--force`, for this one build: only a literal `true` forces. Never an axis of the install.
     force: force === true,
     // The gate switches (`GATE_SWITCHES`: `secretsGate`, `doneGate`, `deletionGate`), each armed

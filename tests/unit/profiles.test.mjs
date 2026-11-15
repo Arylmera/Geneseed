@@ -31,7 +31,7 @@ const STARTER = {
   description: 'For a first install: neutral voice, every guardrail except the ownership gate.',
   hosts: ['opencode', 'bob', 'claude', 'openclaude'],
   theme: 'neutral', footprint: 'lean', posture: 'peer', mode: 'direct', trust: 'balanced',
-  doctrines: 'all', kits: [], gates: { ownershipGate: false }, login: true,
+  doctrines: 'all', kits: [], contextWindow: '200k', gates: { ownershipGate: false }, login: true,
 };
 
 /** A profiles dir holding `files` (name -> object or raw text). */
@@ -197,7 +197,9 @@ test('the captured Claude profile builds its own settings, gates off included', 
     '--theme', 'imperial', '--emit', 'claude-global', '--footprint', 'lean',
     '--posture', 'expert', '--mode', 'foreman', '--doctrines', 'craft,rigor,ops,process,comms',
     '--exclude-rules', 'craft.4,ops.1,process.3,process.4,process.5,rigor.5',
-    '--no-deletion-gate', '--no-ownership-gate', '--no-external-gate', '--exclude-skills', 'none', '--reset',
+    // This laptop runs a 1M model, so the profile builds for it: the listing cap goes to 120.
+    '--no-deletion-gate', '--no-ownership-gate', '--no-external-gate', '--context-window', '1m',
+    '--exclude-skills', 'none', '--reset',
   ]);
 });
 
@@ -215,7 +217,9 @@ test('a profile saved from an install copies every setting, gates off included (
   assert.deepEqual(p, {
     description: 'mine', hosts: ['claude'], theme: 'pirate', footprint: 'full', posture: 'expert',
     mode: 'foreman', trust: 'balanced', doctrines: 'all', excludeRules: ['craft.4', 'ops.1'],
-    excludeSkills: ['bruno'], kits: ['docker'], sharedTier: false, gates: { deletionGate: false }, login: true,
+    excludeSkills: ['bruno'], kits: ['docker'], sharedTier: false,
+    // No `contextWindow` in the read-back: the save writes the default, 200k.
+    contextWindow: '200k', gates: { deletionGate: false }, login: true,
   });
   assert.deepEqual(profileProblems(p), []);
   // A narrowed pack list stays a list.
@@ -343,7 +347,8 @@ test('profile save writes a personal profile by default, a shipped one only from
     const r = save({ name: 'team', from: 'claude-global' });
     assert.equal(r.rc, 0, r.out);
     const saved = JSON.parse(fs.readFileSync(path.join(personal, 'team.json'), 'utf8'));
-    assert.deepEqual(saved, { description: 'Saved from the claude global install.', ...SAVED, sharedTier: false });
+    assert.deepEqual(saved, { description: 'Saved from the claude global install.', ...SAVED, sharedTier: false,
+      contextWindow: '200k' });
     assert.equal(fs.existsSync(path.join(shipped.path, 'team.json')), false);
     assert.ok(r.out.includes(`wrote ${path.join(personal, 'team.json')} (personal)`), r.out);
     assert.ok(r.out.indexOf('gates.deletionGate: on -> off') < r.out.indexOf('theme: neutral -> pirate'), r.out);
@@ -393,7 +398,8 @@ test('profile save reads a project install with --from <host> --project <dir>', 
       { shippedDir: PROFILES_DIR, personalDir: personal }));
     assert.equal(r.rc, 0, r.out);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(personal, 'api.json'), 'utf8')),
-      { description: 'Saved from the claude project install.', ...SAVED, sharedTier: true });
+      { description: 'Saved from the claude project install.', ...SAVED, sharedTier: true,
+        contextWindow: '200k' });
     assert.equal(captured(() => cmdProfile({ action: 'save', name: 'x', from: 'claude-global', project: proj },
       { shippedDir: PROFILES_DIR, personalDir: personal })).rc, 2);
   } finally {

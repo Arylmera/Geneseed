@@ -10,6 +10,7 @@
   "excludeRules": ["craft.4", "ops.1", "process.3", "process.4", "process.5", "rigor.5"],
   "excludeSkills": [],
   "kits": [],
+  "contextWindow": "1m",
   "gates": { "deletionGate": false, "ownershipGate": false, "externalGate": false },
   "login": true
 }

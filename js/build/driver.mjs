@@ -38,7 +38,7 @@ import path from 'node:path';
 import { build, phaseLog } from './bundle.mjs';
 import { emitClaudeRender } from './emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from './emit-opencode.mjs';
-import { settingsIntegrityCheck } from '../hosts/settings.mjs';
+import { loadJsonObject, settingsIntegrityCheck } from '../hosts/settings.mjs';
 import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { writeText, withPlatformNewlines, isFile, withWriteRecord } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
@@ -59,21 +59,21 @@ import { seedProtectedChecks } from '../hosts/geneseed-dir.mjs';
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg.
 import {
-  GATE_SWITCHES, ROOT, makeCfg,
+  CONTEXT_WINDOWS, GATE_SWITCHES, ROOT, makeCfg,
 } from './source.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
 // for a reader. See js/inspect/registry.mjs.
 import { registryRecord, registryRoots } from '../inspect/registry.mjs';
-import { kitsOfDir } from '../hosts/installs.mjs';
+import { installedDefaults, kitsOfDir } from '../hosts/installs.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
 // maintainer pair that needs nothing this driver is banned from having.
 import { syncThemes } from './themes.mjs';
 import { configDefaults, die, parseArgs } from './args.mjs';
-import { preserveRefusal, preserveRefusalText } from './profile.mjs';
+import { guardTarget, preserveRefusal, preserveRefusalText } from './profile.mjs';
 
 export { parseDriverArgs } from './args.mjs';
 
@@ -133,6 +133,24 @@ function preambleExclude(claudeMd, host) {
     globalDir = host === 'openclaude' ? openclaudeConfigDir() : claudeConfigDir();
   } catch { return null; }   // no home: no global preamble to exclude, and a prior claim is kept
   return resolvePath(path.join(globalDir, 'CLAUDE.md')).split(path.sep).join('/');
+}
+
+/**
+ * The skill-listing keys (`CONTEXT_WINDOWS`) the USER-level Claude Code settings file already
+ * sets, for a Claude Code PROJECT emit — `[]` for every other emit. Project-local settings
+ * outrank `~/.claude/settings.json`, so a project value would silently undercut a global `1m`
+ * install or a value the user set there by hand; the project emit leaves those keys to the user
+ * level. Resolved here, in the driver, for `preambleExclude`'s reason: the render half must never
+ * resolve a config dir. An unreadable file sets nothing.
+ */
+function userListingKeys(host, scope) {
+  if (host !== 'claude' || scope !== 'project') return [];
+  let file;
+  try { file = path.join(claudeConfigDir(), 'settings.json'); } catch { return []; }
+  const { state, data } = loadJsonObject(file);
+  if (state !== 'ok') return [];
+  const keys = new Set(Object.values(CONTEXT_WINDOWS).flatMap((w) => Object.keys(w)));
+  return [...keys].filter((k) => Object.hasOwn(data, k));
 }
 
 /**
@@ -485,6 +503,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
+    userListing: userListingKeys(host, scope),
     hookOpts, oldHashes, oldKeptHashes,
   });
   const { owned, stats, memStatus, nbStatus, managed, editRefused, kept, keptHashes } = rendered;
@@ -705,12 +724,13 @@ const PROJECT_EMITS = {
  * carry straight past the parameter default.
  */
 function axesCfg({
-  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates
+  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, contextWindow, ...gates
 }) {
   return makeCfg({
     ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
     ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
     ...(excludeSkills ? { excludeSkills } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
+    ...(contextWindow ? { contextWindow } : {}),
     // The gate switches (`GATE_SWITCHES` keys): only an explicit `false` disarms; `null` (no
     // opinion) keeps the gate.
     ...Object.fromEntries(GATE_SWITCHES.filter((g) => gates[g.key] === false).map((g) => [g.arg, true])),
@@ -719,7 +739,7 @@ function axesCfg({
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, seed = true, ...gates
+  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, contextWindow = null, seed = true, ...gates
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
@@ -730,7 +750,7 @@ export function emitProjectInto(host, {
   // the git root, which for a temp dir inside a repo is that repo, outside the sandbox.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, contextWindow, ...gates }),
     { theme, footprint, root, seed }, out,
   ));
 }
@@ -745,16 +765,17 @@ export function emitProjectInto(host, {
  */
 export function buildInto({
   theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
-  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, contextWindow = null, ...gates
 }) {
   return withPlatformNewlines(() => build(axesCfg({
-    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
+    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, contextWindow, ...gates }),
     theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, sharedRoot = undefined, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, contextWindow = null,
+  sharedRoot = undefined, ...gates
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -771,7 +792,7 @@ export function emitGlobalInto(host, {
   // the same scar the footprint left in `diffCollect`, one axis over each time.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, contextWindow, ...gates }),
     { theme, footprint, root: null, cfgDir, sharedRoot }, out,
   ));
 }
@@ -862,6 +883,16 @@ function run(argv) {
   if (args.sharedTier === 'on' && (args.emit === 'files' || args.emit.endsWith('-global'))) {
     die(2, `argument --shared-tier: only applies to a per-repo host emit (got --emit ${args.emit}); `
       + 'a global install already owns the shared tier');
+  }
+  // A NEW project install takes the machine's context window when none is given: the window is
+  // the model's, so a project on a machine whose global install says `1m` is a 1m project too. An
+  // existing install keeps the default rule, and the preserve guard below holds it to its own.
+  // NOT UNDER `--reset`: a replay (profile apply, the console, the wizard) is a whole selection
+  // that has already resolved the window, and `setupBuildArgs` elides `200k` as the default, so
+  // its silence there means 200k, not "no opinion".
+  if (!args.reset && !args.given.has('contextWindow') && args.emit !== 'files' && !args.emit.endsWith('-global')
+    && !guardTarget(args, out)) {
+    try { args.contextWindow = installedDefaults().contextWindow; } catch { /* default */ }
   }
   // The preserve guard, before anything is written: a build over an existing install that would
   // change a setting it was not given refuses, naming each change and the command that keeps

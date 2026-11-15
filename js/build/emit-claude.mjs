@@ -11,8 +11,10 @@ import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.m
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
-  unwireClaudeEnv, unwireClaudeExcludes, unwireClaudeSettings, wireClaudeEnv, wireClaudeExcludes,
+  unwireClaudeEnv, unwireClaudeExcludes, unwireClaudeListing, unwireClaudeSettings, wireClaudeEnv,
+  wireClaudeExcludes, wireClaudeListing,
 } from '../hosts/settings.mjs';
+import { CONTEXT_WINDOWS } from './source.mjs';
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
@@ -290,6 +292,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     unwireClaudeSettings(path.join(cfgDir, oldSf), get(old, 'settings_hooks') || [], cfgDir);
     unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
     unwireClaudeEnv(path.join(cfgDir, oldSf), get(old, 'settings_env'));
+    unwireClaudeListing(path.join(cfgDir, oldSf), get(old, 'settings_listing'));
   }
   // The merge prunes recorded groups that are no longer canonical and returns the
   // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
@@ -308,6 +311,23 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     const priorEnv = oldSf === settingsName && isDict(get(old, 'settings_env')) ? old.settings_env : {};
     const env = { ...priorEnv, ...wireClaudeEnv(settingsPath) };
     if (Object.keys(env).length) managed.settings_env = env;
+    // The skill-listing budget of `--context-window` (`CONTEXT_WINDOWS` says why and why Claude
+    // Code only). The record is what this install owns on file, so a value can change on a rebuild.
+    const priorListing = oldSf === settingsName && isDict(get(old, 'settings_listing')) ? old.settings_listing : {};
+    // A project emit leaves a key the user-level settings already set to that level
+    // (`userListingKeys`, js/build/driver.mjs): a project value would undercut it.
+    const wantListing = Object.fromEntries(Object.entries(CONTEXT_WINDOWS[gates.contextWindow] ?? {})
+      .filter(([k]) => !(job.userListing ?? []).includes(k)));
+    const listing = wireClaudeListing(settingsPath, wantListing, priorListing);
+    if (Object.keys(listing).length) managed.settings_listing = listing;
+    // Said once, the first time this install writes the keys: an install older than the option
+    // reads as 200k, and on a 1M machine that is a choice its owner should see being made.
+    if (!Object.keys(priorListing).length && Object.keys(listing).length) {
+      process.stdout.write(`[geneseed] skill listing: wrote ${Object.entries(listing).map(([k, v]) => `${k} ${v}`)
+        .join(', ')} into ${settingsName} for a ${gates.contextWindow} context window; `
+        + `${gates.contextWindow === '1m' ? 'for a 200k-token model, rebuild with --context-window 200k'
+          : 'on a 1M-token model, rebuild with --context-window 1m'}.\n`);
+    }
   }
 
   // Project-bypasses-global (Claude and OpenClaude): a PROJECT install suppresses the GLOBAL

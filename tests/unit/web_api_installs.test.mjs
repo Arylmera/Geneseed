@@ -201,6 +201,20 @@ test('the install command honours a valid picked theme', () => {
   });
 });
 
+// `contextWindow` crosses the same boundary: a value `CONTEXT_WINDOWS` names reaches the argv
+// (`1m` spelled, `200k` elided as the default), and anything else keeps the install's own answer.
+test('the install command carries a picked context window, and drops a bogus one', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+    const oneM = argv({ contextWindow: '1m' });
+    assert.deepEqual(oneM.slice(oneM.indexOf('--context-window'), oneM.indexOf('--context-window') + 2),
+      ['--context-window', '1m']);
+    assert.ok(!argv({ contextWindow: '200k' }).includes('--context-window'));
+    assert.ok(!argv({ contextWindow: '../evil' }).includes('../evil'));
+    assert.ok(!argv({ contextWindow: '../evil' }).includes('--context-window'));
+  });
+});
+
 // The theme comes out of a request body and lands in an argv, so a bogus one must never reach
 // the command line — it falls back to the state's theme instead.
 test('the install command rejects a bogus theme and falls back', () => {

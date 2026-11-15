@@ -35,7 +35,8 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import {
-  CONFIG, GATE_SWITCHES, PACK_ORDER, RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
+  CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, GATE_SWITCHES, PACK_ORDER,
+  RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
   CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, gateCarrierText, isHostGlobalDir,
@@ -492,6 +493,25 @@ export function sharedTierOfDir(d, host = null) {
   }, false, host);
 }
 
+const CONTEXT_WINDOW_RE = new RegExp(`^${CONTEXT_WINDOW_MARKER}:[ \\t]*(\\S+?)[ \\t]*\\r?$`, 'm');
+
+/**
+ * The context window a DEPLOYED install was built for (`--context-window`), read back so
+ * `rebuild-all`, `upgrade`, `diff`, the wizard, profiles and the console re-render it. A missing
+ * line is the default: the marker is only ever written off it (the kits line's contract), and an
+ * install older than the option is a default install. A value this checkout does not know reads
+ * as the default too, so a hand-edited line can never reach `--context-window` and refuse a rebuild.
+ */
+export function contextWindowOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    const m = CONTEXT_WINDOW_RE.exec(text);
+    if (!m) return undefined;
+    return Object.hasOwn(CONTEXT_WINDOWS, m[1]) ? m[1] : DEFAULT_CONTEXT_WINDOW;
+  }, DEFAULT_CONTEXT_WINDOW, host);
+}
+
 /**
  * Whether a DEPLOYED install keeps one law's hook gate armed — `true` (armed) or `false` (its
  * `<marker>: off` line, written by a build with that gate's `--no-*-gate` flag; `GATE_SWITCHES`).
@@ -833,6 +853,7 @@ export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
     excludeRules: null, excludeSkills: null, kits: null, sharedTier: false,
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -882,6 +903,9 @@ export function installedDefaults() {
       try { found.kits = kitsOfDir(base); } catch { found.kits = []; }
     }
     if (!found.sharedTier) found.sharedTier = sharedTierOfDir(base);
+    // Two states too: the default and no line read the same, so the first install that says
+    // otherwise speaks.
+    if (found.contextWindow === DEFAULT_CONTEXT_WINDOW) found.contextWindow = contextWindowOfDir(base);
   }
   return found;
 }

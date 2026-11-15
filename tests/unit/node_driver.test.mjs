@@ -91,6 +91,8 @@ const VALUED_FLAGS = [
   ['--kits', 'kits', 'none', []],
   // The project install's switch for the machine tier: `on`/`off`, bound as typed (the driver compares the string).
   ['--shared-tier', 'sharedTier', 'on'],
+  // The model context the install is built for: `200k`/`1m`, bound as typed.
+  ['--context-window', 'contextWindow', '1m'],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],
