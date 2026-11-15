@@ -30,14 +30,27 @@ npm run typecheck
 JSDoc annotation, and `strict` is off (`tsconfig.json` says why).
 
 ```bash
-node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"
+node tests/heavy.mjs suite
 ```
 
+**One heavy proof per machine.** The suite, the fuzz run, `host_canary.mjs`, `golden.mjs` and
+`mutate.mjs --all` each go through `tests/heavy.mjs`, which holds a machine-wide lock
+(`~/.cache/geneseed/heavy.lock`) while it runs them. Several agents once ran three suites and an
+eight-shard `golden.mjs --cli` at once: the PC stopped answering, and a suite went red on load
+timeouts. A second heavy proof now waits its turn and then runs, printing the holder as it waits.
+After 30 minutes (`GENESEED_HEAVY_WAIT_S`) it gives up with exit **75** and `QUEUE TIMEOUT — not a
+test failure`: nothing ran, so nothing is red. A lock it cannot make (an unwritable `~/.cache`)
+exits **71** with `SETUP ERROR — not a test failure`. Because it may queue, launch a heavy proof with
+`run_in_background` (it counts for the done gate once its notification says it finished) or with
+a long timeout. `-- <node args…>` passes any other command through verbatim. CI keeps the raw
+commands below: it runs one job per machine.
+
+`suite` runs `node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"`.
 **Quote the glob** — node expands it, not the shell — and keep `--test-reporter=tap`: CI gates on
 the reported *count*, not the exit code, because `node --test` over a glob that matches nothing
 prints `# tests 0` and exits 0. A gate that fails open. `--test-concurrency=8` because the suite
 mostly waits on child processes: the default (cores − 1) took 151 s on 4 cores, 8 took 100 s. On
-Windows it buys nothing (spawning is CPU-bound there), so CI leaves Windows at the default.
+Windows it buys nothing (spawning is CPU-bound there), so CI and `suite` leave Windows at the default.
 
 ```bash
 node tests/shim_intact.mjs
@@ -47,7 +60,7 @@ Right after the suite: the only check that no test touched the machine tier (`~/
 deleted temp directory (which silently kills every hook on the machine).
 
 ```bash
-node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
+node tests/heavy.mjs -- --test --test-reporter=tap "fuzz/*.fuzz.mjs"
 ```
 
 Fuzzes the hook gates' stdin through the real entry point (a process per case, so it is outside
@@ -55,7 +68,7 @@ the unit glob). Run it after touching anything under `js/hosts/hooks*` or `bin/g
 `FUZZ_RUNS=500` for a longer search. Coverage runs in CI (`c8`, informational).
 
 ```bash
-node tests/host_canary.mjs
+node tests/heavy.mjs -- tests/host_canary.mjs
 ```
 
 Installs the real hosts from npm (~600 MB): OpenCode V1 and V2, Claude Code, and OpenClaude. It
@@ -86,7 +99,7 @@ node bin/geneseed-cli.mjs doctor --all
 ```
 
 ```bash
-node tests/golden.mjs
+node tests/heavy.mjs -- tests/golden.mjs
 ```
 
 Runs all 268 emit configurations and requires each to render without crashing. Run it after
@@ -103,7 +116,7 @@ node tests/mutate.mjs --verify
 Answers only "does every mutation anchor still resolve", writes nothing, takes ~50 ms. **Run it
 after any refactor that moves code** — a moved anchor makes a row unappliable, which the matrix
 scores as a SURVIVOR. `--all` runs the real 42-row matrix and takes minutes, editing product files as it
-goes. A mode is required (`--verify`, `--list`, `--all`, `--only <id>`); anything else is refused.
+goes: run it as `node tests/heavy.mjs -- tests/mutate.mjs --all`. A mode is required (`--verify`, `--list`, `--all`, `--only <id>`); anything else is refused.
 An interrupted run leaves one file **mutated**: the next start of the script, in any mode, restores
 it from its journal and says so. Check `git status` all the same before doing anything else.
 
