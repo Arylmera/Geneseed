@@ -887,7 +887,10 @@ function run(argv) {
   // A NEW project install takes the machine's context window when none is given: the window is
   // the model's, so a project on a machine whose global install says `1m` is a 1m project too. An
   // existing install keeps the default rule, and the preserve guard below holds it to its own.
-  if (!args.given.has('contextWindow') && args.emit !== 'files' && !args.emit.endsWith('-global')
+  // NOT UNDER `--reset`: a replay (profile apply, the console, the wizard) is a whole selection
+  // that has already resolved the window, and `setupBuildArgs` elides `200k` as the default, so
+  // its silence there means 200k, not "no opinion".
+  if (!args.reset && !args.given.has('contextWindow') && args.emit !== 'files' && !args.emit.endsWith('-global')
     && !guardTarget(args, out)) {
     try { args.contextWindow = installedDefaults().contextWindow; } catch { /* default */ }
   }

@@ -300,7 +300,7 @@ function targetGates(emit, out) {
  * or the console. A target with no install takes `machine`, the machine's answer
  * (`installedDefaults`), as the CLI's new project does. Unreadable reads as the default.
  */
-function targetContextWindow(emit, out, machine = DEFAULT_CONTEXT_WINDOW) {
+export function targetContextWindow(emit, out, machine = DEFAULT_CONTEXT_WINDOW) {
   const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? [];
   try {
     if (!host) return contextWindowOfDir(resolveOut(out || 'Harness'));

@@ -32,6 +32,8 @@ import { claudeConfigDir } from '../../js/hosts/hosts.mjs';
 import { contextWindowOfDir } from '../../js/hosts/installs.mjs';
 import { unwireClaudeListing, wireClaudeListing } from '../../js/hosts/settings.mjs';
 import { claudeUninstall } from '../../js/maintain/uninstall.mjs';
+import { targetContextWindow } from '../../js/maintain/setup.mjs';
+import { apiDeployCmd } from '../../js/web/actions.mjs';
 import {
   loadProfile, profileBuildArgs, profileDiff, profileFromInstall, profileProblems,
 } from '../../js/maintain/profiles.mjs';
@@ -331,6 +333,58 @@ test('a hand-set user-level cap is not undercut; the project still writes the ke
     assert.deepEqual(readJson(dir, 'settings.json'), { skillListingMaxDescChars: 300 });
   });
 });
+
+// The replays on a 1m machine. Each passes `--reset` and resolves the window itself, and
+// `setupBuildArgs` elides `200k`: the driver must read that silence as 200k, not as "take the
+// machine's". Rows: [path, what it is given, the window the new project must get].
+/** A machine whose global Claude Code install is built `1m`. */
+const oneMachine = () => {
+  const r = build('--emit', 'claude-global', '--theme', 'neutral', '--context-window', '1m');
+  assert.equal(r.value, 0, r.err);
+};
+
+test('profile apply starter --project on a 1m machine builds 200k, and again 200k', () => {
+  withUserLevel(() => {
+    oneMachine();
+    const d = sandbox('gscw-apply-');
+    const starter = loadProfile('starter').profile;
+    for (const pass of [1, 2]) {
+      assert.equal(build(...profileBuildArgs(starter, 'claude', d)).value, 0);
+      assert.equal(contextWindowOfDir(d, 'claude'), '200k', `apply #${pass}`);
+    }
+    assert.deepEqual(listing(readJson(d, '.claude', 'settings.local.json')), { skillListingBudgetFraction: 0.013 });
+  });
+});
+
+for (const [said, want] of [['200k', '200k'], ['1m', '1m'], [undefined, '1m']]) {
+  test(`the console deploy on a 1m machine, contextWindow ${said ?? 'not sent'} -> ${want}`, () => {
+    withUserLevel(() => {
+      oneMachine();
+      const d = sandbox('gscw-deploy-');
+      const plan = apiDeployCmd({ theme: 'neutral' },
+        { host: 'claude', path: d, ...(said ? { contextWindow: said } : {}) });
+      assert.ok(plan.cmd, JSON.stringify(plan));
+      assert.equal(build(...plan.cmd.slice(2).map(String)).value, 0);
+      assert.equal(contextWindowOfDir(d, 'claude'), want);
+    });
+  });
+}
+
+for (const [existing, want] of [[null, '1m'], ['200k', '200k']]) {
+  test(`the wizard on a 1m machine, target ${existing ?? 'not installed'} -> ${want}`, () => {
+    withUserLevel(() => {
+      oneMachine();
+      const d = sandbox('gscw-wiz-');
+      if (existing) assert.equal(build('--emit', 'claude', '--out', d, '--theme', 'neutral', '--context-window', existing).value, 0);
+      const cw = targetContextWindow('claude', d, '1m');
+      assert.equal(cw, want);
+      const argv = setupBuildArgs('neutral', 'claude', d, d, 'lean', 'peer', 'direct', null, undefined,
+        null, undefined, null, {}, null, false, cw);
+      assert.equal(build(...argv, '--reset').value, 0);
+      assert.equal(contextWindowOfDir(d, 'claude'), want);
+    });
+  });
+}
 
 test('an existing 200k project keeps 200k when a global 1m install arrives later', () => {
   withUserLevel(() => {
