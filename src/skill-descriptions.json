@@ -8,7 +8,7 @@
   "compose-ops": "compose.yaml, docker-compose, Dockerfile: health, volumes, pins, secrets.",
   "council": "\"Convene a council\", \"debate this\", \"argue both sides\": viewpoints, a ruling.",
   "daydream": "On /daydream: find hidden links between notes in an Obsidian vault.",
-  "debug": "Failing test, crash, stack trace, wrong result, red CI: reproduce, root-cause.",
+  "debug": "Bug: failing test, crash, an error or stack trace, wrong return value, red CI.",
   "deck": "Presentation, slides or a deck, no file format named: one offline HTML file.",
   "dependencies": "\"What's outdated\", \"are we vulnerable\", audit or upgrade dependencies, CVEs.",
   "develop": "Implement a feature, fix a bug, change behaviour: test first, then code, green.",
