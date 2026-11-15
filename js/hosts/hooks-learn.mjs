@@ -19,8 +19,8 @@ import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
-import { PROJECT_NOTES_DIR, captureSpecFeedback, subagentReport, turnReply } from './spec-feedback.mjs';
-import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
+import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
+import { gitRootOf } from './gitref.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -346,10 +346,8 @@ export function notesRootsOf(install, host, payloadCwd) {
   let base = null;
   try {
     base = isGlobalInstall(host ?? null, install) ? gitRootOf(hookProjectDir(payloadCwd)) : path.dirname(install);
-    const main = base ? mainWorktreeOf(base) : null;
-    if (main) base = path.join(main, path.relative(gitRootOf(base), base));
   } catch { base = null; }
-  return { machine, project: base ? path.join(base, PROJECT_NOTES_DIR) : null };
+  return { machine, project: projectNotesDir(base) };
 }
 
 /**

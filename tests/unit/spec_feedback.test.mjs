@@ -13,6 +13,7 @@ import {
 import { spawnHook } from '../helpers/hook_run.mjs';
 import { SECRET_RE, tailReader } from '../../js/hosts/hooks-prims.mjs';
 import { cmdLearn, notesRootsOf } from '../../js/hosts/hooks-learn.mjs';
+import { gitRootOf } from '../../js/hosts/gitref.mjs';
 
 const withDir = async (fn) => {
   const sb = makeSandbox('specfb-');
@@ -132,6 +133,11 @@ const SKILL_LINES = [
     [{ scope: 'skill', skill: 'debug', body: 'an unchosen alternative reads as its own' }]],
   ['spec-feedback: [skill:debug:general:project] two scopes in one tag — seen: x', []],
   ['spec-feedback: [skill:debug:local] an unknown scope — seen: x', []],
+  // The bare tag carries its scope too, so a bare project line never reaches the machine notes.
+  ['spec-feedback: skill:debug:project — the bare project tag — seen: x',
+    [{ scope: 'project', skill: 'debug', body: 'the bare project tag — seen: x' }]],
+  ['spec-feedback: skill:debug:general — the bare general tag — seen: x',
+    [{ scope: 'general', skill: 'debug', body: 'the bare general tag — seen: x' }]],
 ];
 
 test('specFeedbackOf: a fenced skill line is an example, not a note', () => {
@@ -594,6 +600,8 @@ test('learn hook: an [agent:project] line goes to <project>/notebook, never to t
     assert.match(read(w.tier, 'agent-notes', 'tester.md'), ownNote);
   });
   await withDir(async (d) => {
+    // A temp folder inside a repo (a home kept under git) has a project after all: no row to run.
+    if (gitRootOf(d)) return;
     const w = world(d, 'claude-global', { shared: true });
     projectReport(w);
     const loose = path.join(d, 'loose');
@@ -667,7 +675,7 @@ test('notesRootsOf: the machine root is the tier\'s, the project root follows th
     assert.deepEqual(notesRootsOf(path.join(proj, '.claude'), 'claude', null), { machine: tier, project: path.join(proj, 'notebook') });
     assert.deepEqual(notesRootsOf(path.join(proj, '.openclaude'), 'openclaude', null), { machine: tier, project: path.join(proj, 'notebook') });
     assert.deepEqual(notesRootsOf(global, 'claude', path.join(proj, 'sub')), { machine: tier, project: path.join(proj, 'notebook') });
-    assert.deepEqual(notesRootsOf(global, 'claude', d), { machine: tier, project: null });
+    if (!gitRootOf(d)) assert.deepEqual(notesRootsOf(global, 'claude', d), { machine: tier, project: null });
     assert.deepEqual(notesRootsOf(null, 'claude', proj), { machine: null, project: null });
   }));
 });

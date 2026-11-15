@@ -113,6 +113,33 @@ test('migrateProjectNotes: a notebook that already is the project notebook is le
   });
 });
 
+/** A linked worktree `<d>/wt` of the main checkout `<d>/main`, laid out as git lays one out. */
+const linkedWorktree = (d) => {
+  const main = path.join(d, 'main');
+  const gitdir = path.join(main, '.git', 'worktrees', 'wt');
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(gitdir, 'commondir'), '../..\n');
+  const wt = path.join(d, 'wt');
+  fs.mkdirSync(wt);
+  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${gitdir}\n`);
+  return { main, wt };
+};
+
+// An install in a linked worktree: its notes go to the main checkout's notebook, where the hook
+// writes them and step 0 reads them; the worktree's own folder goes with the worktree.
+test('migrateProjectNotes: an install in a linked worktree merges into the main checkout', () => {
+  withDir((d) => {
+    const { main, wt } = linkedWorktree(d);
+    const cfg = path.join(wt, '.claude');
+    put(path.join(cfg, 'notebook', 'agent-notes', 'tester.md'), '- [agent] a fix (tester, 2026-11-01)\n');
+    const { say, lines } = said();
+    assert.deepEqual(migrateProjectNotes(cfg, wt, say).moved, ['agent-notes/tester.md']);
+    assert.equal(read(main, 'notebook', 'agent-notes', 'tester.md'), '- [agent] a fix (tester, 2026-11-01)\n');
+    assert.equal(fs.existsSync(path.join(wt, 'notebook')), false);
+    assert.match(lines[0], /into \.\.\/main\/notebook\/;/);
+  });
+});
+
 // Through each project emit: the notes in that host's own layer notebook land in `<root>/notebook`,
 // the one folder every host's step 0 names. OpenCode's legacy layer is `.opencode/notebook` (#590).
 test('a project emit moves its host layer\'s notes into <root>/notebook, on every host', () => {

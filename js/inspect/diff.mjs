@@ -51,7 +51,7 @@ import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
-import { PROJECT_NOTES_DIR } from '../hosts/spec-feedback.mjs';
+import { projectNotesDir } from '../hosts/spec-feedback.mjs';
 import { relPosix } from '../lib/text.mjs';
 
 /**
@@ -369,7 +369,7 @@ const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale
  * Where an install's notes are: its own notebook (where every note went before the two scopes,
  * and a global install's until the fold), the machine notes in the tier's `notes/`, which every
  * install's loops now write (D6), and, for a project install, the project notes in
- * `<project>/notebook` (js/hosts/spec-feedback.mjs `PROJECT_NOTES_DIR`). The project is the
+ * `<project>/notebook` (js/hosts/spec-feedback.mjs `projectNotesDir`, a linked worktree mapped to its main checkout). The project is the
  * install's parent when the install is a host layer (`.claude`, `.opencode`, …), else the install
  * itself. One folder is listed once, under its first label.
  */
@@ -378,7 +378,7 @@ function notesRoots(dir) {
   try { roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
   if (!isGlobalInstall(null, dir)) {
     const project = path.basename(dir).startsWith('.') ? path.dirname(dir) : dir;
-    roots.push([path.join(project, PROJECT_NOTES_DIR), 'project-notebook']);
+    roots.push([projectNotesDir(project), 'project-notebook']);
   }
   const seen = new Set();
   return roots.filter(([root]) => {

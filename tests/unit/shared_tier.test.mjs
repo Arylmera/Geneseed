@@ -282,11 +282,23 @@ test('the back-port queue reads the tier\'s notes for every install, and a proje
     const layer = install(path.join(d, 'repo', '.claude'), 'claude');
     put(path.join(d, 'repo', 'notebook'));
     const atRoot = install(path.join(d, 'oc-repo'), 'opencode');
+    // A project install in a linked worktree: its project notes are the main checkout's.
+    const gitdir = path.join(d, 'main', '.git', 'worktrees', 'wt');
+    fs.mkdirSync(gitdir, { recursive: true });
+    fs.writeFileSync(path.join(gitdir, 'commondir'), '../..\n');
+    fs.mkdirSync(path.join(d, 'wt'));
+    fs.writeFileSync(path.join(d, 'wt', '.git'), `gitdir: ${gitdir}\n`);
+    const inWorktree = install(path.join(d, 'wt', '.claude'), 'claude');
+    put(path.join(d, 'main', 'notebook'));
     await inEnv({ XDG_CONFIG_HOME: xdg }, () => {
       assert.deepEqual(collectNotes(global).map((n) => n.rel), ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md']);
       assert.deepEqual(collectNotes(layer).map((n) => n.rel),
         ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md', 'project-notebook/skill-notes/debug.md']);
       assert.deepEqual(collectNotes(atRoot).map((n) => n.rel), ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md']);
+      const wtNotes = collectNotes(inWorktree);
+      assert.deepEqual(wtNotes.map((n) => n.rel),
+        ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md', 'project-notebook/skill-notes/debug.md']);
+      assert.equal(fs.existsSync(path.join(d, 'wt', 'notebook')), false, 'the worktree has no notebook: the listed one is main\'s');
     });
   });
 });

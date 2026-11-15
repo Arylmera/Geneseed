@@ -23,7 +23,7 @@ import { normcase } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { archiveStore } from '../hosts/memory-files.mjs';
 import {
-  PROJECT_NOTEBOOK_GITIGNORE, PROJECT_NOTES_DIR, feedbackKey, mergeNotesText, withLock,
+  PROJECT_NOTEBOOK_GITIGNORE, feedbackKey, mergeNotesText, projectNotesDir, withLock,
 } from '../hosts/spec-feedback.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -41,7 +41,8 @@ const keysOf = (text) => new Set(text.replace(/\r\n?/g, '\n').split('\n').filter
  */
 export function migrateProjectNotes(cfgDir, projectRoot, say = (s) => process.stdout.write(s)) {
   const report = { moved: [], kept: [], archived: [] };
-  const target = path.join(projectRoot, PROJECT_NOTES_DIR);
+  // A linked worktree's notes go to its main checkout, as the hook writes them (`projectNotesDir`).
+  const target = projectNotesDir(projectRoot);
   for (const sub of NOTES_DIRS) {
     const src = path.join(cfgDir, 'notebook', sub);
     const dst = path.join(target, sub);
@@ -86,11 +87,11 @@ export function migrateProjectNotes(cfgDir, projectRoot, say = (s) => process.st
   }
   if (report.moved.length) {
     say(`[geneseed] notes: merged ${report.moved.length} project note file(s) from `
-      + `${relPosix(projectRoot, path.join(cfgDir, 'notebook')) || cfgDir} into ${PROJECT_NOTES_DIR}/; the originals `
+      + `${relPosix(projectRoot, path.join(cfgDir, 'notebook')) || cfgDir} into ${relPosix(projectRoot, target) || target}/; the originals `
       + `are set aside in ${report.archived.map((a) => relPosix(projectRoot, a) || a).join(', ')}\n`);
   }
   for (const { rel, why } of report.kept) {
-    say(`[geneseed] notes: kept ${rel} where it is, not merged into ${PROJECT_NOTES_DIR}/ (${why}); merge it by hand\n`);
+    say(`[geneseed] notes: kept ${rel} where it is, not merged into ${relPosix(projectRoot, target) || target}/ (${why}); merge it by hand\n`);
   }
   return report;
 }

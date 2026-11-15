@@ -523,8 +523,11 @@ test("two scopes: V1 and V2 child sessions send each line to its scope, for a pr
     await fs.mkdir(path.join(other, "src"))
     const roots = await global.notesRootsOf(path.join(gcfg, "plugins"), path.join(other, "src"))
     assert.deepEqual(roots, { machine: sb.tier, project: path.join(other, "notebook") })
-    assert.deepEqual(await global.notesRootsOf(path.join(gcfg, "plugins"), sb.d), { machine: sb.tier, project: null },
-      "a global session outside any repo has no project")
+    const { gitRootOf } = await import("../../js/hosts/gitref.mjs")
+    if (!gitRootOf(sb.d)) {   // a temp folder inside a repo (a home kept under git) has a project after all
+      assert.deepEqual(await global.notesRootsOf(path.join(gcfg, "plugins"), sb.d), { machine: sb.tier, project: null },
+        "a global session outside any repo has no project")
+    }
     const queue = []
     let wake = null
     const controller = { aborted: false }

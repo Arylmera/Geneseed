@@ -24,6 +24,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { SECRET_RE, splitLines } from './hooks-prims.mjs';
+import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
 
 // ---- spec-feedback twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
 // to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
@@ -53,9 +54,9 @@ const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t
  * before `general` is the template's unchosen alternative, as `[agent|general]` is: own notes.
  * The bracket's content is taken whole, and a name that is no slug (the template's `<name>`, a
  * path) drops the line rather than letting `[skill:…]` fall through into an agent's notes. The
- * brackets may be dropped (`skill:debug — …`), as reports drop them around `agent`.
+ * brackets may be dropped (`skill:debug — …`), as reports drop them around `agent`, scope and all (`skill:debug:project — …`).
  */
-const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general|project)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general|project)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?::(general|project))?(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 const SKILL_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 // What opens a skill's tag at all, parsed or not.
 const SKILL_OPENING_RE = /^(?:\[[ \t]*skill\b|skill[ \t]*:)/i;
@@ -125,7 +126,8 @@ export function specFeedbackOf(text, secret) {
       // format), not the reply's own line: the main session discusses the format, an agent's
       // report does not. A whole-line `spec-feedback:` in backticks stays an agent's line.
       if (m[1] === '`') continue;
-      scope = k[3] && k[2] !== '|' ? k[3].toLowerCase() : 'skill';
+      const tag = k[3] && k[2] !== '|' ? k[3] : k[5];
+      scope = tag ? tag.toLowerCase() : 'skill';
       body = body.slice(k[0].length);
     } else if (SKILL_OPENING_RE.test(body)) {
       continue; // a skill tag that does not parse (`[skill:a:b]`, `[skill:a, b]`) is no agent's line
@@ -419,6 +421,22 @@ export function liveSkill(skillsDir, name) {
   try {
     return readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf8').includes(`skill-notes/${name}.md`);
   } catch { return false; }
+}
+
+/**
+ * THE ONE RESOLVER of a project's notes folder, for the hook, the migration and `diff`:
+ * `<base>/notebook`, where a `base` inside a linked git worktree is mapped to the same place in
+ * the main checkout, since a worktree and its notes go when it is removed. Read off disk, never
+ * by spawning git. The OpenCode learn plugin keeps an async hand twin (`notesRootsOf`).
+ */
+export function projectNotesDir(base) {
+  if (!base) return null;
+  let at = base;
+  try {
+    const main = mainWorktreeOf(at);
+    if (main) at = path.join(main, path.relative(gitRootOf(at), at));
+  } catch { at = base; }
+  return path.join(at, PROJECT_NOTES_DIR);
 }
 
 /**
