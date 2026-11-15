@@ -28,6 +28,7 @@ import { after, test } from 'node:test';
 import { main as driverMain } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { CONTEXT_WINDOWS } from '../../js/build/source.mjs';
+import { claudeConfigDir } from '../../js/hosts/hosts.mjs';
 import { contextWindowOfDir } from '../../js/hosts/installs.mjs';
 import { unwireClaudeListing, wireClaudeListing } from '../../js/hosts/settings.mjs';
 import { claudeUninstall } from '../../js/maintain/uninstall.mjs';
@@ -179,6 +180,24 @@ test('wireClaudeListing never rewrites a commented file, and says what to merge'
   assert.match(r.err, /has comments — not rewriting it .*skillListingMaxDescChars/);
 });
 
+test('wireClaudeListing keeps the record when the file cannot be read, and writes nothing', () => {
+  const p = path.join(sandbox('gscw-inv-'), 'settings.json');
+  fs.writeFileSync(p, '{ not json');
+  const r = capture(() => wireClaudeListing(p, W1M, W200K));
+  assert.deepEqual(r.value, W200K);
+  assert.equal(fs.readFileSync(p, 'utf8'), '{ not json');
+});
+
+test('the first build that writes the keys says so in one line; the next says nothing', () => {
+  const cfg = sandbox('gscw-say-');
+  const first = claudeGlobal(cfg);
+  const said = first.out.split(/\r?\n/).filter((l) => l.startsWith('[geneseed] skill listing:'));
+  assert.deepEqual(said, ['[geneseed] skill listing: wrote skillListingMaxDescChars 80, '
+    + 'skillListingBudgetFraction 0.013 into settings.json for a 200k context window; '
+    + 'on a 1M-token model, rebuild with --context-window 1m.']);
+  assert.doesNotMatch(claudeGlobal(cfg).out, /skill listing:/);
+});
+
 test('unwireClaudeListing removes a recorded key only while it holds the recorded value', () => {
   const p = path.join(sandbox('gscw-u-'), 'settings.json');
   fs.writeFileSync(p, JSON.stringify({ skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.02 }));
@@ -276,4 +295,49 @@ test('profile save reads the value back, and the diff names it', () => {
 test('an unknown value in a profile is refused, naming the valid ones', () => {
   const p = { ...loadProfile('starter').profile, contextWindow: '128k' };
   assert.deepEqual(profileProblems(p), ["'contextWindow': invalid value '128k' (valid: '200k', '1m')"]);
+});
+
+// ---- 7. a project install beside the user level ------------------------------------------------------
+// Project settings outrank `~/.claude/settings.json`, so a project emit must never undercut a key
+// the user level sets, and a new project takes the machine's window. These tests use the sandboxed
+// DEFAULT Claude dir (the user level) and empty it after each, so no other test sees it.
+
+/** Run `fn` with the sandboxed user-level Claude dir, removed afterwards. */
+function withUserLevel(fn) {
+  const dir = claudeConfigDir();
+  try { return fn(dir); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
+test('a global 1m install: a new project with no flag is 1m and leaves the cap to the global file', () => {
+  withUserLevel((dir) => {
+    const r = build('--emit', 'claude-global', '--theme', 'neutral', '--context-window', '1m');
+    assert.equal(r.value, 0, r.err);
+    assert.deepEqual(listing(readJson(dir, 'settings.json')), W1M);
+    const d = sandbox('gscw-under-');
+    assert.equal(build('--emit', 'claude', '--out', d, '--theme', 'neutral').value, 0);
+    assert.equal(contextWindowOfDir(d, 'claude'), '1m');
+    assert.deepEqual(listing(readJson(d, '.claude', 'settings.local.json')), {});
+  });
+});
+
+test('a hand-set user-level cap is not undercut; the project still writes the key the user left', () => {
+  withUserLevel((dir) => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ skillListingMaxDescChars: 300 }));
+    const d = sandbox('gscw-hand-user-');
+    assert.equal(build('--emit', 'claude', '--out', d, '--theme', 'neutral').value, 0);
+    assert.equal(contextWindowOfDir(d, 'claude'), '200k');
+    assert.deepEqual(listing(readJson(d, '.claude', 'settings.local.json')), { skillListingBudgetFraction: 0.013 });
+    assert.deepEqual(readJson(dir, 'settings.json'), { skillListingMaxDescChars: 300 });
+  });
+});
+
+test('an existing 200k project keeps 200k when a global 1m install arrives later', () => {
+  withUserLevel(() => {
+    const d = sandbox('gscw-later-');
+    assert.equal(build('--emit', 'claude', '--out', d, '--theme', 'neutral').value, 0);
+    assert.equal(build('--emit', 'claude-global', '--theme', 'neutral', '--context-window', '1m').value, 0);
+    assert.equal(build('--emit', 'claude', '--out', d, '--theme', 'neutral').value, 0);
+    assert.equal(contextWindowOfDir(d, 'claude'), '200k');
+  });
 });

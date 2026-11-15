@@ -1463,7 +1463,8 @@ export function wireClaudeListing(p, wanted = {}, recorded = {}) {
   const want = parseJson(JSON.stringify(wanted));
   const prior = isDict(recorded) ? recorded : {};
   const loaded = readSettingsForMerge(p, 'Its skill-listing keys were not wired.');
-  if (!loaded) return {};
+  // A file that cannot be read changes nothing, so what this install owns stays on record.
+  if (!loaded) return { ...prior };
   const [config, hadComments] = loaded;
   // `deepEquals`, never `===`: a parsed number is a `JsonNumber` wrapper (js/lib/json.mjs).
   const owned = (k) => has(prior, k) && has(config, k) && deepEquals(config[k], prior[k]);

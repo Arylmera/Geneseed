@@ -59,7 +59,7 @@ import { setupBuildArgs } from '../build/generate.mjs';
 import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../inspect/cost.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
-  claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults,
+  claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults, installState,
   contextWindowOfDir, readJsonMaybe, sharedTierOfDir, themeFiles,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
@@ -297,15 +297,16 @@ function targetGates(emit, out) {
  * The context window of the one install a setup answer re-runs, read off it as `targetGates`
  * reads the gates. PRESERVED, NOT ASKED: the wizard's questions are answered by holding Enter and
  * every recorded probe compares them byte for byte, so the option is set with the flag, a profile
- * or the console. Unreadable or absent reads as the default.
+ * or the console. A target with no install takes `machine`, the machine's answer
+ * (`installedDefaults`), as the CLI's new project does. Unreadable reads as the default.
  */
-function targetContextWindow(emit, out) {
+function targetContextWindow(emit, out, machine = DEFAULT_CONTEXT_WINDOW) {
   const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? [];
   try {
     if (!host) return contextWindowOfDir(resolveOut(out || 'Harness'));
     const dir = scope === 'global'
       ? HOSTS.find((h) => h.host === host).configDir() : resolveOut(out || '.');
-    return contextWindowOfDir(dir, host);
+    return installState(dir, host, scope) === 'absent' ? machine : contextWindowOfDir(dir, host);
   } catch {
     return DEFAULT_CONTEXT_WINDOW;
   }
@@ -357,7 +358,7 @@ export function collectSetupLines(kitMap = null) {
   // `setupBuildArgs` elides an armed gate, so an all-armed install prints what it always did.
   const gates = targetGates(emit, out);
   const gated = Object.values(gates).some((on) => on === false);
-  const contextWindow = targetContextWindow(emit, out);
+  const contextWindow = targetContextWindow(emit, out, inst.contextWindow);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
       excludeRules, undefined, excludeSkills, gates, kits, sharedTier, contextWindow).join(' ')} --reset\n`);

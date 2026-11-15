@@ -244,7 +244,7 @@ function givenTokens(row, args) {
  * before it is ours, and the guard must never refuse a first install into a repo that already
  * uses OpenCode.
  */
-function guardTarget(args, out) {
+export function guardTarget(args, out) {
   if (args.emit === 'files') return null;
   const [host, scope] = EMIT_HOST_SCOPE.get(args.emit) ?? [];
   if (!host) return null;

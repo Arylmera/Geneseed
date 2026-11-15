@@ -46,7 +46,7 @@ import { HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, contextWindowOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
-  installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
+  installedDefaults, installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
 } from '../hosts/installs.mjs';
 import {
@@ -154,11 +154,13 @@ function bodySharedTier(body, root, host) {
 
 /**
  * A request body's `contextWindow` (`--context-window`): only a value `CONTEXT_WINDOWS` names
- * counts; anything else keeps the install's own answer, so a malformed body changes nothing.
+ * counts; anything else keeps the install's own answer, so a malformed body changes nothing. An
+ * install not there yet takes the machine's (`installedDefaults`), as the CLI's new project does.
  */
-function bodyContextWindow(body, root, host) {
+function bodyContextWindow(body, root, host, scope) {
   const said = bget(body, 'contextWindow');
-  return typeof said === 'string' && Object.hasOwn(CONTEXT_WINDOWS, said) ? said : contextWindowOfDir(root, host);
+  if (typeof said === 'string' && Object.hasOwn(CONTEXT_WINDOWS, said)) return said;
+  return installState(root, host, scope) === 'absent' ? installedDefaults().contextWindow : contextWindowOfDir(root, host);
 }
 
 /**
@@ -790,7 +792,7 @@ export function apiInstallCmd(state, body) {
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
-    kits ?? kitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host));
+    kits ?? kitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope));
   // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
   // and `setupBuildArgs` elides an axis at its default, so returning one to it (a mode back to
   // direct, a gate re-armed) would otherwise trip the preserve guard (js/build/profile.mjs).
@@ -914,7 +916,7 @@ export function apiDeployCmd(state, body) {
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host),
-    bodySharedTier(body, root, host), bodyContextWindow(body, root, host));
+    bodySharedTier(body, root, host), bodyContextWindow(body, root, host, 'project'));
   // `--reset`, as in `apiInstallCmd`: the form's answers plus the folder's own are a whole selection.
   argv.push('--reset');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
