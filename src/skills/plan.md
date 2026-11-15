@@ -15,8 +15,9 @@
    [brainstorm {{SKILL}}](brainstorm.md) first rather than planning blind. Otherwise
    restate the goal in one line. Either way, confirm the actual starting state before
    designing the steps ({{LAW:verify-before-asserting}} — verify before designing).
-2. Write a numbered plan to `WORKLOG.md` (or `plans/<task>.md`) in your {{NOTEBOOK}}
-   (§6) — into the repository only when the user asks. A worker or slice
+2. Write a numbered plan beside its spec, in the project's spec or plan home (e.g.
+   `docs/plans/`) when one exists; else to `WORKLOG.md` (or `plans/<task>.md`) in your
+   {{NOTEBOOK}} (§6). A worker or slice
    in another worktree cannot see the {{NOTEBOOK}}, so its brief carries the plan's path
    or text. The plan holds ordered steps, each
    independently checkable. Group the steps into milestones — coherent chunks after
@@ -55,7 +56,7 @@
 
 > The worklog is external memory: it lets a context-limited agent recover its
 > place after the window fills, and lets the user correct course early. The
-> {{NOTEBOOK}} is git-ignored; a worklog the user asked for in the repository is
-> committed or ignored as they decide.
+> {{NOTEBOOK}} is git-ignored; a plan in the project's own spec or plan home is
+> tracked there like its spec.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
