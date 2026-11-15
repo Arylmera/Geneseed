@@ -24,7 +24,7 @@
   <!-- bash: allow -->
 
 ## Procedure
-0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md` and `_general.md` there, which win where they disagree.
    When the brief says to answer from what it hands you alone, skip steps 0–2.
 1. Search to locate the relevant files before reading them ({{DOCTRINE:context-economy}}).
 2. Read only the slices that matter; follow references outward as needed.

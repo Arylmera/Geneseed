@@ -903,6 +903,7 @@ function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {
     const install = path.join(sb.path, 'install');
     fs.mkdirSync(path.join(install, 'notebook'), { recursive: true });
     fs.mkdirSync(path.join(install, 'memory'), { recursive: true });   // where an agent lesson lands
+    fs.mkdirSync(path.join(sb.path, 'home', '.config', 'geneseed'), { recursive: true });   // the machine folder
     if (before) before(install);
     const transcript = path.join(sb.path, 'agent-w.jsonl');
     const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) };
@@ -926,7 +927,8 @@ function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {
       const ledger = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8') : '';
       if (fs.existsSync(ledgerFile)) fs.unlinkSync(ledgerFile);
       const lesson = fs.existsSync(path.join(install, 'memory', 'agents', 'developer.md'));
-      const noteFile = path.join(install, 'notebook', 'agent-notes', 'developer.md');
+      // An `[agent]` line is a machine note: the tier's, whatever the install kind.
+      const noteFile = path.join(sb.path, 'home', '.config', 'geneseed', 'notes', 'agent-notes', 'developer.md');
       const note = fs.existsSync(noteFile) ? fs.readFileSync(noteFile, 'utf8') : null;
       return { rc: p.status, out: p.stdout, err: p.stderr, ledger, lesson, note };
     });

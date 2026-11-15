@@ -40,7 +40,7 @@ In [foreman mode](foreman-mode.md) the session hands each task that would block 
 
 ### Agents learn too
 
-When a subagent finishes, the hook copies each `spec-feedback:` line its report ends with into `agent-notes/<name>.md` in the notes folder (a `general` line into `agent-notes/_general.md` instead, which every agent reads), with no model call. The agent reads those notes first at its next dispatch, so a spec flaw it reported is in front of it until the user folds the fix into the source. See [Hooks](hooks.md). (Not on Bob, which has no subagent-finished event: there the caller copies the line.)
+When a subagent finishes, the hook copies each `spec-feedback:` line its report ends with into a notes file, with no model call. The line picks its scope with one question: is it true in any repo, or only here? A flaw of the spec is true in any repo: `[agent]` goes into the machine notes, `agent-notes/<name>.md` under `~/.config/geneseed/notes/` (a `[general]` line into `agent-notes/_general.md` there, which every agent reads). A fact true only in this repo is tagged `[agent:project]` and goes into `notebook/agent-notes/<name>.md` at the project root, one folder for every host (in a linked worktree, the main checkout's); a `[general:project]` line goes into `notebook/agent-notes/_general.md`, which every agent reads in that repo. The agent reads the machine notes and then the project notes first at its next dispatch; where they disagree, the project notes win. So a flaw it reported is in front of it until the user folds the fix into the source. See [Hooks](hooks.md). (Not on Bob, which has no subagent-finished event: there the caller copies the line into the machine or the project file.)
 
 ### Did a spec change help?
 

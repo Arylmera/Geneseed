@@ -50,7 +50,8 @@ import { hostGlobalInstalls as globalInstalls } from './excludes.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';
-import { toPlatformPath } from '../lib/paths.mjs';
+import { normcase, toPlatformPath } from '../lib/paths.mjs';
+import { projectNotesDir } from '../hosts/spec-feedback.mjs';
 import { relPosix } from '../lib/text.mjs';
 
 /**
@@ -364,11 +365,28 @@ export const drifted = (files) => files.filter((f) => f.status !== 'linked');
  */
 const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
 
-/** An install's notebook; a global install's loops write to the tier's `notes/` too (D6). */
+/**
+ * Where an install's notes are: its own notebook (where every note went before the two scopes,
+ * and a global install's until the fold), the machine notes in the tier's `notes/`, which every
+ * install's loops now write (D6), and, for a project install, the project notes in
+ * `<project>/notebook` (js/hosts/spec-feedback.mjs `projectNotesDir`, a linked worktree mapped to its main checkout). The project is the
+ * install's parent when the install is a host layer (`.claude`, `.opencode`, …), else the install
+ * itself. One folder is listed once, under its first label.
+ */
 function notesRoots(dir) {
   const roots = [[path.join(dir, 'notebook'), 'notebook']];
-  try { if (isGlobalInstall(null, dir)) roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
-  return roots;
+  try { roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
+  if (!isGlobalInstall(null, dir)) {
+    const project = path.basename(dir).startsWith('.') ? path.dirname(dir) : dir;
+    roots.push([projectNotesDir(project), 'project-notebook']);
+  }
+  const seen = new Set();
+  return roots.filter(([root]) => {
+    const k = normcase(path.resolve(root));
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 /**

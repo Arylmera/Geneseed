@@ -19,7 +19,7 @@ A global install keeps what you teach it in one place for every host on the mach
 | `geneseed-wiki.jsonc` | Your [wiki](../guides/wiki.md) declaration |
 | `excludes.json` | [Sovereign folders](exclusions.md) |
 | `memory/` | The [memory](memory.md) store: facts, `MEMORY.md`, `topics/`, `agents/`, `archive/` |
-| `notes/` | The self-improvement notes: `skill-notes/`, `agent-notes/` |
+| `notes/` | The self-improvement notes true in any repo: `skill-notes/`, `agent-notes/`. Every install writes them here, project installs included, and a project install's files name this folder as `~/.config/geneseed/notes`, the same on every machine. The notes true in one repo only live in that repo's `notebook/` |
 | `user-rules.draft.md` | What waits for your decision. Never loaded |
 | `.fold-state.json` | The record of each drafted or decided item |
 | `default-install.json` | The console's default install, once you pick one |

@@ -30,6 +30,14 @@ export const LEGACY_WIKI_SEED = 'cccc917c34e6b990e821620bdb4739090151885ab71b6e8
 /** Where the self-improvement loops write, relative to a notes root. */
 export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
 
+/**
+ * The tier's root as a PROJECT emit names it. A project install's files may be committed and read
+ * on a teammate's machine, so they never carry this machine's absolute path: the default location
+ * in `~` form, the same bytes on every machine. A relocated `$XDG_CONFIG_HOME` is the one case it
+ * misses: there the hook still writes to the real tier, and a project's step 0 reads the default.
+ */
+export const PORTABLE_MACHINE_DIR = '~/.config/geneseed';
+
 export function machineDir() {
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(base, 'geneseed');

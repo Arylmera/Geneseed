@@ -39,6 +39,8 @@ import {
 } from './source.mjs';
 import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
+import { PROJECT_NOTES_DIR } from '../hosts/spec-feedback.mjs';
+import { PORTABLE_MACHINE_DIR } from '../lib/machine-dir.mjs';
 import { VENDORED_SKILL_DIRS, vendoredWithCatalogueLine } from '../hosts/native.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 
@@ -73,7 +75,11 @@ export function pathTokens(theme, sharedRoot = null) {
   const at = sharedRoot ? `${sharedRoot}/` : theme.AT_HARNESS ?? '';
   return {
     PATH_MEMORY: sharedRoot ? `${at}memory` : memory,
-    PATH_NOTES: sharedRoot ? `${at}notes` : theme.DIR_NOTEBOOK ?? 'notebook',
+    // The two notes scopes (js/hosts/spec-feedback.mjs `PROJECT_NOTES_DIR`). Machine: the tier,
+    // absolute on a global emit, the portable `~` form on any other (a project's files travel).
+    // Project: relative to the project root, the same on every host and never prefixed.
+    PATH_NOTES: `${sharedRoot ?? PORTABLE_MACHINE_DIR}/notes`,
+    PATH_PROJECT_NOTES: PROJECT_NOTES_DIR,
     PATH_RULES: `${at}user-rules.md`,
     PATH_PROFILE: `${at}PROFILE.md`,
     PATH_WIKI: `${at}geneseed-wiki.jsonc`,
@@ -640,12 +646,10 @@ export function effectiveTheme(cfg, themeName, {
   footprint = 'full', lawsPrefix = '', sharedRoot = null,
 } = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
+  // Neither notes path takes `lawsPrefix`: the machine one is the tier's, and the project one is
+  // the project root's `notebook/` on every host. Prefixing it once sent OpenClaude's skills to
+  // `notebook/` while its hook wrote `.openclaude/notebook/` (T10).
   Object.assign(theme, pathTokens(theme, sharedRoot));
-  // A skill or agent names its notes file as a path the agent opens from the project root, and
-  // on an install whose harness sits a level down (`.claude/`) the notebook is there too. Only
-  // the relative form takes the prefix; the root file's re-render (`prefixedAgentText`) derives
-  // its own from its prefixed DIR_NOTEBOOK.
-  if (!sharedRoot) theme.PATH_NOTES = `${lawsPrefix}${theme.PATH_NOTES}`;
   // Empty without a tier, so a project emit and a default build stay byte-identical (the
   // `EXCLUDED_SKILLS_LINE` contract). Each rides the end of a template line, so its value carries
   // the blank line. C1 lives in this text: the readers only concatenate, shared first.

@@ -56,12 +56,14 @@ async function inEnv(env, fn) {
 test('the PATH tokens follow the DIR tokens when relative and ignore any prefix when absolute', () => {
   // Relative rows are today's bytes: a project carrier reads `.claude/memory`, so the prefix that
   // `prefixedAgentText` puts on DIR_MEMORY and AT_HARNESS must reach these too. An absolute row
-  // takes no prefix: `../C:/x` is a path to nowhere.
+  // takes no prefix: `../C:/x` is a path to nowhere. The two notes paths follow no DIR token at
+  // all: the machine notes are the tier's (absolute on a global emit, the portable `~` form on any
+  // other), and the project notes are `notebook` from the project root, on every host.
   const cases = [
-    ['bundle', STRUCTURE, null, 'memory', 'notebook', 'user-rules.md', 'PROFILE.md', '[`memory/`](memory/)',
+    ['bundle', STRUCTURE, null, 'memory', '~/.config/geneseed/notes', 'user-rules.md', 'PROFILE.md', '[`memory/`](memory/)',
       '`PROFILE.md` beside the deployed AGENT.md', 'geneseed-wiki.jsonc', ''],
     ['prefixed', { DIR_MEMORY: '.claude/memory', DIR_NOTEBOOK: '.claude/notebook', AT_HARNESS: '.claude/' }, null,
-      '.claude/memory', '.claude/notebook', '.claude/user-rules.md', '.claude/PROFILE.md',
+      '.claude/memory', '~/.config/geneseed/notes', '.claude/user-rules.md', '.claude/PROFILE.md',
       '[`.claude/memory/`](.claude/memory/)', '`PROFILE.md` beside the deployed AGENT.md',
       '.claude/geneseed-wiki.jsonc', ''],
     ['global', { DIR_MEMORY: '../memory', DIR_NOTEBOOK: '../notebook', AT_HARNESS: '../' }, 'C:/h/.config/geneseed',
@@ -71,8 +73,9 @@ test('the PATH tokens follow the DIR tokens when relative and ignore any prefix 
       ', then, when that one declares no wiki, the shared `C:/h/.config/geneseed/geneseed-wiki.jsonc`'],
   ];
   for (const [label, theme, root, memory, notes, rules, profile, link, located, wiki, wikiTier] of cases) {
-    assert.deepEqual(pathTokens(theme, root), { PATH_MEMORY: memory, PATH_NOTES: notes, PATH_RULES: rules,
-      PATH_PROFILE: profile, PATH_WIKI: wiki, WIKI_TIER: wikiTier, LINK_MEMORY: link, PROFILE_LOCATION: located }, label);
+    assert.deepEqual(pathTokens(theme, root), { PATH_MEMORY: memory, PATH_NOTES: notes, PATH_PROJECT_NOTES: 'notebook',
+      PATH_RULES: rules, PATH_PROFILE: profile, PATH_WIKI: wiki, WIKI_TIER: wikiTier, LINK_MEMORY: link,
+      PROFILE_LOCATION: located }, label);
   }
 });
 
@@ -256,7 +259,12 @@ test('doctor notes a carrier whose rendered tier is not the run-time one', async
 
 // ---- Callers the move would have stranded -------------------------------------------------------
 
-test('the back-port queue reads a global install\'s tier notes, and a project install\'s notebook only', async () => {
+// Every install's loops now write machine notes to the tier, so every install's queue lists the
+// tier's notes. A project install also lists its project notes, `<project>/notebook` (the parent
+// of a `.claude`-style layer, or the install itself when it is the project's root, where the
+// project notes and its own notebook are one folder, listed once). Its own notebook stays listed:
+// notes written there before the two scopes wait in it until the migration moves them.
+test('the back-port queue reads the tier\'s notes for every install, and a project install\'s project notes', async () => {
   await withDir(async (d) => {
     const xdg = path.join(d, 'xdg');
     const put = (root) => {
@@ -264,23 +272,38 @@ test('the back-port queue reads a global install\'s tier notes, and a project in
       fs.writeFileSync(path.join(root, 'skill-notes', 'debug.md'), '- a note\n');
     };
     put(path.join(xdg, 'geneseed', 'notes'));
-    const install = (emit) => {
-      const dir = path.join(d, emit);
-      fs.mkdirSync(dir);
+    const install = (dir, emit) => {
+      fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, '.geneseed-emit'), emit);
       put(path.join(dir, 'notebook'));
       return dir;
     };
-    const global = install('claude-global');
-    const project = install('claude');
+    const global = install(path.join(d, 'claude-global'), 'claude-global');
+    const layer = install(path.join(d, 'repo', '.claude'), 'claude');
+    put(path.join(d, 'repo', 'notebook'));
+    const atRoot = install(path.join(d, 'oc-repo'), 'opencode');
+    // A project install in a linked worktree: its project notes are the main checkout's.
+    const gitdir = path.join(d, 'main', '.git', 'worktrees', 'wt');
+    fs.mkdirSync(gitdir, { recursive: true });
+    fs.writeFileSync(path.join(gitdir, 'commondir'), '../..\n');
+    fs.mkdirSync(path.join(d, 'wt'));
+    fs.writeFileSync(path.join(d, 'wt', '.git'), `gitdir: ${gitdir}\n`);
+    const inWorktree = install(path.join(d, 'wt', '.claude'), 'claude');
+    put(path.join(d, 'main', 'notebook'));
     await inEnv({ XDG_CONFIG_HOME: xdg }, () => {
       assert.deepEqual(collectNotes(global).map((n) => n.rel), ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md']);
-      assert.deepEqual(collectNotes(project).map((n) => n.rel), ['notebook/skill-notes/debug.md']);
+      assert.deepEqual(collectNotes(layer).map((n) => n.rel),
+        ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md', 'project-notebook/skill-notes/debug.md']);
+      assert.deepEqual(collectNotes(atRoot).map((n) => n.rel), ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md']);
+      const wtNotes = collectNotes(inWorktree);
+      assert.deepEqual(wtNotes.map((n) => n.rel),
+        ['notebook/skill-notes/debug.md', 'notes/skill-notes/debug.md', 'project-notebook/skill-notes/debug.md']);
+      assert.equal(fs.existsSync(path.join(d, 'wt', 'notebook')), false, 'the worktree has no notebook: the listed one is main\'s');
     });
   });
 });
 
-// ---- Carried from S3 ----------------------------------------------------------------------------
+// ---- Carried from S3----------------------------------------------------------------------------
 
 test('the rule gate survives a home directory it cannot read, and still guards the rule store', async () => {
   // A gate that touched the home dir unguarded would answer "no target" for every path, and a rule

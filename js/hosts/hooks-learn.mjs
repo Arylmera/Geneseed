@@ -19,7 +19,8 @@ import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
-import { captureSpecFeedback, subagentReport, turnReply } from './spec-feedback.mjs';
+import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
+import { gitRootOf } from './gitref.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -324,24 +325,29 @@ function sharedStoreFor(install, args) {
 }
 
 /**
- * The notes root an install's agents read, `PATH_NOTES` as the render spells it: the tier's
- * `notes/` when `--memory` (after `sharedStoreFor`) is the shared store, else `<install>/notebook`,
- * the folder the fold copies from (js/build/fold.mjs `foldNotes`). So a global install whose tier
- * is not seeded yet keeps its notes beside its own store until the next fold, as its facts wait.
+ * The two notes roots a line can go to (./spec-feedback.mjs `feedbackTargets`), as the render
+ * names them: MACHINE is the tier's `notes/` (`{{PATH_NOTES}}`) for every host and install kind;
+ * PROJECT is `<project>/notebook` (`{{PATH_PROJECT_NOTES}}`), one folder for every host.
  *
- * `notebook` IS ASSUMED, NOT DERIVED: the render's `DIR_NOTEBOOK` (js/build/render.mjs STRUCTURE)
- * defaults to it, no theme overrides it, and the fold reads the same literal. Deriving it would mean
- * loading the build's render module on every SubagentStop; if a theme ever renames the notebook,
- * this line and `foldNotes` move together.
+ * The project is the install's parent for a project install (`<repo>/.claude`, `.bob`,
+ * `.openclaude`), and for a global install the git root of the session's project
+ * (`hookProjectDir`); either way a linked worktree's main checkout, since a worktree and its notes
+ * go when it is removed. A global session outside any repo (home, a temp folder) has no project:
+ * its project lines are dropped, never sent to the machine notes, where every repo would read them.
+ *
+ * The machine notes need the tier's folder to exist; it does on any machine an emit has run on
+ * (the install registry lives there), and only `notes/<sub>/` is ever created under it, never
+ * `memory/`, whose presence is what `sharedStoreFor` reads as "the tier is seeded".
  */
-export function notesRootOf(memory) {
-  if (!memory) return null;
-  const mem = path.resolve(toPlatformPath(memory));
+export function notesRootsOf(install, host, payloadCwd) {
+  if (!install) return { machine: null, project: null };
+  let machine = null;
+  try { machine = sharedPaths().notes; } catch { /* no home directory: no tier */ }
+  let base = null;
   try {
-    const shared = sharedPaths();
-    if (mem === path.resolve(shared.memory)) return shared.notes;
-  } catch { /* no home directory: no tier */ }
-  return path.join(path.dirname(mem), 'notebook');
+    base = isGlobalInstall(host ?? null, install) ? gitRootOf(hookProjectDir(payloadCwd)) : path.dirname(install);
+  } catch { base = null; }
+  return { machine, project: projectNotesDir(base) };
 }
 
 /**
@@ -351,10 +357,12 @@ export function notesRootOf(memory) {
  * `<install>/skills/`. No model, so `$GENESEED_LLM` does not gate it. Silent on stdout, which an
  * advisory verdict or the change report may hold, and a failure costs only the capture.
  */
-function captureFeedback(agent, report, args, install) {
+function captureFeedback(agent, report, args, install, meta) {
+  // Most replies hold no feedback line: then the two roots are never resolved (two fs walks).
+  if (!/spec-feedback/i.test(report || '')) return;
   try {
     const skills = install ? path.join(install, 'skills') : null;
-    const written = captureSpecFeedback(agent, report, notesRootOf(args.memory), undefined, skills);
+    const written = captureSpecFeedback(agent, report, notesRootsOf(install, args.host, meta.cwd), undefined, skills);
     if (written.length) err(`[learn] spec-feedback -> ${written.join(', ')}\n`);
   } catch { /* a note never fails the hook */ }
 }
@@ -372,7 +380,7 @@ function subagentFeedback(meta, args, read, install) {
   if (!agent) return null;
   let report = '';
   try { report = subagentReport(meta, read); } catch { /* no report: nothing to capture */ }
-  captureFeedback(agent, report, args, install);
+  captureFeedback(agent, report, args, install, meta);
   return { agent, report };
 }
 function subagentEnded(meta, args, read, install, { agent, report }) {
@@ -448,7 +456,7 @@ export function cmdLearn(args) {
   if (hookEvent === 'Stop') {
     let reply = '';
     try { reply = turnReply(meta, read); } catch { /* no reply: nothing to capture */ }
-    if (reply) captureFeedback(null, reply, args, install);
+    if (reply) captureFeedback(null, reply, args, install, meta);
   }
   if (verdict === 'block') return 0;
 
