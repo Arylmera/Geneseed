@@ -35,7 +35,11 @@
  *
  * KNOWN GAP: kill only this wrapper hard (SIGKILL, Task Manager) and its child runs on unlocked;
  * the lock goes stale in STALE_MS and the next waiter starts beside it. SIGINT and SIGTERM are
- * forwarded to the child, which avoids this.
+ * forwarded to the child, which avoids this. A narrower one: three waiters meet one stale lock,
+ * the first takes it, the second renames that live lock aside, and a third creates a lock before
+ * the second can link it back. Two runs then overlap, and the first holder's heartbeat says it
+ * lost the lock. That needs a dead holder and three waiters inside one poll; a lock with no
+ * window would need an OS primitive that node does not offer.
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
