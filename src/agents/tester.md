@@ -22,7 +22,9 @@
 1. For new tests: write the test, watch it fail with the behaviour absent or
    deliberately broken, then confirm it passes against the implementation —
    a test that has never failed verifies nothing ({{LAW:verify-before-asserting}}).
-2. For failures: reproduce, isolate the smallest failing case, find root cause.
+2. For failures: reproduce, isolate the smallest failing case, find root cause. A failure
+   seen in a concurrent run: re-run that file alone first. Green alone and red together is
+   load or a race, not the code — report it as such.
 3. Cover edge cases and error paths, not just the happy path — including
    adversarial inputs at any trust boundary the code under test exposes.
 4. Run the project's linter alongside the suite and report both exit codes — the
