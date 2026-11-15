@@ -71,14 +71,27 @@ function argsOf(argv) {
 
 const readOrNull = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 
-/** Create the lock, or take over a stale one. True when it is ours, holding `mine`. */
-function tryAcquire(mine) {
+// BUSY IS NOT AN ERROR. On Windows a lock its holder is deleting refuses a new create with EPERM,
+// not EEXIST, and a file a waiter is reading refuses a delete with EBUSY or EPERM. Measured: 2 of
+// 25 serialized runs crashed with EPERM on the create before this. Each one means "try again".
+const BUSY = new Set(['EEXIST', 'EPERM', 'EACCES', 'EBUSY']);
+const remove = (p) => {
+  try { fs.rmSync(p, { force: true, maxRetries: 10, retryDelay: 50 }); } catch { /* goes stale */ }
+};
+
+function create(mine) {
   try {
     fs.writeFileSync(LOCK, mine, { flag: 'wx' });
     return true;
   } catch (e) {
-    if (e.code !== 'EEXIST') throw e;
+    if (!BUSY.has(e.code)) throw e;
+    return false;
   }
+}
+
+/** Create the lock, or take over a stale one. True when it is ours, holding `mine`. */
+function tryAcquire(mine) {
+  if (create(mine)) return true;
   let mtime;
   try { mtime = fs.statSync(LOCK).mtimeMs; } catch { return false; }
   const judged = readOrNull(LOCK);
@@ -88,18 +101,12 @@ function tryAcquire(mine) {
   if (readOrNull(aside) !== judged) {
     // Another waiter took over between our read and our rename: this is its live lock.
     try { fs.linkSync(aside, LOCK); } catch { /* a third holder exists; nothing better to do */ }
-    fs.rmSync(aside, { force: true });
+    remove(aside);
     return false;
   }
-  fs.rmSync(aside, { force: true });
+  remove(aside);
   say(`took over a stale lock (untouched ${Math.round((Date.now() - mtime) / 1000)} s): ${judged.trim()}`);
-  try {
-    fs.writeFileSync(LOCK, mine, { flag: 'wx' });
-    return true;
-  } catch (e) {
-    if (e.code !== 'EEXIST') throw e;
-    return false;
-  }
+  return create(mine);
 }
 
 function holderLine() {
@@ -166,7 +173,7 @@ async function main() {
   }, HEARTBEAT_MS);
   run(args, (code) => {
     clearInterval(beat);
-    if (ours()) fs.rmSync(LOCK, { force: true });
+    if (ours()) remove(LOCK);
     process.exit(code);
   });
 }

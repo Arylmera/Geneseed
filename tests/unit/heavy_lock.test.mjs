@@ -9,16 +9,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const HEAVY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'heavy.mjs');
 
 function scratch(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-heavy-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  return { dir, lock: path.join(dir, 'heavy.lock') };
+  const sb = makeSandbox('gs-heavy-');
+  t.after(() => sb.cleanup());
+  return { dir: sb.path, lock: path.join(sb.path, 'heavy.lock') };
 }
 
 function wrapped(lock, args, extraEnv = {}) {
@@ -51,8 +51,8 @@ test('two concurrent wrapped runs are serialized', async (t) => {
   const { dir, lock } = scratch(t);
   const log = path.join(dir, 'log');
   const [a, b] = await Promise.all([wrapped(lock, timed(log, 'a')), wrapped(lock, timed(log, 'b'))]);
-  assert.equal(a.code, 0);
-  assert.equal(b.code, 0);
+  assert.equal(a.code, 0, a.stderr);
+  assert.equal(b.code, 0, b.stderr);
   const at = {};
   for (const line of fs.readFileSync(log, 'utf8').trim().split('\n')) {
     const [tag, what, ms] = line.split(' ');
