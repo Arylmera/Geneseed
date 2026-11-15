@@ -28,9 +28,11 @@ When the session is unsure, it delegates. The test is still a count, because "su
 
 ### No dispatch tool, no foreman
 
-Foreman needs a tool that starts a subagent: `Agent` on Claude Code, `subagent` (V1: `task`) on OpenCode, `spawn_subagent` on Bob. When the session holds no such tool, it works as in direct mode: it does each task itself, one at a time, in one tree, and tells you so once.
+Foreman needs a tool that can start a writing (`developer`) worker: `Agent` on Claude Code and OpenClaude, `subagent` (V1: `task`) on OpenCode, `spawn_subagent` on Bob. When the session holds no such tool, it works as in direct mode: it does each task itself, one at a time, in one tree, and tells you so once.
 
-The check is on the tool the session holds, not on the host, because the same install can run with and without that tool. Bob IDE and Bob Shell (the terminal CLI) read the same `~/.bob` install, so a build cannot tell them apart. Bob IDE 2.2.3 gives `spawn_subagent` only when the `session.subagents` setting is on (the default) and only to a mode whose groups hold `subagent`: the built-in `agent` and `plan` modes get it, `ask` gets only the `explore` subagent. Bob Shell has no subagents, no worktrees and no parallel dispatch; this is reported by Bob Shell itself, not read in code, because IBM does not publish Bob Shell on npm.
+The check is on the tool the session holds, not on the host, because the same install can run with and without that tool. Bob IDE and Bob Shell (the terminal CLI) read the same `~/.bob` install, so a build cannot tell them apart. Bob IDE 2.2.3 gives `spawn_subagent` only when the `session.subagents` setting is on (the default) and only to a mode whose groups hold `subagent`: the built-in `agent` and `plan` modes can start every subagent. The `ask` mode holds `spawn_subagent` too, but it may start only `explore`, so it cannot start a worker and Foreman runs as direct there. Bob Shell has no subagents, no worktrees and no parallel dispatch; this is reported by Bob Shell itself, not read in code, because IBM does not publish Bob Shell on npm.
+
+Bob's `start_subtask` (the `subtask` group, held by the `agent` mode) does not count as a Foreman dispatch tool: it appears to make the parent wait until the subtask ends, which blocks the session. That is inferred from the bundle, not observed live.
 
 ### The task worker
 

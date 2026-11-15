@@ -22,7 +22,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 | Standing-rule write needs your call | 🔒 ask³ | 🪝 ask | 🪝 block¹ | 🪝 ask² |
 | User-only skills hidden from the model | 🔒 `permission.skill` deny | ✅ `disable-model-invocation` | ✅ `/`-command, no skill | ✅ `disable-model-invocation` |
 | Sovereign-repo exclusions⁵ | ⚙️ plugins stand down | ✅ `claudeMdExcludes` | ✅ rules shadow stub | ✅ `claudeMdExcludes` |
-| Subagent depth capped at two ([Foreman mode](foreman-mode.md)) | ✅ `subagent_depth` | ✅ `env` setting | ➖ undocumented | ➖ no cap in the host |
+| Subagent depth capped at two ([Foreman mode](foreman-mode.md)) | ✅ `subagent_depth` | ✅ `env` setting | ✅ one level, set by Bob itself: a subagent cannot spawn another | ➖ no cap in the host |
 | MCP servers (Geneseed reads and lists them, never writes them) | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcpServers` |
 | Colour themes · LSP · workflow runner · primary agent · `/`-commands | ✅ | ➖ | ➖ | ➖ |
 
@@ -43,7 +43,7 @@ This is the one place that says what was checked against each host itself, how, 
 | Claude Code | canary: `tests/host_canary.mjs` installs the host from npm and starts it in a throwaway home | weekly in CI, at npm `latest` | `claude doctor` lists no invalid setting in the emitted `settings.json`; a logged-out `-p` run shows `SessionStart` running the context hook | hooks that need a model turn: the `PreToolUse` gates, `Stop` |
 | OpenClaude | canary, the same run | weekly in CI, at npm `latest` | the emitted settings load; `SessionStart` runs the context hook. Its `doctor` checks only the auto-updater, so there is no settings verdict to read | hooks that need a model turn |
 | OpenClaude | source read | 2026-09 | the config directory, the root files it loads, the settings and hook types (`src/utils/envUtils.ts`, `claudemd.ts`, `config.ts`, `src/types/hooks.ts`) | |
-| Bob | bundle read: Bob 2.2.3's shipped `bob-code/dist/extension.js` | 2026-10 | the hook payload (Claude's keys plus `cwd`), the event list, the strict settings schema, the agent frontmatter reader | whether Bob lists agents to the model; a sub-agent depth cap |
+| Bob | bundle read: Bob 2.2.3's shipped `bob-code/dist/extension.js` | 2026-10 | the hook payload (Claude's keys plus `cwd`), the event list, the strict settings schema, the agent frontmatter reader; the sub-agent depth (one level: `SUBAGENT_FORBIDDEN_TOOLS` denies subagents `spawn_subagent` and `start_subtask`) | whether Bob lists agents to the model |
 | Bob | live session, Bob IDE | 2026-10-23 | a `tool-gate` refusal (exit 2) stopped the call and its reason reached the model; Bob ignores Claude's `disallowedTools`, which is why a read-only agent carries `groups:`; the first-reply override | the `Stop` hook; the ownership gate's sub-agent deferral |
 | Bob | live session | 2026-10-25 | a prompt wrote an Activity snapshot from `UserPromptSubmit` | |
 | Bob | canary | never | nothing: IBM does not publish Bob Shell on npm, so the canary reports Bob as `skip` | everything above is a one-time read, not a standing check. [Verify it works](../guides/verify.md) has the by-hand steps |

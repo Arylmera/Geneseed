@@ -128,7 +128,7 @@ id), `cwd` (the root workspace, with a lower-case drive letter on Windows), and 
 - `spawn_subagent` is registered only when `session.subagents` is on (the default), and only
   for a mode whose groups hold `subagent`: `agent` and `plan` get every subagent, `ask` only
   `explore`. A subagent can never spawn another (`SUBAGENT_FORBIDDEN_TOOLS` holds
-  `spawn_subagent`), so the depth is one level. Bob Shell, which reads the same `~/.bob`
+  `spawn_subagent`, and `start_subtask` too), so the depth is one level. Bob Shell, which reads the same `~/.bob`
   install, reports that it has no subagents at all (reported by Bob Shell itself, not read in
   code). So Foreman mode on Bob runs as direct wherever the tool is absent.
 - After a compaction, Bob fires `SessionStart` with `source: "compact"`. The writer counts a
