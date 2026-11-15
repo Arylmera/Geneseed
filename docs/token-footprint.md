@@ -76,10 +76,10 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   in at most 80 characters, theme-neutral (`skillDescription` in
   `js/hosts/native.mjs`). The host lists skills under a budget of about 1% of
   the context window and drops the descriptions of the least-used skills when
-  the listing overruns it. The 80-character lines took a default install's
-  listing from 8 836 to 3 971 characters. Before them, the purpose line plus the
-  first trigger sentence ran to 320 characters, and at the earlier 900-character
-  cap the catalogue weighed ~5.6k tokens. The themed purpose and the full
+  the listing overruns it. Read the listing's size off `SKILL_LISTING_CEILING`
+  in `js/inspect/cost.mjs`, which carries the measurement, rather than a figure
+  quoted here. Before the 80-character lines, the purpose line plus the first
+  trigger sentence ran to 320 characters. The themed purpose and the full
   trigger still live in the body, read as soon as the skill is chosen.
 - **§5–§9 carry authored lean halves too** (Memory, Notebook, Workspace, Wiki,
   Context): each keeps its obligations — read `MEMORY.md`, read
