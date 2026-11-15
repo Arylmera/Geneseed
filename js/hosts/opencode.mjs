@@ -388,7 +388,7 @@ export function writeAliasCommands(cfg, items, commandDir, claim = (_dest) => tr
     for (const name of names) {
       const dest = path.join(commandDir, `${name}.md`);
       if (!claim(dest)) continue;
-      writeCommandFile(dest, name === stem ? skillDescription(text, stem, cfg.src) :`Alias of ${stem}.`, body);
+      writeCommandFile(dest, name === stem ? skillDescription(text, stem, cfg.src) : `Alias of ${stem}.`, body);
       written.push(dest);
     }
   }

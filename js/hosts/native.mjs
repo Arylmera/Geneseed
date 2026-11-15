@@ -172,7 +172,9 @@ export function skillDescription(text, stem = null, src = undefined) {
  * A vendored skill's own SKILL.md with its frontmatter `description:` swapped for the
  * catalogue line, the upstream description kept as the first body line, as a blockquote. The
  * upstream lines ran to 600 characters and were the longest in the listing. Text with no
- * catalogue line, no frontmatter or no `description:` key passes unchanged.
+ * catalogue line, no frontmatter or no `description:` key passes unchanged, and so does a
+ * value this cannot read whole: a block scalar (`>`, `|`), a plain scalar continued on an
+ * indented next line, or a quoted value that does not close on its line.
  */
 export function vendoredWithCatalogueLine(text, stem, src = undefined) {
   const line = skillDescriptions(src)[stem];
@@ -182,10 +184,15 @@ export function vendoredWithCatalogueLine(text, stem, src = undefined) {
   const lines = m[0].split(/\r?\n/);
   const at = lines.findIndex((ln) => /^description:/.test(ln));
   const raw = at < 0 ? '' : lines[at].replace(/^description:\s*/, '');
-  // A YAML block scalar (`>`, `|`) spans lines this does not parse: left as the upstream wrote it.
-  if (!raw || /^[>|]/.test(raw)) return text;
+  if (!raw || /^[>|]/.test(raw) || /^[ \t]/.test(lines[at + 1] ?? '')) return text;
   let upstream = raw;
-  if (raw.startsWith('"')) { try { upstream = parseJson(raw); } catch { upstream = raw; } }
+  if (raw.startsWith('"')) {
+    try { upstream = parseJson(raw); } catch { return text; }
+  } else if (raw.startsWith("'")) {
+    // YAML single quotes: `''` is an escaped quote, and the value must close on its line.
+    if (!/^'(?:[^']|'')*'$/.test(raw)) return text;
+    upstream = raw.slice(1, -1).replaceAll("''", "'");
+  }
   lines[at] = `description: ${jsonDumps(line)}`;
   const body = text.slice(m[0].length).replace(/^(\r?\n)+/, '');
   return `${lines.join(eol)}${eol}> ${upstream}${eol}${eol}${body}`;

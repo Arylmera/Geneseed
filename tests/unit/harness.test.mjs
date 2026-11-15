@@ -743,6 +743,15 @@ test('skillDescription prefers the catalogue line; a vendored SKILL.md keeps the
   assert.equal(vendoredWithCatalogueLine(upstream, 'no-such-skill'), upstream);
   const block = upstream.replace('"Long upstream text."', '>-\n  Long upstream text.');
   assert.equal(vendoredWithCatalogueLine(block, 'token-report'), block);
+  // A value it cannot read whole is left as written: a plain scalar continued on an indented
+  // line, and a quoted value that does not close on its line.
+  const folded = upstream.replace('"Long upstream text."', 'Long upstream\n  text.');
+  assert.equal(vendoredWithCatalogueLine(folded, 'token-report'), folded);
+  const open = upstream.replace('"Long upstream text."', '"Long upstream');
+  assert.equal(vendoredWithCatalogueLine(open, 'token-report'), open);
+  // A single-quoted value is unquoted, its doubled quote read as one.
+  const single = upstream.replace('"Long upstream text."', "'It''s upstream text.'");
+  assert.match(vendoredWithCatalogueLine(single, 'token-report'), /\n> It's upstream text\.\n/);
 });
 
 test('descriptionProblems ignores a file with no frontmatter', () => {
