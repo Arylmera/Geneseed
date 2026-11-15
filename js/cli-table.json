@@ -3,7 +3,7 @@
   "commands": [
     {
       "name": "activity",
-      "help": "UserPromptSubmit/SessionEnd hook: records the session into <root>/activity/ for the web console's live view; decides nothing and prints nothing (off with $GENESEED_ACTIVITY=off or the console toggle)",
+      "help": "UserPromptSubmit/SessionEnd hook: records the session into <root>/activity/ for the web console's live view (off with $GENESEED_ACTIVITY=off or the console toggle), and counts a typed /<skill> into <root>/notebook/usage.jsonl (off with $GENESEED_NO_USAGE or .usage-off); decides nothing and prints nothing",
       "description": "",
       "positionals": [],
       "options": [

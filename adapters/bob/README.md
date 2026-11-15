@@ -155,7 +155,9 @@ reports one that does not start.
 
 **What fires.** `tool-gate` also counts skill and sub-agent calls for the web console's
 Overview: `spawn_subagent` by its `name`, `start_subtask` by its `mode`. A subtask's `title` is
-never recorded: it is free text, and the count keeps no prompt.
+never recorded: it is free text, and the count keeps no prompt. A message typed as `/<skill>`
+is counted on `UserPromptSubmit` when that skill is installed, from the payload's `prompt` field
+as Claude Code sends it; that field is not verified on a live Bob session.
 
 **Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the

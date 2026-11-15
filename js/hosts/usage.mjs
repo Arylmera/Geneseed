@@ -10,9 +10,27 @@
  * printed byte would turn a gate permissive), and swallows every error — a counter that fails
  * must never block, slow or change a tool call. It rides `tool-gate`, the verb Bob already runs
  * on every tool and Claude/OpenClaude route their `Skill|Agent|Task` matcher to, so no host pays
- * an extra process for it. The OpenCode guard plugin carries the same rules inline (a plugin
+ * an extra process for it; the slash counter rides `activity`, already wired to UserPromptSubmit
+ * on all three, and loads this module only for a prompt that starts with `/`. The OpenCode guard plugin carries the same rules inline (a plugin
  * cannot import from here): `NAME_RE` by `tests/twins.mjs`, `usageOf` by hand, since it reads
  * no Bob shape. `tests/unit/usage.test.mjs` holds both to one table.
+ *
+ * A SKILL TYPED AS `/name` is a second source (`recordSlash`): Claude Code hands UserPromptSubmit
+ * the prompt as typed, and a slash-invoked skill makes no Skill tool call (2026-11 transcripts: 1
+ * Skill call after ~300 skill slash lines), so the tool counter never sees it. Its line carries
+ * `via: "slash"`; a Skill-tool line stays byte-identical. Only a name that resolves to an installed
+ * `SKILL.md` counts — a built-in (`/clear`, `/model`) or a path never does, and the prompt's
+ * arguments are never read. A namespaced plugin skill (`/plugin:skill`) is not counted that way:
+ * its folder is the host's plugin cache, which this reads nowhere else.
+ *
+ * NOT COUNTED, ON PURPOSE:
+ *   * a session in an EXCLUDED folder (`sovereignBypass`): the install is dormant there, and its
+ *     hooks write nothing — the counter included. This was the whole of the 2026-11 gap between
+ *     transcripts and the ledger on the maintainer's machine (one repo excluded for a month).
+ *   * the GLOBAL install's copy when a live project install of the same host sits in the session's
+ *     project dir (`globalHookStandingDown`): both hooks run, both would append, and the console
+ *     sums every install's ledger, so each call read twice. The caller passes that test in as
+ *     `standingDown`, evaluated only for a call that counts: this module stays builtins-only.
  *
  * Off when `GENESEED_NO_USAGE` is set or the install holds a `.usage-off` marker.
  */
@@ -59,16 +77,49 @@ export function usageOf(payload) {
   return NAME_RE.test(name) ? { kind, name } : null;
 }
 
-/** Append one line for `payload` under `root`, if it is a counted call. Never throws. */
-export function recordUse(root, payload, now = new Date()) {
+/** The tail both counters share: the switches, the stand-down, then one appended line. */
+function appendUse(root, use, now, standingDown) {
+  if (existsSync(path.join(root, USAGE_OFF))) return;
+  if (!existsSync(path.join(root, 'notebook'))) return;
+  if (standingDown && standingDown()) return;
+  appendFileSync(path.join(root, USAGE_LEDGER),
+    `${JSON.stringify({ ts: now.toISOString().slice(0, 10), ...use })}\n`);
+}
+
+/**
+ * Append one line for `payload` under `root`, if it is a counted call. Never throws.
+ * `standingDown`: a thunk, true when another install's hook counts this call (see the header).
+ */
+export function recordUse(root, payload, now = new Date(), standingDown = null) {
   try {
     if (!root || process.env.GENESEED_NO_USAGE) return;
     const use = usageOf(payload);
     if (!use) return;
-    if (existsSync(path.join(root, USAGE_OFF))) return;
-    const dir = path.join(root, 'notebook');
-    if (!existsSync(dir)) return;
-    appendFileSync(path.join(root, USAGE_LEDGER),
-      `${JSON.stringify({ ts: now.toISOString().slice(0, 10), ...use })}\n`);
+    appendUse(root, use, now, standingDown);
   } catch { /* a counter never fails a tool call */ }
+}
+
+/**
+ * The skill a prompt typed as `/name …` names, else null. The first token only, and never one
+ * holding a path separator, `..` or a plugin's `:` — it is about to become a folder name.
+ */
+export function slashSkillOf(prompt) {
+  if (typeof prompt !== 'string') return null;
+  const m = /^\s*\/(\S+)/.exec(prompt);
+  if (!m || /[/\\:]|\.\./.test(m[1])) return null;
+  return NAME_RE.test(m[1]) ? m[1] : null;
+}
+
+/**
+ * One `via: "slash"` line for a UserPromptSubmit `payload` whose prompt runs an installed skill:
+ * `<dir>/<name>/SKILL.md` exists in one of `skillDirs`. Same switches and stand-down as
+ * `recordUse`. Never throws.
+ */
+export function recordSlash(root, payload, { skillDirs = [], now = new Date(), standingDown = null } = {}) {
+  try {
+    if (!root || process.env.GENESEED_NO_USAGE) return;
+    const name = slashSkillOf(payload && payload.prompt);
+    if (!name || !skillDirs.some((d) => d && existsSync(path.join(d, name, 'SKILL.md')))) return;
+    appendUse(root, { kind: 'skill', name, via: 'slash' }, now, standingDown);
+  } catch { /* a counter never fails a prompt */ }
 }

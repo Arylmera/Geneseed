@@ -10,6 +10,7 @@
  */
 import { statSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { isatty } from 'node:tty';
 import { comparePaths } from '../lib/paths.mjs';
 import { readTail } from '../lib/fs.mjs';
 
@@ -546,8 +547,38 @@ export function activityOn(root) {
  * The `activity` verb, wired to the events no other verb runs on (UserPromptSubmit; SessionEnd
  * on Claude and OpenClaude; SubagentStart runs `context` since the agent loadout). It decides nothing and prints nothing: the entry's
  * `trackActivity` records the payload after every verb alike, this one included.
+ *
+ * Its one act of its own: a prompt typed as `/<skill>` is counted (`recordSlash`, ./usage.mjs).
+ * The test before the parse is a regex over the raw stdin, so a plain prompt costs no import;
+ * only a slash prompt loads the counter and `./hosts.mjs`. It stands down where the tool counter
+ * does: an excluded folder, a model-CLI child `learn` spawned, a terminal, and beside a live
+ * project install of the same host (`globalHookStandingDown` on `activity`, the verb that
+ * install's own UserPromptSubmit runs). Skills resolve in the install's `skills/` and in the
+ * project's own `<marker>/skills/`. Bob: its UserPromptSubmit payload is read as Claude's
+ * (`prompt`), unverified on a live Bob. Always 0: on UserPromptSubmit exit 2 erases the prompt.
  */
-export const cmdActivity = () => 0;
+const SLASH_PROMPT_RE = /"prompt"\s*:\s*"\s*\//;
+export async function cmdActivity(args) {
+  try {
+    if (!args || !args.root || process.env.GENESEED_NO_USAGE || process.env.GENESEED_LEARN_CHILD
+      || isatty(0)) return 0;
+    const raw = readStdin();
+    if (!SLASH_PROMPT_RE.test(raw)) return 0;
+    const payload = JSON.parse(raw);
+    if (payload.hook_event_name && payload.hook_event_name !== 'UserPromptSubmit') return 0;
+    const [{ recordSlash }, hosts] = await Promise.all([import('./usage.mjs'), import('./hosts.mjs')]);
+    if (hosts.sovereignBypass(args.root)) return 0;
+    const projectDir = hosts.hookProjectDir(payload.cwd);
+    const marker = (hosts.HOSTS.find((h) => h.host === (args.host || 'claude')) || {}).projectMarker;
+    const skillDirs = [path.join(args.root, 'skills')];
+    if (marker) skillDirs.push(path.join(projectDir, marker, 'skills'));
+    recordSlash(args.root, payload, {
+      skillDirs,
+      standingDown: () => hosts.globalHookStandingDown(args.root, projectDir, args.host, 'activity'),
+    });
+  } catch { /* a counter never fails a prompt */ }
+  return 0;
+}
 
 // The two output funnels, with Python's newline translation reproduced, are `printOut`/`printErr`
 // in `js/lib/fs.mjs` — they moved there in P5c, beside `writeText`, which is the same rule for

@@ -348,7 +348,8 @@ async function main(argv) {
   }
   let rc;
   try {
-    rc = (await spec.load())[spec.fn](parsed.args);
+    // Awaited: `activity` is async (its slash counter imports on demand); the rest return a number.
+    rc = await (await spec.load())[spec.fn](parsed.args);
   } catch (e) {
     return verbFailed(verb, parsed.args, e);
   }

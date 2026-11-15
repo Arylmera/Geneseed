@@ -21,7 +21,8 @@
 // (.env edits) are WARNED, not blocked. Every block is recorded in the gate
 // ledger (`<cfg>/notebook/gates.jsonl`) under the hook's rule key (`law-1`, `rigor-5`,
 // `law-4`, `ops-2`, `process-1`, `wiki`, `ownership`); every skill or subagent call, blocked or not, is
-// counted in `<cfg>/notebook/usage.jsonl` when that `notebook/` exists and `.usage-off` does not.
+// counted in the install's `notebook/usage.jsonl` (`usageHome`) when that `notebook/` exists and
+// `.usage-off` does not, and so is a V1 `/skill` command.
 //
 // GENESEED_GUARD=off    disable entirely.
 // GENESEED_GUARD=warn   downgrade every block to a warning (log, but allow).
@@ -2504,17 +2505,60 @@ function usageOf(tool, args) {
   name = name.trim().replace(/^\/+/, "")
   return NAME_RE.test(name) ? { kind, name } : null
 }
-async function recordUse(tool, args) {
+// WHERE THE LEDGER IS: the install's own `notebook/`. A global install keeps it beside plugins/
+// (`<cfg>/notebook`); a PROJECT install keeps its plugins in `<repo>/.opencode/plugins` and its
+// notebook at `<repo>/notebook`, the root the console reads (js/web/usage-api.mjs). Only the first
+// was tried once, and a project install counted nothing. null: no notebook, no count.
+async function usageHome() {
+  const cfg = path.dirname(PLUGIN_DIR)
+  if (await isDir(path.join(cfg, "notebook"))) return cfg
+  if (path.basename(cfg) === ".opencode" && await isDir(path.join(path.dirname(cfg), "notebook"))) return path.dirname(cfg)
+  return null
+}
+// The twin of `globalHookStandingDown` for the counter only: OpenCode loads the global plugins/
+// AND a project's `.opencode/plugins/` (it dedups npm plugins, not local files), so beside a
+// project install both guards count each call and the console, which sums every install, reads
+// it twice. This copy stands down when the session's project carries its own guard and this is
+// not it. `GENESEED_STACK_GLOBAL` stacks them, as it does the hooks.
+function projectCountsIt(here) {
+  if (process.env.GENESEED_STACK_GLOBAL) return false
+  try {
+    const mine = norm(PLUGIN_DIR)
+    for (const dir of new Set((here || []).filter(Boolean))) {
+      const theirs = path.join(dir, ".opencode", "plugins")
+      if (norm(theirs) !== mine && existsSync(path.join(theirs, "geneseed-guard.js"))) return true
+    }
+  } catch { /* cannot tell: count */ }
+  return false
+}
+async function appendUse(use, here) {
+  const home = await usageHome()
+  if (!home || existsSync(path.join(home, ".usage-off")) || projectCountsIt(here)) return
+  await fs.appendFile(path.join(home, "notebook", "usage.jsonl"),
+    `${JSON.stringify({ ts: new Date().toISOString().slice(0, 10), ...use })}\n`)
+}
+async function recordUse(tool, args, here) {
   try {
     if (process.env.GENESEED_NO_USAGE) return
     const use = usageOf(tool, args)
-    if (!use) return
-    const cfg = path.dirname(PLUGIN_DIR)
-    if (existsSync(path.join(cfg, ".usage-off"))) return
-    if (!(await isDir(path.join(cfg, "notebook")))) return
-    await fs.appendFile(path.join(cfg, "notebook", "usage.jsonl"),
-      `${JSON.stringify({ ts: new Date().toISOString().slice(0, 10), ...use })}\n`)
+    if (use) await appendUse(use, here)
   } catch { /* a counter never fails a tool call */ }
+}
+// A V1 slash command that runs an installed skill: `command.execute.before` names the command,
+// and it counts when `<layer>/skills/<name>/SKILL.md` exists — the plugin's own layer, then the
+// project's `.opencode/skills`. The twin of the hook's `recordSlash` (js/hosts/usage.mjs); a
+// command is a name, never its arguments. Not on V2: it has no command hook, and its prompt hook
+// sees the expanded template, with no name to count. A renamed command (`/code-review` runs
+// `geneseed-code-review`) or an alias counts only where a skill of that name exists.
+async function recordSlash(command, here) {
+  try {
+    if (process.env.GENESEED_NO_USAGE || typeof command !== "string") return
+    const name = command.trim().replace(/^\/+/, "")
+    if (/[/\\:]|\.\./.test(name) || !NAME_RE.test(name)) return
+    const layers = [path.dirname(PLUGIN_DIR), ...(here || []).filter(Boolean).map((d) => path.join(d, ".opencode"))]
+    if (!layers.some((l) => existsSync(path.join(l, "skills", name, "SKILL.md")))) return
+    await appendUse({ kind: "skill", name, via: "slash" }, here)
+  } catch { /* a counter never fails a command */ }
 }
 
 // ---- a gate that fails -----------------------------------------------------------
@@ -2643,12 +2687,19 @@ export const GeneseedGuard = async (ctx) => {
         }
       } catch (err) { log(`change report error (ignored): ${err?.message ?? err}`) }
     },
+    // V1 only (V2 has no command hook): a `/skill` command counts as the skill (`recordSlash`).
+    "command.execute.before": async (input) => {
+      try {
+        if (await sovereignBypass(root())) return
+        await recordSlash(input?.command, [ctx?.directory, ctx?.worktree])
+      } catch { /* a counter never fails a command */ }
+    },
     "tool.execute.before": async (input, output) => {
       // Bypass before counting, the order Claude's toolGate keeps: an excluded repo is
       // dormant, so nothing is written there. GENESEED_GUARD=off still counts — Claude's
       // hook has no such switch; GENESEED_NO_USAGE / .usage-off stop the counter.
       if (await sovereignBypass(root())) return
-      await recordUse(input?.tool || input?.name, output?.args || input?.args)
+      await recordUse(input?.tool || input?.name, output?.args || input?.args, [ctx?.directory, ctx?.worktree])
       if (OFF) return
       // A session that predates this plugin never sent `session.created`. Once per session.
       try { await watch(input?.sessionID) } catch { /* the report never decides a tool call */ }

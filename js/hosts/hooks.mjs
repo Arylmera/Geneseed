@@ -1611,8 +1611,11 @@ function toolGate(args) {
   if (sovereignBypass(args.root)) return 0;
   const payload = normaliseBobPayload(readPayload());
   // Count a skill or subagent call before judging it: Bob runs this verb on every tool and
-  // Claude/OpenClaude route their `Skill|Agent|Task` matcher here (js/hosts/usage.mjs).
-  recordUse(args.root, payload);
+  // Claude/OpenClaude route their `Skill|Agent|Task` matcher here (js/hosts/usage.mjs). Only the
+  // COUNT stands down beside a live project install, whose own tool-gate counts the call; the
+  // gates below still run once per install, as before.
+  recordUse(args.root, payload, undefined, () => globalHookStandingDown(args.root,
+    hookProjectDir(payload && payload.cwd), args.host, 'tool-gate'));
   const ti = (payload && payload.tool_input) || {};
   return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
 }
