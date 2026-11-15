@@ -640,7 +640,7 @@ test('the summary job produces rows and not an empty list', () => {
     'the opencode PROJECT emit did not reach the LSP rows');
   assert.ok(!results[3].some(([, t]) => t.includes('Java 21+ (jdtls)')),
     'a claude emit reached the LSP rows, which are opencode-only');
-  // Ten keys, and the four exclusion/pack/kit ones are the only lists. `sharedTier` is a boolean: false
+  // Eleven keys, and the four exclusion/pack/kit ones are the only lists. `sharedTier` is a boolean: false
   // with no `Shared tier: on` line, which is written only for a per-repo install that reads the tier. `doctrines` distinguishes
   // three states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
   // `excludeRules` and `excludeSkills` have only two, because their markers are written only
@@ -648,11 +648,12 @@ test('the summary job produces rows and not an empty list', () => {
   // install excluded neither. `kits` has the same two states (no `Active kits:` line is `[]`,
   // spec A3), `[]` here since this install has no kit. No `gates`: they are read off the one install being re-run, never
   // this machine-wide walk. All are present for the same reason: the wizard must not fall
-  // through this walk to `cwd/Harness`.
+  // through this walk to `cwd/Harness`. `contextWindow` has two states too: no
+  // `Context window:` line is the default, `200k`, which this install was built at.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [], excludeSkills: [], kits: [],
-    sharedTier: false,
+    sharedTier: false, contextWindow: '200k',
   });
 });
 

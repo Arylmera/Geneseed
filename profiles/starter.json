@@ -8,6 +8,7 @@
   "trust": "balanced",
   "doctrines": "all",
   "kits": [],
+  "contextWindow": "200k",
   "gates": { "ownershipGate": false },
   "login": true
 }

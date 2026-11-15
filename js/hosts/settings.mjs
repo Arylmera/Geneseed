@@ -1443,6 +1443,77 @@ export function unwireClaudeEnv(p, recorded) {
   }
 }
 
+/**
+ * The skill-listing keys of `--context-window` (`CONTEXT_WINDOWS`, js/build/source.mjs), merged
+ * into top-level settings keys one by one. Returns the `{key: value}` pairs Geneseed owns after
+ * the merge, which the manifest records (`managed.settings_listing`).
+ *
+ * UNLIKE `wireClaudeEnv`, A VALUE GENESEED OWNS CAN CHANGE: `200k` -> `1m` turns 80 into 120 and
+ * takes the fraction away. So ownership is the record, checked against the file:
+ * - a key absent from the file is written and recorded;
+ * - a key on file with exactly the recorded value is Geneseed's: updated to `want`, or removed
+ *   when `want` no longer names it;
+ * - any other key on file is the user's, even one equal to `want` with no record, and it stays
+ *   untouched and unrecorded, so uninstall never takes it.
+ * A commented file is never rewritten: the wanted changes are printed for a hand merge and the
+ * keys already owned stay recorded as they are on file.
+ */
+export function wireClaudeListing(p, wanted = {}, recorded = {}) {
+  // Parsed, so every number is the `JsonNumber` the renderers require (`jsonDumpsCompact` below).
+  const want = parseJson(JSON.stringify(wanted));
+  const prior = isDict(recorded) ? recorded : {};
+  const loaded = readSettingsForMerge(p, 'Its skill-listing keys were not wired.');
+  if (!loaded) return {};
+  const [config, hadComments] = loaded;
+  // `deepEquals`, never `===`: a parsed number is a `JsonNumber` wrapper (js/lib/json.mjs).
+  const owned = (k) => has(prior, k) && has(config, k) && deepEquals(config[k], prior[k]);
+  const next = { ...config };
+  const record = {};
+  for (const k of new Set([...Object.keys(prior), ...Object.keys(want)])) {
+    if (has(want, k) && (!has(config, k) || owned(k))) {
+      if (!has(config, k) || !deepEquals(config[k], want[k])) next[k] = want[k];
+      record[k] = want[k];
+    } else if (!has(want, k) && owned(k)) {
+      delete next[k];
+    }
+  }
+  const changed = Object.keys({ ...config, ...next })
+    .some((k) => has(config, k) !== has(next, k) || !deepEquals(config[k], next[k]));
+  if (!changed) return record;
+  if (hadComments) {
+    const add = Object.fromEntries(Object.entries(record).filter(([k, v]) => !deepEquals(config[k], v)));
+    const drop = Object.keys(config).filter((k) => !has(next, k));
+    process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
+      + '(your edits are kept). Merge its skill-listing keys by hand: set '
+      + `${jsonDumpsCompact(add)}${drop.length ? `, remove ${drop.join(', ')}` : ''}\n`);
+    return Object.fromEntries(Object.keys(prior).filter(owned).map((k) => [k, config[k]]));
+  }
+  try {
+    atomicWriteJson(p, next);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    process.stderr.write(`[geneseed] WARN: could not write ${p} (${e.message}) — its `
+      + `skill-listing keys were not wired. Set them by hand: ${jsonDumpsCompact(want)}\n`);
+    return Object.fromEntries(Object.keys(prior).filter(owned).map((k) => [k, config[k]]));
+  }
+  return record;
+}
+
+/** Remove each recorded skill-listing key while it still holds the recorded value. */
+export function unwireClaudeListing(p, recorded) {
+  if (!isDict(recorded) || !Object.keys(recorded).length) return;
+  const { state, data: loaded, hadComments } = loadJsonObject(p);
+  if (state !== 'ok' || hadComments) return;
+  const gone = Object.keys(recorded).filter((k) => has(loaded, k) && deepEquals(loaded[k], recorded[k]));
+  if (!gone.length) return;
+  for (const k of gone) delete loaded[k];
+  try {
+    atomicWriteJson(p, loaded);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+  }
+}
+
 /** `_build_settings._unwire_claude_excludes`. */
 export function unwireClaudeExcludes(p, excludes) {
   if (!excludes || !excludes.length) return;

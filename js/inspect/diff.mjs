@@ -40,7 +40,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
-  excludedSkillsOfDir, gatesOfDir, kitsOfDir, sharedTierOfDir,
+  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, kitsOfDir, sharedTierOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
@@ -266,6 +266,8 @@ export function diffCollect({
     kits: kitsOfDir(dir, host),
     // The shared-tier marker, or an install built `--shared-tier on` reads its `Shared tier: on` line as drift.
     sharedTier: sharedTierOfDir(dir, host),
+    // The context window, or a `1m` install reads its `Context window: 1m` line as drift.
+    contextWindow: contextWindowOfDir(dir, host),
     // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
     ...gatesOfDir(dir, host),
     // The tier root it rendered, or an install left relative reads every file as behind source.

@@ -68,7 +68,7 @@ import {
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
   OWNED_VERDICT,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes,
-  unwireClaudeSettings, wireClaudeEnv, unwireClaudeEnv,
+  unwireClaudeSettings, wireClaudeEnv, unwireClaudeEnv, wireClaudeListing, unwireClaudeListing,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
@@ -349,6 +349,7 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
   const unwired = unwireClaudeSettings(sf, hooks, cfg);
   unwireClaudeExcludes(sf, managed.settings_excludes || []);
   unwireClaudeEnv(sf, managed.settings_env);
+  unwireClaudeListing(sf, managed.settings_listing);
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
   // supposedly-uninstalled repo could keep firing Geneseed's hooks. Loud, never fatal.
   settingsIntegrityCheck(sf, managed, 'absent');
@@ -1304,6 +1305,7 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || [], cfg);
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   unwireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
+  unwireClaudeListing(settingsFile(cfg, managed), managed.settings_listing);
   // The same integrity check the uninstall path runs: a deactivate that silently failed to
   // unwire would leave hooks firing in a repo the user believes is off.
   settingsIntegrityCheck(settingsFile(cfg, managed), managed, 'absent');
@@ -1362,6 +1364,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
   wireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   // Only what the manifest records: a reactivate restores this install's own keys, never new ones.
   if (isDict(managed.settings_env)) wireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
+  if (isDict(managed.settings_listing)) wireClaudeListing(settingsFile(cfg, managed), managed.settings_listing);
   cleanHostStash(cfg, host);
   return { ok: true, kind: host, moved };
 }

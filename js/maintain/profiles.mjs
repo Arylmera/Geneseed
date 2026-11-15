@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from 'node:path';
 
 import {
-  discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
+  CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
 } from '../build/source.mjs';
 import { installProfile, setupBuildArgs } from '../build/profile.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -65,9 +65,10 @@ export const BASE_PROFILE = 'starter';
  * Every key a profile may hold, in the order `saveProfile` writes them. `sharedTier` is one since
  * spec D37 (which supersedes D18 on that point): a profile has no scope, so a project-only field is
  * accepted, used by a project apply, and ignored by a global one, whose install owns the tier.
+ * `contextWindow` (`--context-window`) is optional: absent is the default, `200k`.
  */
 export const PROFILE_KEYS = ['description', 'hosts', 'theme', 'footprint', 'posture', 'mode', 'trust',
-  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'sharedTier', 'gates', 'login'];
+  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'sharedTier', 'contextWindow', 'gates', 'login'];
 
 /** A profile name: a file stem, never a path. */
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -137,6 +138,7 @@ export function profileProblems(p) {
   choice('posture', discoverNames('postures', 'peer'));
   choice('mode', discoverNames('modes', 'direct'));
   choice('trust', Object.keys(PRESETS));
+  choice('contextWindow', Object.keys(CONTEXT_WINDOWS));
   const packs = discoverNames('doctrines', PACK_ORDER[0]);
   if (p.doctrines !== undefined && p.doctrines !== 'all') {
     if (!stringList(p.doctrines)) errs.push(`'doctrines' must be 'all' or a list of: ${list(packs)}`);
@@ -232,7 +234,8 @@ export function profileBuildArgs(p, host, project = null) {
   // profile's `sharedTier`; a global install owns the tier, so a global apply ignores the field.
   const argv = setupBuildArgs(p.theme, project ? host : `${host}-global`, project, project, p.footprint,
     p.posture, p.mode, doctrines, PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [],
-    p.gates ?? {}, p.kits ?? [], project ? p.sharedTier === true : false);
+    p.gates ?? {}, p.kits ?? [], project ? p.sharedTier === true : false,
+    p.contextWindow ?? DEFAULT_CONTEXT_WINDOW);
   if (!p.excludeSkills?.length) argv.push('--exclude-skills', 'none');
   argv.push('--reset');
   return argv;
@@ -263,6 +266,7 @@ export function profileFromInstall(info, description = '') {
     excludeSkills: [...(info.excludeSkills ?? [])].sort(),
     kits: [...(info.kits ?? [])].sort(),
     sharedTier: info.sharedTier === true,
+    contextWindow: info.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
     gates,
     login: true,
   };
@@ -296,6 +300,11 @@ export function profileDiff(p, base) {
     if (key === 'sharedTier') {
       const t = (prof) => (prof.sharedTier === true ? 'on' : 'off');
       if (t(p) !== t(base)) out.push({ key, base: t(base), now: t(p) });
+      continue;
+    }
+    if (key === 'contextWindow') {
+      const w = (prof) => prof.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+      if (w(p) !== w(base)) out.push({ key, base: w(base), now: w(p) });
       continue;
     }
     if (norm(p) !== norm(base)) out.push({ key, base: norm(base), now: norm(p) });

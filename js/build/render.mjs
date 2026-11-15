@@ -37,6 +37,7 @@ import { normcase, comparePaths } from '../lib/paths.mjs';
 import {
   CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
+import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
 import { VENDORED_SKILL_DIRS, vendoredWithCatalogueLine } from '../hosts/native.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
@@ -690,6 +691,9 @@ export function effectiveTheme(cfg, themeName, {
   // The shared-tier marker, under the same contract (`sharedTierOfDir` reads it): written only when
   // `on`, so a default build stays byte-identical. Not `GATE_SWITCHES`, which holds `--no-*` disarms.
   theme.SHARED_TIER_LINE = cfg.sharedTier ? `\n${SHARED_TIER_LINE}\n` : '';
+  // `--context-window`, under the same contract (`contextWindowOfDir` reads it): a line only off the default.
+  theme.CONTEXT_WINDOW_LINE = cfg.contextWindow && cfg.contextWindow !== DEFAULT_CONTEXT_WINDOW
+    ? `\n${CONTEXT_WINDOW_MARKER}: ${cfg.contextWindow}\n` : '';
   // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
   // written only when its gate is OFF, so a default build stays byte-identical and a missing
   // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so

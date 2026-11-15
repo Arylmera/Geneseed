@@ -52,6 +52,26 @@ When two skills merge, the old name still works as a slash command: `/deps-audit
 
 The skill *bodies* are read only when used. The *descriptions* are listed to the agent every turn so it can pick the right one — that list is part of the always-on cost described in [Footprint](footprint.md).
 
+### The listing budget on Claude Code
+
+Claude Code builds the skill list under a character budget: the model's context window, times about 3 characters per token, times `skillListingBudgetFraction` (default 0.01). That is about 6 000 characters on a 200k-token model and 30 000 on a 1M one. Its bundled skills always keep their text. When the list is over budget, the other skills that are used least lose their description and show as a bare name, and the agent no longer knows when to use them. A fresh install on a 200k model lost all of them.
+
+`geneseed build --context-window 200k|1m` (default `200k`) tells the build which model the install is for. On a Claude Code emit it writes two keys into the settings file Geneseed already merges (`settings.json`, or `settings.local.json` for a project):
+
+| `--context-window` | `skillListingMaxDescChars` | `skillListingBudgetFraction` | Budget at 3 characters per token |
+| --- | --- | --- | --- |
+| `200k` | 80 | 0.013 | 7 800 |
+| `1m` | 120 | not set (default 0.01) | 30 000 |
+
+`skillListingMaxDescChars` cuts *every* skill's description to that length, Claude Code's own and other plugins' included, so each one costs less. Simulated on a fresh install (the 14 bundled skills and 46 Geneseed skills, no usage yet):
+
+- `200k`: at the default fraction, every description fits with 264 characters to spare. One kit, or three skills of your own, would push some out. At 0.013, all of them fit with a kit and fifteen more skills. The fraction is a ceiling, not a cost: a list that fits uses only its own length.
+- `1m`: a fresh install fits even without a cap. The cap is for a machine with many skills: a 143-skill list of 47 617 characters fits whole in 19 427.
+
+The keys are merged one by one. A key you set yourself is yours: the build never changes it, and uninstall never removes it. A key the build wrote moves with the setting (from `200k` to `1m` the cap goes to 120 and the fraction is removed), and uninstall removes it. Claude Code reads these keys from about version 2.1.129; an older version keeps them and ignores them.
+
+OpenClaude (checked on 0.31) and IBM Bob read neither key, and OpenCode does not cap its list, so on those hosts the option writes nothing. Every host records the choice: a `Context window: 1m` line in the install's instruction file, written only when it is not the default. Rebuilds, upgrades, `profile save` and the console read it back. The `setup` wizard keeps it without asking. Set it with the flag, a profile's `contextWindow` key, or the console's **Context window** picker on a Claude Code install.
+
 ### Related
 
 [Agents](agents.md) — who does the work · [Rules](rules.md) — what every skill obeys · writing your own: [docs/extending.md](../extending.md)

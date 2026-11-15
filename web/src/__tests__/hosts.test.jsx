@@ -389,7 +389,8 @@ describe('Installs / Hosts', () => {
     fireEvent.change(fp, { target: { value: 'lean' } })
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     await answered()
-    // The table-row install's seven fields, plus the loop trust preset at its default.
+    // The table-row install's seven fields, plus the loop trust preset and the context window at
+    // their defaults.
     expect(onAction).toHaveBeenCalledWith('install', {
       host: 'claude',
       scope: 'global',
@@ -399,6 +400,7 @@ describe('Installs / Hosts', () => {
       posture: 'peer',
       mode: 'direct',
       trust: 'balanced',
+      contextWindow: '200k',
     })
   })
 
@@ -530,6 +532,73 @@ describe('Installs / Hosts', () => {
       'install',
       expect.objectContaining({ host: 'claude', scope: 'project', sharedTier: true }),
     )
+  })
+
+  // `--context-window`: offered on a Claude Code install only, the one host whose settings it
+  // writes. The pick opens on the install's own value and rides the rebuild body.
+  it('a Claude Code install offers the context window, and rebuilds with the pick', async () => {
+    const row = (host, over) => ({
+      id: `${host}:global`,
+      host,
+      scope: 'global',
+      path: `/home/u/.${host}`,
+      state: 'active',
+      theme: 'neutral',
+      footprint: 'lean',
+      posture: 'peer',
+      mode: 'direct',
+      trust: 'balanced',
+      contextWindow: '200k',
+      ...over,
+    })
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [row('claude', { default: true })],
+      postures: ['peer'],
+      modes: ['direct'],
+      trusts: ['balanced'],
+    })
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const apply = await screen.findByRole('button', { name: 'Apply and rebuild' })
+    const sel = screen.getByRole('combobox', { name: 'context window for Claude Code · global' })
+    expect(sel.value).toBe('200k')
+    expect(screen.getByText(/cut to 80 characters/)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+    fireEvent.change(sel, { target: { value: '1m' } })
+    expect(screen.getByText(/cut to 120 characters/)).toBeTruthy()
+    expect(apply.disabled).toBe(false)
+    fireEvent.click(apply)
+    await answered()
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'claude', scope: 'global', contextWindow: '1m' }),
+    )
+  })
+
+  it('no other host offers the context window', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'opencode:global',
+          host: 'opencode',
+          scope: 'global',
+          path: '/home/u/.config/opencode',
+          state: 'active',
+          default: true,
+          theme: 'neutral',
+          footprint: 'lean',
+          posture: 'peer',
+          mode: 'direct',
+          trust: 'balanced',
+        },
+      ],
+      postures: ['peer'],
+      modes: ['direct'],
+      trusts: ['balanced'],
+    })
+    render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    await screen.findByRole('button', { name: 'Apply and rebuild' })
+    expect(screen.queryByRole('combobox', { name: /context window/ })).toBeNull()
   })
 
   // THE FORCED REBUILD. An install can hold files that are the user's where Geneseed ships its

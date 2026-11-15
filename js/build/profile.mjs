@@ -11,11 +11,11 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { GATE_SWITCHES, PACK_ORDER } from './source.mjs';
+import { DEFAULT_CONTEXT_WINDOW, GATE_SWITCHES, PACK_ORDER } from './source.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
 import {
-  EMIT_FOR, EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
+  EMIT_FOR, EMIT_HOST_SCOPE, contextWindowOfDir, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   emitHostScopeOf, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, sharedTierOfDir,
   gatesOfDir, installState, modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
@@ -55,7 +55,8 @@ import {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null, sharedTier = false) {
+  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null, sharedTier = false,
+  contextWindow = DEFAULT_CONTEXT_WINDOW) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -93,6 +94,9 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (kits?.length) argv.push('--kits', [...kits].sort().join(','));
   // The shared tier elides when off, like the kits: the default is off, so only `on` speaks.
   if (sharedTier) argv.push('--shared-tier', 'on');
+  // The context window elides at its default, like the shared tier: no config key feeds it, so
+  // only `1m` speaks and every default argv stays the bytes it was before the flag existed.
+  if (contextWindow && contextWindow !== DEFAULT_CONTEXT_WINDOW) argv.push('--context-window', contextWindow);
   return argv;
 }
 
@@ -150,9 +154,11 @@ export function installProfile(host, scope, root, notify = null) {
   const kits = kitsOfDir(root, host, notify);
   // A project install's `Shared tier: on` stays on across a rebuild; a global install never has it.
   const sharedTier = sharedTierOfDir(root, host);
+  // `Context window: 1m` stays 1m: a rebuild that forgot it would shrink the listing cap.
+  const contextWindow = contextWindowOfDir(root, host);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits, sharedTier);
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits, sharedTier, contextWindow);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -161,7 +167,7 @@ export function installProfile(host, scope, root, notify = null) {
   return {
     host, scope, root, state: installState(root, host, scope),
     emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills,
-    kits, sharedTier, ...gates, argv,
+    kits, sharedTier, contextWindow, ...gates, argv,
   };
 }
 
@@ -204,6 +210,8 @@ const GUARDED = [
   { name: 'kits', given: 'kits', flag: '--kits', now: (a) => show(sorted(a.kits)), was: (p) => show(sorted(p.kits)) },
   { name: 'shared-tier', given: 'sharedTier', flag: '--shared-tier',
     now: (a) => (a.sharedTier === 'on' ? 'on' : 'off'), was: (p) => (p.sharedTier ? 'on' : 'off') },
+  { name: 'context-window', given: 'contextWindow', flag: '--context-window',
+    now: (a) => a.contextWindow ?? DEFAULT_CONTEXT_WINDOW, was: (p) => p.contextWindow },
   // A switch reads as its flag says. `--no-deletion-gate` given is `deletion-gate: off`;
   // `--strict-consent` (the one switch whose flag adds asks, so it is not `--no-*`) given is
   // `strict-consent: on`. Either way the flag given means the switch's key is `false`.

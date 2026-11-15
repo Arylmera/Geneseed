@@ -91,7 +91,8 @@ function sysExit(msg) {
 const BUILD_FORWARD = [
   ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
   ['posture', '--posture'], ['mode', '--mode'], ['trust', '--trust'], ['doctrines', '--doctrines'],
-  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['kits', '--kits'], ['sharedTier', '--shared-tier'], ['out', '--out'], ['root', '--root'],
+  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['kits', '--kits'], ['sharedTier', '--shared-tier'],
+  ['contextWindow', '--context-window'], ['out', '--out'], ['root', '--root'],
   ['configDir', '--config-dir'],
 ];
 

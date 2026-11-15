@@ -24,7 +24,7 @@ import { factCount } from '../hosts/memory-files.mjs';
 import { autostartState } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, leftoversOf, modeOfDir,
-  trustOfDir, sharedTierOfDir, strandedGatesOf,
+  trustOfDir, sharedTierOfDir, contextWindowOfDir, strandedGatesOf,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -242,6 +242,8 @@ export function apiInstalls(state) {
       trust: trustOfDir(root, host),
       // A project install's switch for reading the machine tier (a global install owns it).
       sharedTier: scope === 'global' ? false : sharedTierOfDir(root, host),
+      // The context window the install is built for (`--context-window`); it writes settings on Claude Code only.
+      contextWindow: contextWindowOfDir(root, host),
       // Files here that are the user's where Geneseed ships one, and retired leftovers: what a
       // forced rebuild would replace or remove (`leftoversOf`). Read off the emit's own record.
       leftovers: leftoversOf(root, host, scope),

@@ -34,7 +34,7 @@ import path from 'node:path';
 
 import { emitGlobalInto } from '../build/driver.mjs';
 import {
-  ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
+  CONTEXT_WINDOWS, ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
 } from '../build/source.mjs';
 import { diffCollect, drifted, renderMemo, withStdoutSwallowed } from '../inspect/diff.mjs';
 import { SESSION_FILES } from '../hosts/hooks-context.mjs';
@@ -44,7 +44,7 @@ import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import { HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import {
-  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
+  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, contextWindowOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -150,6 +150,15 @@ function bodyKits(body) {
 function bodySharedTier(body, root, host) {
   const said = bget(body, 'sharedTier');
   return typeof said === 'boolean' ? said : sharedTierOfDir(root, host);
+}
+
+/**
+ * A request body's `contextWindow` (`--context-window`): only a value `CONTEXT_WINDOWS` names
+ * counts; anything else keeps the install's own answer, so a malformed body changes nothing.
+ */
+function bodyContextWindow(body, root, host) {
+  const said = bget(body, 'contextWindow');
+  return typeof said === 'string' && Object.hasOwn(CONTEXT_WINDOWS, said) ? said : contextWindowOfDir(root, host);
 }
 
 /**
@@ -666,6 +675,7 @@ export function apiRestore(state, files) {
       // The kits: a restored AGENT.md keeps its Kits block and `Active kits:` line.
       kits: kitsOfDir(target),
       sharedTier: sharedTierOfDir(target),
+      contextWindow: contextWindowOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));
@@ -780,7 +790,7 @@ export function apiInstallCmd(state, body) {
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
-    kits ?? kitsOfDir(root, host), sharedTier);
+    kits ?? kitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host));
   // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
   // and `setupBuildArgs` elides an axis at its default, so returning one to it (a mode back to
   // direct, a gate re-armed) would otherwise trip the preserve guard (js/build/profile.mjs).
@@ -904,7 +914,7 @@ export function apiDeployCmd(state, body) {
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host),
-    bodySharedTier(body, root, host));
+    bodySharedTier(body, root, host), bodyContextWindow(body, root, host));
   // `--reset`, as in `apiInstallCmd`: the form's answers plus the folder's own are a whole selection.
   argv.push('--reset');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
