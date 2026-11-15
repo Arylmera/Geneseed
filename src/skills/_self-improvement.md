@@ -32,9 +32,9 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   runs end here.
 <!-- LEAN:else -->
 Read `{{PATH_NOTES}}/skill-notes/{{SKILL_NAME}}.md` and `skill-notes/_general.md` before the
-first step when they exist; they win where they disagree with this file. One beat of
-reflection on this {{SKILL}}: a step that misled, a missing step, or a wrong trigger is a
-flaw in this file — end your reply with one line, at a line start and outside any code,
+first step when they exist; they win where they disagree with this file.
+One beat of reflection on this {{SKILL}}: a step that misled, a missing step, or a wrong
+trigger is a flaw in this file — end your reply with one line, at a line start and outside any code,
 `spec-feedback: [skill:{{SKILL_NAME}}] <the one-line fix> [— situation: <when it applies>] — seen: <what happened vs expected>`
 (`[skill:{{SKILL_NAME}}:general]` for a fix other {{SKILLS}} need too). The hook copies it into
 the notes when the turn ends; do not write them yourself, except on Bob, whose hook never
