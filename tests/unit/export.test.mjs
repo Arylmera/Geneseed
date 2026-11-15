@@ -137,8 +137,8 @@ test('only, exclude and laws narrow the export, and a dropped reference is repor
 
 test('a vendored folder skill and an alias are named as left out, never written', () => {
   assert.ok(plan.skipped.some((l) => /^daydream: a vendored folder skill/.test(l)));
-  assert.ok(plan.skipped.some((l) => /grill-me.*aliases/.test(l)));
-  assert.ok(!plan.files.some((f) => /acme-(daydream|grill-me)\//.test(f.rel)));
+  assert.ok(plan.skipped.some((l) => /ci-fix.*aliases/.test(l)));
+  assert.ok(!plan.files.some((f) => /acme-(daydream|ci-fix)\//.test(f.rel)));
 });
 
 test('writes are claim-on-create: a stranger is kept, an earlier export is replaced and pruned', () => {

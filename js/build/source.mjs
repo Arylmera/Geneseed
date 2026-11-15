@@ -504,7 +504,23 @@ export function aliasesOf(text) {
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
 }
 
-/** Every declared alias -> the skill that declares it. First declaration wins; the doctor names a duplicate. */
+/**
+ * Aliases taken OUT of a spec's marker -> the skill they used to alias. No emit writes them any
+ * more (the emitters read the marker, `aliasesOf`), but everything that reads an OLDER install
+ * still must: an `Excluded skills:` line that names one, and the alias folder an older build
+ * rendered, whose heading names the former target (`isRendered`, `staleRetired`). So
+ * `skillAliases` serves them beside the live markers, and the old render is moved aside like any
+ * retired alias's. `grill-me` left `brainstorm` because the user keeps a grill-me skill of
+ * their own, and an alias folder under that name collides with it.
+ */
+export const RETIRED_ALIASES = {
+  'grill-me': 'brainstorm',
+};
+
+/**
+ * Every declared alias -> the skill that declares it, then each `RETIRED_ALIASES` entry no
+ * marker declares. First declaration wins; the doctor names a duplicate.
+ */
 export function skillAliases(src = SRC) {
   const map = new Map();
   const dir = path.join(src, 'skills');
@@ -513,6 +529,7 @@ export function skillAliases(src = SRC) {
       if (!map.has(a)) map.set(a, f.slice(0, -3));
     }
   }
+  for (const [a, target] of Object.entries(RETIRED_ALIASES)) if (!map.has(a)) map.set(a, target);
   return map;
 }
 

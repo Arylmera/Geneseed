@@ -214,18 +214,18 @@ function withCommands(fn) {
 }
 
 // Which files carry a pointer, per host family: the three skills with side files (brainstorm,
-// debug, rule), their three aliases (grill-me, ci-fix, consolidate-memory) on the Claude dialect (alias skills), on OpenCode (alias commands, `command/`) and
+// debug, rule), the aliases of the two that have one (ci-fix, consolidate-memory; brainstorm's
+// grill-me was retired, so no emit writes it) on the Claude dialect (alias skills), on OpenCode (alias commands, `command/`) and
 // on Bob (alias commands too, host-compat O2/R1 — but `commands/`, Bob's own documented
 // folder name, and never `command/debug.md`: Bob never runs `writeCommandLayer`, the
 // `GENESEED_COMMANDS` opt-in layer, only the unconditional alias commands), plus OpenCode's
 // opt-in `/debug` command. Each pointer must resolve to a file the emit wrote.
 const CLAUDE_CARRIERS = ['skills/brainstorm/SKILL.md', 'skills/ci-fix/SKILL.md',
-  'skills/consolidate-memory/SKILL.md', 'skills/debug/SKILL.md', 'skills/grill-me/SKILL.md',
-  'skills/rule/SKILL.md'];
-const BOB_CARRIERS = ['commands/ci-fix.md', 'commands/consolidate-memory.md', 'commands/grill-me.md',
+  'skills/consolidate-memory/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
+const BOB_CARRIERS = ['commands/ci-fix.md', 'commands/consolidate-memory.md',
   'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
 const OPENCODE_CARRIERS = ['command/ci-fix.md', 'command/consolidate-memory.md', 'command/debug.md',
-  'command/grill-me.md', 'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
+  'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
 
 function assertResolves(found, carriers) {
   assert.deepEqual(Object.keys(found).sort(), carriers);
