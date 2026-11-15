@@ -217,17 +217,16 @@ const log = (msg) => say(msg)
 // and the console can count what the boundary actually caught on an OpenCode install too. A
 // warning is not recorded (nothing was refused) and neither is `GENESEED_GUARD=warn`.
 // `notebook/` is never created here — an install without one (or a test importing this file)
-// records nothing. Beside a live project install the global copy judges the call too, so ONE
-// copy records the block, the one `countingCopy` names, as for usage.jsonl: the console sums
-// every install's ledger. Capped at the newest MAX_LEDGER_LINES like the hook's; never throws,
-// never decides.
+// records nothing. Each loaded copy records its OWN refusals, with no stand-down: a global and a
+// project copy judge a call each from its own carrier AGENT.md (gates, packs, excluded rules), so
+// the copy that can record is not always the copy that refused. Capped at the newest
+// MAX_LEDGER_LINES like the hook's; never throws, never decides.
 const MAX_LEDGER_LINES = 1000
-async function ledger(rule, here) {
+async function ledger(rule) {
   // `geneseed doctor --probe` blocks on purpose; its blocks are not the user's (the twin of
   // the same line in js/hosts/hooks.mjs). The record only — never the decision.
   if (process.env.GENESEED_GATE_PROBE) return
   try {
-    if (anotherCopyCounts(here, notebookHome)) return
     const bases = []
     if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
     const own = notebookHome()
@@ -2538,9 +2537,7 @@ function usageHome(cfg = path.dirname(PLUGIN_DIR)) {
 // and a session in pkg, that rule had every copy stand down and nothing counted. A project guard
 // that cannot count (no notebook, `.usage-off`) silences nothing, as a hook a project does not
 // wire silences nothing on the Claude side. `GENESEED_STACK_GLOBAL` stacks them, as for the hooks.
-// `live` is what "can record" means for the ledger asking: `usageHome` for the counters,
-// `notebookHome` for the gate ledger, which `.usage-off` does not switch off.
-function countingCopy(here, live = usageHome) {
+function countingCopy(here) {
   const [directory, worktree] = here || []
   if (!directory) return null
   const start = path.resolve(directory)
@@ -2552,14 +2549,14 @@ function countingCopy(here, live = usageHome) {
   else for (let d = start; norm(d) !== norm(top) && path.dirname(d) !== d;) { d = path.dirname(d); dirs.push(d) }
   for (const dir of dirs) {
     const plugins = path.join(dir, ".opencode", "plugins")
-    if (existsSync(path.join(plugins, "geneseed-guard.js")) && live(path.join(dir, ".opencode"))) return norm(plugins)
+    if (existsSync(path.join(plugins, "geneseed-guard.js")) && usageHome(path.join(dir, ".opencode"))) return norm(plugins)
   }
   return null
 }
-function anotherCopyCounts(here, live = usageHome) {
+function anotherCopyCounts(here) {
   if (process.env.GENESEED_STACK_GLOBAL) return false
   try {
-    const winner = countingCopy(here, live)
+    const winner = countingCopy(here)
     return winner !== null && winner !== norm(PLUGIN_DIR)
   } catch { return false /* cannot tell: count */ }
 }
@@ -2755,7 +2752,7 @@ export const GeneseedGuard = async (ctx) => {
       const deny = async (why, rule) => {
         if (WARN_ONLY) { log(`WARN (would block): ${why}`); warned = true; return false }
         log(`BLOCKED: ${why}`)
-        await ledger(rule, [ctx?.directory, ctx?.worktree])
+        await ledger(rule)
         throw new Error(`[geneseed-guard] blocked: ${why}`)
       }
       // Each gate runs alone. Our own deny propagates. Any other error is that gate's alone: it is
@@ -2771,7 +2768,7 @@ export const GeneseedGuard = async (ctx) => {
           log(`gate error in ${name} (the other gates still run): ${what}`)
           if (failure) return
           failure = { name, what }
-          await ledger("gate-error", [ctx?.directory, ctx?.worktree])
+          await ledger("gate-error")
         }
       }
       // A call no gate refused and one gate could not judge: each host answers to its own ceiling

@@ -135,7 +135,7 @@ function usageHome(cfg = path.dirname(PLUGIN_DIR)) {
   const home = notebookHome(cfg)
   return home && !existsSync(path.join(home, ".usage-off")) ? home : null
 }
-function countingCopy(here, live = usageHome) {
+function countingCopy(here) {
   const [directory, worktree] = here || []
   if (!directory) return null
   const start = path.resolve(directory)
@@ -147,14 +147,14 @@ function countingCopy(here, live = usageHome) {
   else for (let d = start; norm(d) !== norm(top) && path.dirname(d) !== d;) { d = path.dirname(d); dirs.push(d) }
   for (const dir of dirs) {
     const plugins = path.join(dir, ".opencode", "plugins")
-    if (existsSync(path.join(plugins, "geneseed-guard.js")) && live(path.join(dir, ".opencode"))) return norm(plugins)
+    if (existsSync(path.join(plugins, "geneseed-guard.js")) && usageHome(path.join(dir, ".opencode"))) return norm(plugins)
   }
   return null
 }
-function anotherCopyCounts(here, live = usageHome) {
+function anotherCopyCounts(here) {
   if (process.env.GENESEED_STACK_GLOBAL) return false
   try {
-    const winner = countingCopy(here, live)
+    const winner = countingCopy(here)
     return winner !== null && winner !== norm(PLUGIN_DIR)
   } catch { return false /* cannot tell: count */ }
 }

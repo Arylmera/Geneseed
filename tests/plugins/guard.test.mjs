@@ -201,10 +201,13 @@ test("no notebook/ dir means no ledger and no mkdir", async () => {
 // `<repo>/notebook`: the emit writes the bundle's notebook/ at the repo root, and the console reads
 // the root (js/web/api.mjs `activeInstalls`). `<repo>/.opencode/notebook` exists in no emit, so a
 // project guard used to record nothing. When both load (OpenCode loads the global plugins and every
-// project `.opencode/plugins`), both judge the call, and the console sums every install's ledger:
-// one copy records the block, the nearest project's, as for usage.jsonl. `.usage-off` switches
-// counting off, never the gate ledger. Each case copies the guard into the layout, imports each copy
-// (one module per file) and drives one secret-file write through each; the ledgers are written out.
+// project `.opencode/plugins`), each copy judges the call from its OWN carrier AGENT.md and records
+// its OWN refusal: there is no stand-down for the gate ledger, because the copy that can record is
+// not always the one that refused. A project carrier with `Secrets gate: off` lets the write pass
+// while the global copy refuses it, and that refusal must still land in `<cfg>/notebook`.
+// `.usage-off` switches counting off, never the gate ledger. Each case copies the guard into the
+// layout, imports each copy (one module per file, the carrier read at load) and drives one
+// secret-file write through each; each copy's verdict and both ledgers are written out.
 async function layoutRun(layout) {
   const root = makeSandbox("gsguard-layout-").path
   const repo = path.join(root, "repo")
@@ -223,14 +226,19 @@ async function layoutRun(layout) {
     await fs.mkdir(path.join(repo, "notebook"), { recursive: true })
     await fs.mkdir(path.join(cfg, "notebook"), { recursive: true })
     if (layout.usageOff) await fs.writeFile(path.join(repo, ".usage-off"), "")
+    if (layout.projectSecretsOff) await fs.writeFile(path.join(repo, "AGENT.md"), "# carrier\nSecrets gate: off\n")
     const key = path.join(root, "home", ".ssh", "id_rsa")
+    const verdicts = []
     for (const dir of dirs) {
       const hooks = await (await import(pathToFileURL(path.join(dir, "geneseed-guard.js")).href)).default.server({ directory: repo, worktree: repo })
-      await assert.rejects(hooks["tool.execute.before"]({ tool: "write" }, { args: { filePath: key } }), /\[geneseed-guard\] blocked:/)
+      try { await hooks["tool.execute.before"]({ tool: "write" }, { args: { filePath: key } }); verdicts.push("allowed") } catch (err) {
+        if (!String(err?.message).startsWith("[geneseed-guard] blocked:")) throw err
+        verdicts.push("blocked")
+      }
     }
     const rules = async (p) => (await fs.readFile(path.join(p, "notebook", "gates.jsonl"), "utf8").catch(() => ""))
       .split("\n").filter(Boolean).map((l) => JSON.parse(l).rule)
-    return { repo: await rules(repo), cfg: await rules(cfg),
+    return { verdicts, repo: await rules(repo), cfg: await rules(cfg),
       stray: await isFileAt(path.join(repo, ".opencode", "notebook", "gates.jsonl")) }
   } finally {
     for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
@@ -238,15 +246,23 @@ async function layoutRun(layout) {
 }
 
 test("gate ledger, global install alone: the block is recorded in <cfg>/notebook", async () => {
-  assert.deepEqual(await layoutRun({ project: false }), { repo: [], cfg: ["law-1"], stray: false })
+  assert.deepEqual(await layoutRun({ project: false }), { verdicts: ["blocked"], repo: [], cfg: ["law-1"], stray: false })
 })
 
-test("gate ledger, project and global installs: one line, in <repo>/notebook", async () => {
-  assert.deepEqual(await layoutRun({ project: true }), { repo: ["law-1"], cfg: [], stray: false })
+// Verdicts in load order: the project copy, then the global one.
+test("gate ledger, project and global installs: each copy records its own block, the project's in <repo>/notebook", async () => {
+  assert.deepEqual(await layoutRun({ project: true }),
+    { verdicts: ["blocked", "blocked"], repo: ["law-1"], cfg: ["law-1"], stray: false })
 })
 
-test("gate ledger, project install with .usage-off: still recorded, still once", async () => {
-  assert.deepEqual(await layoutRun({ project: true, usageOff: true }), { repo: ["law-1"], cfg: [], stray: false })
+test("gate ledger, project install with .usage-off: its block is still recorded", async () => {
+  assert.deepEqual(await layoutRun({ project: true, usageOff: true }),
+    { verdicts: ["blocked", "blocked"], repo: ["law-1"], cfg: ["law-1"], stray: false })
+})
+
+test("gate ledger, the copies disagree (project Secrets gate: off): the global's refusal lands in <cfg>/notebook", async () => {
+  assert.deepEqual(await layoutRun({ project: true, projectSecretsOff: true }),
+    { verdicts: ["allowed", "blocked"], repo: [], cfg: ["law-1"], stray: false })
 })
 
 async function isFileAt(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
