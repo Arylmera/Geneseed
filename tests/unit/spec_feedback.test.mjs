@@ -5,11 +5,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import {
-  captureSpecFeedback, feedbackBullets, finalAssistantText, mergeFeedback, specFeedbackOf, subagentReport, today,
-  withLock, MAX_GENERAL_BULLETS,
+  captureSpecFeedback, feedbackBullets, finalAssistantText, mergeFeedback, skillBullets, specFeedbackOf, subagentReport,
+  today, turnReply, withLock, MAX_GENERAL_BULLETS,
 } from '../../js/hosts/spec-feedback.mjs';
+import { spawnHook } from '../helpers/hook_run.mjs';
 import { SECRET_RE, tailReader } from '../../js/hosts/hooks-prims.mjs';
 import { cmdLearn, notesRootOf } from '../../js/hosts/hooks-learn.mjs';
 
@@ -69,6 +70,102 @@ const LINES = [
 
 test('specFeedbackOf: reads every real scope form and skips what is no feedback', () => {
   for (const [line, want] of LINES) assert.deepEqual(specFeedbackOf(line, SECRET_RE), want, line);
+});
+
+// A skill's line always NAMES the skill: `[skill:<name>]` for its own notes, `[skill:<name>:general]`
+// (or `, general` / ` general`) for the file every skill shares. The name is folded to lower case
+// and must be a slug; the template's `<name>`, a path or an empty name drops the line whole, so a
+// `[skill:…]` tag never falls through into an agent's notes. `|general` is the template's
+// unchosen pair and reads as the skill's own, as `[agent|general]` reads as agent. The brackets
+// may be dropped. The agents' rules hold too: a quoted, protocol-naming, "none" or secret line is
+// no note, and `skill-notes/…` (no colon after `skill`) is an agent body, not a tag.
+const SKILL_LINES = [
+  ['spec-feedback: [skill:debug] run the failing test alone first — seen: a flaky run',
+    [{ scope: 'skill', skill: 'debug', body: 'run the failing test alone first — seen: a flaky run' }]],
+  ['spec-feedback: [skill:debug:general] name the base ref in every brief — seen: drift',
+    [{ scope: 'general', skill: 'debug', body: 'name the base ref in every brief — seen: drift' }]],
+  ['spec-feedback: [skill: Debug , general] case and spacing are folded — seen: x',
+    [{ scope: 'general', skill: 'debug', body: 'case and spacing are folded — seen: x' }]],
+  ['spec-feedback: [skill:debug general] a space before general works too',
+    [{ scope: 'general', skill: 'debug', body: 'a space before general works too' }]],
+  ['spec-feedback: [skill:debug|general] the unchosen pair reads as its own',
+    [{ scope: 'skill', skill: 'debug', body: 'the unchosen pair reads as its own' }]],
+  ['spec-feedback: skill:debug — the bare tag is the skill\'s too',
+    [{ scope: 'skill', skill: 'debug', body: 'the bare tag is the skill\'s too' }]],
+  ['- **spec-feedback:** [skill:plan] bold label and a list marker',
+    [{ scope: 'skill', skill: 'plan', body: 'bold label and a list marker' }]],
+  ['spec-feedback: skill-notes/debug.md is never read — seen: empty',
+    [{ scope: 'agent', body: 'skill-notes/debug.md is never read — seen: empty' }]],
+  ['spec-feedback: [skill:<name>] a filled body under the template name', []],
+  ['spec-feedback: [skill:<name>] <the one-line fix> [— situation: <when it applies>] — seen: <what happened>', []],
+  ['spec-feedback: [skill:../evil] a path is no skill name at all', []],
+  ['spec-feedback: [skill:] an empty name is no skill name', []],
+  ['spec-feedback: [skill:9lives] a name opens with a letter', []],
+  ['spec-feedback: [skill:debug] none', []],
+  ['> spec-feedback: [skill:debug] a quoted line is someone else\'s', []],
+  ['The debug skill\'s spec-feedback: [skill:debug] only names the protocol', []],
+  ['spec-feedback: [skill:debug] rotate ghp_abcdefghijklmnopqrstuvwxyz0123456789 now', []],
+];
+
+test('specFeedbackOf: a skill line names its skill, and every near miss is no note', () => {
+  for (const [line, want] of SKILL_LINES) assert.deepEqual(specFeedbackOf(line, SECRET_RE), want, line);
+});
+
+test('specFeedbackOf: one body for two skills is two notes, for one skill twice is one', () => {
+  const report = 'spec-feedback: [skill:debug] the same words here\nspec-feedback: [skill:plan] the same words here\n'
+    + 'spec-feedback: [skill:debug] the same  words here';
+  assert.deepEqual(specFeedbackOf(report, SECRET_RE), [
+    { scope: 'skill', skill: 'debug', body: 'the same words here' },
+    { scope: 'skill', skill: 'plan', body: 'the same words here' },
+  ]);
+});
+
+// A skill's line has one home: its own `skill-notes/<name>.md` in the `- [skill] … (date)` shape the
+// hand-written notes already used, or `skill-notes/_general.md` with the skill's name beside the date.
+// The agent's bullets never take a skill line, and the skills' never take an agent line.
+test('skillBullets and feedbackBullets: each line to its one home', () => {
+  const items = [{ scope: 'skill', skill: 'debug', body: 'a fix' }, { scope: 'general', skill: 'plan', body: 'b fix' },
+    { scope: 'agent', body: 'c fix' }, { scope: 'skill', skill: 'debug', body: 'd fix' }];
+  const s = skillBullets(items, '2026-11-14');
+  assert.deepEqual([...s.own], [['debug', ['- [skill] a fix (2026-11-14)', '- [skill] d fix (2026-11-14)']]]);
+  assert.deepEqual(s.general, ['- [general] b fix (plan, 2026-11-14)']);
+  assert.deepEqual(feedbackBullets(items, 'tester', '2026-11-14'), { own: ['- [agent] c fix (2026-11-14)'], general: [] });
+});
+
+// The user's own notes file, written by hand before the hook existed, uses the same shape: a hook
+// bullet with the same words is not added again, and those dated lines count against the cap.
+test('mergeFeedback: a hand-written [skill] bullet is the same note as the hook\'s', () => {
+  const hand = '- [skill] Name the git ref each unit reviews — seen: six units measured 5.1.0 (2026-11-11)\n';
+  assert.equal(mergeFeedback(hand, ['- [skill] name the git ref each unit reviews — seen: six units measured 5.1.0 (2026-11-15)']), null);
+  assert.equal(mergeFeedback(hand, ['- [skill] a newer one (2026-11-15)'], 1), '- [skill] a newer one (2026-11-15)\n');
+});
+
+// The capture with no agent (a Stop): only skill lines, and only for a skill the install ships
+// (`skillsDir/<name>/`), so an invented name writes no file. With an agent (a SubagentStop), the
+// agent's lines go to agent-notes and the skill lines still go to skill-notes.
+const MIXED = ['spec-feedback: [skill:debug] read the stack trace before the diff — seen: a guess',
+  'spec-feedback: [skill:debug:general] say which runner the repo uses — seen: a wrong runner',
+  'spec-feedback: [skill:ghost] a skill this install does not ship — seen: x',
+  'spec-feedback: [agent] relayed from a worker — seen: y',
+  'spec-feedback: [general] relayed general from a worker — seen: z'].join('\n');
+test('captureSpecFeedback: no agent writes skill lines only, and only for a shipped skill', async () => {
+  await withDir((d) => {
+    const notes = path.join(d, 'notes');
+    const skills = path.join(d, 'skills');
+    fs.mkdirSync(path.join(skills, 'debug'), { recursive: true });
+    assert.deepEqual(captureSpecFeedback(null, MIXED, notes, '2026-11-14'), [], 'no skills dir: no skill line counts');
+    assert.equal(fs.existsSync(notes), false);
+    assert.deepEqual(captureSpecFeedback(null, MIXED, notes, '2026-11-14', skills),
+      [path.join(notes, 'skill-notes', 'debug.md'), path.join(notes, 'skill-notes', '_general.md')]);
+    assert.equal(read(notes, 'skill-notes', 'debug.md'), '- [skill] read the stack trace before the diff — seen: a guess (2026-11-14)\n');
+    assert.equal(read(notes, 'skill-notes', '_general.md'), '- [general] say which runner the repo uses — seen: a wrong runner (debug, 2026-11-14)\n');
+    assert.deepEqual(fs.readdirSync(notes), ['skill-notes']);
+    assert.deepEqual(fs.readdirSync(path.join(notes, 'skill-notes')).sort(), ['_general.md', 'debug.md']);
+    assert.deepEqual(captureSpecFeedback(null, MIXED, notes, '2026-11-15', skills), [], 'the same lines again add nothing');
+    assert.deepEqual(captureSpecFeedback('tester', MIXED, notes, '2026-11-15', skills),
+      [path.join(notes, 'agent-notes', 'tester.md'), path.join(notes, 'agent-notes', '_general.md')]);
+    assert.equal(read(notes, 'agent-notes', 'tester.md'), '- [agent] relayed from a worker — seen: y (2026-11-15)\n');
+  });
 });
 
 test('specFeedbackOf: a body seen twice in one report is kept once, and a runaway line is cut at 500', () => {
@@ -340,11 +437,14 @@ test('learn hook: an unnamed or namespaced agent writes nothing, and a second st
   });
 });
 
-test('learn hook: a Stop (not SubagentStop) never captures', async () => {
+// A Stop is the main session's: it has no agent, and its `[agent]` and plain `[general]` lines are
+// relayed from sub-agents, so neither agent notes nor skill notes get them.
+test('learn hook: a Stop (not SubagentStop) never captures an agent\'s line', async () => {
   await withDir(async (d) => {
     const w = world(d, 'claude', { shared: false });
     await subagentStop(w, d, { hook_event_name: 'Stop', transcript_path: w.transcript, agent_type: 'tester' });
     assert.equal(fs.existsSync(path.join(w.cfg, 'notebook', 'agent-notes')), false);
+    assert.equal(fs.existsSync(path.join(w.cfg, 'notebook', 'skill-notes')), false);
   });
 });
 
@@ -358,4 +458,124 @@ test('notesRootOf: the tier store maps to the tier notes, any other store to its
 
 test('today: a local YYYY-MM-DD', () => {
   assert.equal(today(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
+});
+
+// ---- Skills: `learn` on a Stop, through the real hook binary ------------------------------------
+// A skill runs in the main context, so no SubagentStop sees it: its `[skill:<name>]` line is read off
+// the main session's final reply at Stop and copied into the notes that skill reads. Each run spawns
+// bin/geneseed-hook.mjs with the payload on stdin, every home sandboxed and `$GENESEED_LLM` unset.
+
+const asst = (text, id = 'fin') => JSON.stringify({ type: 'assistant', message: { id, role: 'assistant', content: [{ type: 'text', text }] } });
+const usr = (text) => JSON.stringify({ type: 'user', message: { role: 'user', content: text } });
+const SKILL_REPLY = ['Done, the bug is fixed.',
+  'spec-feedback: [skill:debug] read the stack trace before the diff — seen: a guess',
+  'spec-feedback: [skill:debug:general] say which runner the repo uses — seen: a wrong runner',
+  'spec-feedback: [agent] relayed from a worker — seen: y'].join('\n');
+const SKILL_NOTE = new RegExp(`^- \\[skill\\] read the stack trace before the diff — seen: a guess \\(${DATE}\\)\\n$`);
+const SKILL_GENERAL = new RegExp(`^- \\[general\\] say which runner the repo uses — seen: a wrong runner \\(debug, ${DATE}\\)\\n$`);
+
+/** A project (a git root, `checks` its done list), an install shipping `skills`, and a Stop runner. */
+function stopWorld({ emit = 'claude', tier = false, skills = ['debug'], checks = null, exclude = false } = {}) {
+  const sb = makeSandbox('skillfb-');
+  const home = path.join(sb.path, 'home');
+  const proj = path.join(sb.path, 'proj');
+  fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
+  if (checks) {
+    fs.mkdirSync(path.join(proj, '.geneseed'));
+    fs.writeFileSync(path.join(proj, '.geneseed', 'done-checks.txt'), checks);
+  }
+  const install = path.join(sb.path, 'install');
+  fs.mkdirSync(path.join(install, 'memory'), { recursive: true });
+  fs.mkdirSync(path.join(install, 'notebook'));
+  for (const s of skills) fs.mkdirSync(path.join(install, 'skills', s), { recursive: true });
+  fs.writeFileSync(path.join(install, '.geneseed-emit'), emit);
+  if (tier) fs.mkdirSync(path.join(home, '.config', 'geneseed', 'memory'), { recursive: true });
+  if (exclude) fs.writeFileSync(path.join(install, 'excludes.json'), JSON.stringify({ excludes: [proj] }));
+  const transcript = path.join(sb.path, 't.jsonl');
+  const env = { ...process.env, ...homeOverrides(home), CLAUDE_PROJECT_DIR: proj };
+  for (const k of ['GENESEED_LLM', 'GENESEED_LEARN_CHILD', 'GENESEED_MEMORY', 'GENESEED_HARNESS']) delete env[k];
+  const stop = (rows, payload = {}, { argv = [], body = null } = {}) => {
+    fs.writeFileSync(transcript, `${rows.join('\n')}\n`);
+    const sent = body ?? { hook_event_name: 'Stop', session_id: 's', cwd: proj, transcript_path: transcript, ...payload };
+    const p = spawnHook(['learn', '--memory', path.join(install, 'memory'), ...argv], JSON.stringify(sent), { cwd: proj, env });
+    return { rc: p.status, out: p.stdout, err: p.stderr };
+  };
+  const notes = tier ? path.join(home, '.config', 'geneseed', 'notes') : path.join(install, 'notebook');
+  const note = (name) => {
+    const f = path.join(notes, 'skill-notes', name);
+    return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null;
+  };
+  return { sb, proj, install, notes, stop, note };
+}
+const inWorld = (opts, fn) => { const w = stopWorld(opts); try { return fn(w); } finally { w.sb.cleanup(); } };
+
+test('learn on Stop: a skill line is copied with no model, stdout stays empty, and a re-read adds nothing', () => {
+  inWorld({}, (w) => {
+    const r = w.stop([usr('fix it'), asst(SKILL_REPLY)]);
+    assert.equal(r.rc, 0, r.err);
+    assert.equal(r.out, '', 'the capture printed on stdout');
+    assert.match(w.note('debug.md') ?? '', SKILL_NOTE, r.err);
+    assert.match(w.note('_general.md') ?? '', SKILL_GENERAL);
+    assert.equal(fs.existsSync(path.join(w.notes, 'agent-notes')), false, 'a relayed [agent] line is no note on Stop');
+    // The same Stop again, and a resumed session whose newest reply repeats the lines: nothing added.
+    const once = [w.note('debug.md'), w.note('_general.md')];
+    w.stop([usr('fix it'), asst(SKILL_REPLY)]);
+    w.stop([usr('fix it'), asst(SKILL_REPLY), usr('again'), asst(SKILL_REPLY, 'fin2')]);
+    assert.deepEqual([w.note('debug.md'), w.note('_general.md')], once);
+    // Only the final reply is read: an earlier reply's line is not this turn's.
+    w.stop([usr('a'), asst('spec-feedback: [skill:debug] an earlier turn\'s line here', 'e1'), usr('b'), asst('ok', 'e2')]);
+    assert.deepEqual([w.note('debug.md'), w.note('_general.md')], once);
+  });
+});
+
+// The host copy, `last_assistant_message`: with no `spec-feedback` in it the transcript is never read
+// (the common Stop costs a substring test), and it is read alone when the transcript lags.
+test('learn on Stop: the host copy decides whether the transcript is read', () => {
+  inWorld({}, (w) => {
+    w.stop([usr('fix it'), asst(SKILL_REPLY)], { last_assistant_message: 'Done, the bug is fixed.' });
+    assert.equal(w.note('debug.md'), null, 'the transcript was read past a host copy with no feedback');
+    w.stop([], { transcript_path: path.join(w.install, 'missing.jsonl'), last_assistant_message: SKILL_REPLY });
+    assert.match(w.note('debug.md') ?? '', SKILL_NOTE);
+  });
+});
+
+// Each row: what the world is, then the Stop. None of them writes a skill note.
+test('learn on Stop: a blocked turn, an excluded folder, an unshipped skill and Bob write no skill note', () => {
+  const editRows = (proj) => [usr('fix it'),
+    JSON.stringify({ type: 'assistant', message: { id: 'ed', role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: path.join(proj, 'a.js') } }] } }),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', is_error: false }] } }),
+    asst(SKILL_REPLY)];
+  inWorld({ checks: 'npm run lint\n' }, (w) => {
+    const r = w.stop(editRows(w.proj));
+    assert.equal(JSON.parse(r.out).decision, 'block', r.err);
+    assert.equal(w.note('debug.md'), null, 'a blocked turn has not ended: nothing captured');
+  });
+  inWorld({ exclude: true }, (w) => {
+    assert.equal(w.stop([usr('fix it'), asst(SKILL_REPLY)]).out, '');
+    assert.equal(fs.existsSync(path.join(w.notes, 'skill-notes')), false, 'an excluded folder captured a note');
+  });
+  inWorld({ skills: ['plan'] }, (w) => {
+    w.stop([usr('fix it'), asst(SKILL_REPLY)]);
+    assert.equal(fs.existsSync(path.join(w.notes, 'skill-notes')), false, 'a skill this install does not ship got a note');
+  });
+  inWorld({}, (w) => {
+    const r = w.stop([], {}, { argv: ['--host', 'bob'], body: { event: 'Stop', session_id: 's' } });
+    assert.equal(r.rc, 0);
+    assert.match(r.err, /no transcript available \(bob\)/);
+    assert.equal(fs.existsSync(path.join(w.notes, 'skill-notes')), false);
+  });
+});
+
+test('learn on Stop: a global install with the shared tier writes to the tier\'s skill notes', () => {
+  inWorld({ emit: 'claude-global', tier: true }, (w) => {
+    const r = w.stop([usr('fix it'), asst(SKILL_REPLY)]);
+    assert.match(w.note('debug.md') ?? '', SKILL_NOTE, r.err);
+    assert.equal(fs.existsSync(path.join(w.install, 'notebook', 'skill-notes')), false, 'not beside the host store too');
+  });
+});
+
+test('turnReply: the host copy alone decides when it holds no feedback', () => {
+  assert.equal(turnReply({ last_assistant_message: 'all done', transcript_path: '/nowhere' }, tailReader()), '');
+  assert.equal(turnReply({ last_assistant_message: 'spec-feedback: [skill:x] y' }, tailReader()), 'spec-feedback: [skill:x] y');
+  assert.equal(turnReply({}, tailReader()), '');
 });

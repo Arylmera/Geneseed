@@ -19,7 +19,7 @@ import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
-import { captureSpecFeedback, subagentReport } from './spec-feedback.mjs';
+import { captureSpecFeedback, subagentReport, turnReply } from './spec-feedback.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -346,12 +346,15 @@ export function notesRootOf(memory) {
 
 /**
  * SubagentStop: the `spec-feedback:` lines of the sub-agent's final report into the notes its next
- * dispatch reads (./spec-feedback.mjs). No model, so `$GENESEED_LLM` does not gate it. Silent on
- * stdout, which an advisory verdict may already hold, and a failure costs only the capture.
+ * dispatch reads (./spec-feedback.mjs). Stop: the `[skill:<name>]` lines of the main session's
+ * final reply into the notes that skill reads (`agent` null). Skill lines are checked against
+ * `<install>/skills/`. No model, so `$GENESEED_LLM` does not gate it. Silent on stdout, which an
+ * advisory verdict or the change report may hold, and a failure costs only the capture.
  */
-function captureFeedback(agent, report, args) {
+function captureFeedback(agent, report, args, install) {
   try {
-    const written = captureSpecFeedback(agent, report, notesRootOf(args.memory));
+    const skills = install ? path.join(install, 'skills') : null;
+    const written = captureSpecFeedback(agent, report, notesRootOf(args.memory), undefined, skills);
     if (written.length) err(`[learn] spec-feedback -> ${written.join(', ')}\n`);
   } catch { /* a note never fails the hook */ }
 }
@@ -368,7 +371,7 @@ function subagentEnded(meta, args, read, install) {
   if (!agent) return;
   let report = '';
   try { report = subagentReport(meta, read); } catch { /* no report: nothing to capture */ }
-  captureFeedback(agent, report, args);
+  captureFeedback(agent, report, args, install);
   const ran = !args.file && !args.noDoneGate;
   const judged = typeof meta.agent_transcript_path === 'string' && meta.agent_transcript_path;
   recordAgentRun(install, agent, meta, { done: !ran ? null : judged ? 'ended' : 'not-judged', report, read });
@@ -436,6 +439,13 @@ export function cmdLearn(args) {
   // its outcome line is written. A blocked turn returned above, so a line is one finished turn;
   // the re-run of a turn that is captured twice adds no note.
   if (hookEvent === 'SubagentStop') subagentEnded(meta, args, read, install);
+  // A skill runs in the main context: its `[skill:<name>]` line is read off the turn's final reply.
+  // After the block return as the agents' lines are: a blocked turn's reply is not its last.
+  if (hookEvent === 'Stop') {
+    let reply = '';
+    try { reply = turnReply(meta, read); } catch { /* no reply: nothing to capture */ }
+    if (reply) captureFeedback(null, reply, args, install);
+  }
 
   // The change report, at the turn's real end (./store-watch.mjs). One JSON document on stdout, so an
   // advisory already there keeps it, and Bob reads no stdout here at all: those go to stderr.
