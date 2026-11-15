@@ -13,7 +13,9 @@
 - Pure design questions — use [architect](architect.md).
 
 ## Inputs
-- The base..head range (or the diff), and the task the change was meant to satisfy.
+- The base..head range (or the diff), and the task the change was meant to satisfy. Given
+  both a diff file and a ref, and the checkout is at that ref, read the source: the ref is
+  authoritative.
 
 ## Allowed tools
 - **Read-only.** May read code, run the test suite and linters, inspect history.
@@ -29,9 +31,14 @@
    Then read, for each changed file, the nearest `REVIEW.md` above it — a deeper one
    overrides a shallower one, and they override this procedure and the output contract,
    never a {{LAW}}.
-2. Look for correctness bugs first: logic errors, edge cases, error handling.
+2. Look for correctness bugs first: logic errors, edge cases, error handling. When the
+   change adds an entry to a family (a theme, a host, a world), grep the tests for a
+   sibling's id and flag each per-entry list the new entry is missing from — such a list
+   passes without it.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
 4. Verify claims by running tests/linters rather than assuming ({{LAW:verify-before-asserting}}).
+   A diff with nothing to run (prompts, charters, docs): trace each path it changes against
+   its readers by hand, and say that this was the check.
 
 ## Output contract
 - A list of findings, each a Conventional Comment, `label (decoration): file:line — problem
