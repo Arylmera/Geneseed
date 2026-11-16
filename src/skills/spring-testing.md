@@ -42,6 +42,8 @@ class UserControllerTests {
 
 `MockMvcTester` is AssertJ-based (`assertThat(mvc.get().uri(...)).hasStatusOk()`); do not mix it with the `expectStatus()` chain, which belongs to the other clients. Security: `@WithMockUser` still works on slices; `@Import` your security config.
 
+`@WebMvcTest` creates no services or repositories: every bean the controller injects needs a `@MockitoBean`, including a repository newly added to an existing controller. Assert error bodies as Problem Details fields (`$.status`, `$.errors[*].field`), never on message texts.
+
 ## Full-server test
 
 ```java
@@ -82,6 +84,8 @@ class AuthorRepositoryTests { /* ... */ }
 - The default `replace = NON_TEST` already keeps a `@ServiceConnection` data source; `replace = NONE` is only needed for a non-test `DataSource` you defined yourself.
 - Where `@ServiceConnection` has no support for the container, use `@Testcontainers` + `@Container static` + `@DynamicPropertySource` to register the properties.
 - Share one container configuration across tests so the context cache is reused.
+- `@Testcontainers(disabledWithoutDocker = true)` skips the class silently when no daemon answers: check the test report shows the integration tests as run. With Podman, point `DOCKER_HOST` at the Podman socket and set `TESTCONTAINERS_RYUK_DISABLED=true`.
+- Beyond CRUD, the integration tests cover what a mocked slice cannot see: all migrations applied, a DB `CHECK` rejecting a bad row, none -> A, A -> B and A -> none for each relation a client can change, a stale `version` answering 409, a referenced delete answering 409 with the row still there.
 
 ## Rules
 

@@ -21,12 +21,14 @@ Target stack: Spring Boot 4 / Spring Framework 7 / Spring Security 7 / Hibernate
 - DTOs are records. JPA entities are not records. Never return an entity from a controller.
 - `@Valid` on every request body; `@Transactional(readOnly = true)` on read services, `@Transactional` on mutating methods.
 - Typed config: `@ConfigurationProperties` records instead of scattered `@Value`.
-- Errors: one `@RestControllerAdvice`, Problem Details responses.
+- Errors: one `@RestControllerAdvice`, Problem Details responses; the catch-all 500 never returns the exception message.
+- List endpoints return `PagedModel`, never `Page`/`PageImpl` (their JSON is not a stable format).
+- Relational database: the migration tool owns the schema, Hibernate only validates it (the spring-data-jpa skill).
 - Blocking outbound HTTP: `RestClient`, or an `@HttpExchange` interface. `WebClient` only for reactive or streaming code. Do not mix blocking and reactive in one call path.
 - Jakarta namespaces only (`jakarta.persistence`, `jakarta.validation`, `jakarta.servlet`).
 - Secrets from the environment or mounted files, never committed config.
 - Tests: positive and negative cases; Testcontainers with `@ServiceConnection`; `@MockitoBean` for slice-test collaborators.
-- Baseline properties worth enabling: `spring.threads.virtual.enabled: true`, `spring.mvc.problemdetails.enabled: true`, `server.shutdown: graceful`.
+- Baseline properties worth enabling: `spring.threads.virtual.enabled: true`, `spring.mvc.problemdetails.enabled: true`, `server.shutdown: graceful`. Behind security, permit `/actuator/health/**`, not only `/actuator/health`, or the liveness and readiness probes fail.
 
 ## Boot 4 pitfalls
 Removed or renamed in Boot 4 (do not write them): `@MockBean` and `@SpyBean`, `ClientHttpRequestFactories`, `javax.persistence` (now `jakarta.persistence`), Spring Security 6 idioms such as `authorizeRequests` and `.and()` chains. <!-- banned: ok -->
@@ -52,6 +54,6 @@ Removed or renamed in Boot 4 (do not write them): `@MockBean` and `@SpyBean`, `C
 - **Logging and structured logs** -> read [spring-boot/logging.md](spring-boot/logging.md) and follow it.
 
 ## Done when
-- The project's build and tests pass, read from real output; no deprecated Boot 2/3 idiom was introduced; every new endpoint validates input and has a negative test.
+- The project's clean build and tests pass, read from real output (`./mvnw clean verify`: classes the IDE compiled into `target` can hide `javac` errors), with the integration tests run, not skipped; no deprecated Boot 2/3 idiom was introduced; every new endpoint validates input and has a negative test.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

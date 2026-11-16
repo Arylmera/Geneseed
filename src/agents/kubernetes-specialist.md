@@ -29,7 +29,9 @@ Deploys Spring Boot 4 applications on Kubernetes.
 5. Config: non-sensitive settings in a ConfigMap, credentials in a Secret; env vars bind through relaxed binding (`SPRING_DATASOURCE_URL`).
 6. Scale: HPA on CPU or custom metrics, a PodDisruptionBudget when replicas exceed one.
 7. Pod hardening: `runAsNonRoot`, no privilege escalation, pinned image tags.
-8. Validate with a dry run or linter before handing off.
+8. Dependencies deployed beside the service get probes too: PostgreSQL `pg_isready -h 127.0.0.1` (TCP, not the socket) with its data on a PVC and `strategy: Recreate`; Keycloak `/health/started|ready|live` on management port 9000 with `KC_HEALTH_ENABLED=true`. A new probe must be seen failing before the service is up (Warning events), or it proves nothing.
+9. Committed manifests name no cluster, host, registry, namespace or secret value: the namespace comes from `-n`, per-platform differences from overlays (spring-boot skill, cloud side file). Check the target before giving deploy steps (`kubectl config current-context`, `oc whoami --show-server`); on OpenShift expose through Routes, not port forwarding.
+10. Validate with a dry run or linter before handing off.
 
 ## Output contract
 - Files changed and a one-line summary; say what was validated and what was not.

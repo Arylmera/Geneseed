@@ -36,6 +36,8 @@ class UserController {
 
 Version the path (`/api/v1`). Use GET for reads, POST/PUT/PATCH/DELETE for state changes; never change state on GET.
 
+Paged lists return `PagedModel` (`{content, page}`): the JSON of `Page`/`PageImpl` is not a stable format and Spring Data warns when it serializes one. Do not get that shape by putting `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` on the application class: `@WebMvcTest` then registers the web support twice and fails. Cap the page size (`spring.data.web.pageable.max-page-size: 100`).
+
 ## DTOs and validation
 Records for request and response. Constraints sit on the record components (`jakarta.validation.constraints`); `@Valid` on the controller parameter triggers them. Put the entity-to-DTO mapping in a static factory or a mapper, not in the controller.
 
@@ -46,7 +48,7 @@ public record UserCreateRequest(
         @Min(18) Integer age) {}
 ```
 
-A custom constraint is an annotation with `@Constraint(validatedBy = ...)` plus a `ConstraintValidator`; the validator may be a Spring bean and inject a repository. A uniqueness check in a validator is advisory only; the database constraint is the truth, so also handle `DataIntegrityViolationException` (409).
+A custom constraint is an annotation with `@Constraint(validatedBy = ...)` plus a `ConstraintValidator`; the validator may be a Spring bean and inject a repository. A rule across two fields (a date range) is a class-level constraint that reports on one field (`context.buildConstraintViolationWithTemplate(...).addPropertyNode("to")`), so a client can show it next to the input. A uniqueness check in a validator is advisory only; the database constraint is the truth, so also handle `DataIntegrityViolationException` (409).
 
 ## Errors: Problem Details
 Enable RFC 9457 responses for Spring's own exceptions:
@@ -73,10 +75,26 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail conflict(DataIntegrityViolationException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Resource already exists");
     }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ProblemDetail staleVersion(ObjectOptimisticLockingFailureException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Record was changed by someone else; reload and retry");
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)   // ?sort=unknownProperty
+    ProblemDetail badSort(PropertyReferenceException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    ProblemDetail unexpected(Exception ex) {
+        logger.error("Unexpected error", ex);              // logged here, never returned
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error");
+    }
 }
 ```
 
-A domain exception can carry its own problem by extending `ErrorResponseException`. Never put stack traces or SQL text in `detail`; log the exception server-side and return a generic message for the catch-all 500.
+A domain exception can carry its own problem by extending `ErrorResponseException`; a plain `ResponseStatusException(NOT_FOUND, ...)` also renders as Problem Details with no extra handler. Never put stack traces, SQL text or an unexpected exception's message in `detail`. To answer a duplicate with the field at fault, read the constraint name from Hibernate's `ConstraintViolationException` (the cause), and name constraints explicitly in migrations so that name is stable. Deleting a record that others still reference answers 409; it never cascades.
 
 ## Outbound HTTP
 Blocking calls use `RestClient`; build it from the injected `RestClient.Builder` so Boot's customizers (timeouts, SSL, observability) apply.
@@ -109,4 +127,6 @@ Prefer one bean over scattered annotations. With Spring Security on the classpat
 | Bad input | `@Valid` -> 400 Problem Details |
 | Missing resource | 404 via your exception handler |
 | Duplicate | 409 from the DB constraint |
+| Stale update | 409 from `ObjectOptimisticLockingFailureException` |
+| Unknown `sort` property | 400 from `PropertyReferenceException` |
 | Slow upstream | `spring.http.clients.connect-timeout` / `read-timeout` |

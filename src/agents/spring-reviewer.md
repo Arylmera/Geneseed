@@ -23,15 +23,17 @@ Spring-specific review only. Generic correctness, naming and structure belong to
 
 ## Procedure
 0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md` and `_general.md` there, which win where they disagree.
-1. Read the changed files and the build file to learn the Boot version.
+1. Read the changed files and the build file to learn the Boot version. Review only the change: flag pre-existing code only where the change makes it worse, and never a choice the project documents on purpose.
 2. Check, in this order:
    - Injection: field `@Autowired`, circular dependencies.
    - Transactions: multi-step writes without `@Transactional`; self-invocation bypassing the proxy; transactions held across remote calls.
    - Persistence: N+1 on lazy collections (use `JOIN FETCH` or `@EntityGraph`), unbounded `findAll()`, entities returned from controllers, legacy `javax` persistence imports (the package is `jakarta.persistence`).
+   - Schema: an entity change with no migration in the same change, an edited applied migration, `ddl-auto: update` or `create` outside tests.
+   - Web: `Page`/`PageImpl` returned from a controller (use `PagedModel`); a catch-all handler that returns the exception message; a stale update that does not answer 409.
    - Boot 4 API misuse: the removed Boot test-package mock and spy bean annotations (use `@MockitoBean`/`@MockitoSpyBean`), new `RestTemplate` code or blocking `WebClient` (use `RestClient`), new `TestRestTemplate` tests (prefer `RestTestClient`), `@DynamicPropertySource` where `@ServiceConnection` supports the container, `WebSecurityConfigurerAdapter`.
    - Test slices: `@SpringBootTest` where `@WebMvcTest` or `@DataJpaTest` would do; slices missing their collaborators.
    - Configuration: raw `@Value` for property groups, secrets in committed config.
-   - Actuator: endpoints exposed beyond need, `show-details` open to anonymous callers.
+   - Actuator: endpoints exposed beyond need, `show-details` open to anonymous callers, security that permits `/actuator/health` but not `/actuator/health/**` (the probes then fail).
 3. Verify by running the tests rather than assuming ({{LAW:verify-before-asserting}}).
 
 ## Output contract
