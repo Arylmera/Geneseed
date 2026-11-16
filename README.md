@@ -30,14 +30,14 @@
 **New here? One line, no questions** — it clones Geneseed and installs the [`starter` profile](#-new-to-ai-agents-one-line-no-questions). You need git and Node ≥ 22.7.
 
 ```bat
-git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && .\install.cmd --profile starter
+cmd /c "(if exist Geneseed (git -C Geneseed pull) else (git clone https://github.com/Arylmera/Geneseed.git)) && cd Geneseed && .\install.cmd --profile starter"
 ```
 
 ```bash
-git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
+{ [ -d Geneseed ] && git -C Geneseed pull || git clone https://github.com/Arylmera/Geneseed.git; } && cd Geneseed && ./install --profile starter
 ```
 
-The first line is for Windows (cmd or PowerShell 7), the second for macOS and Linux. Windows PowerShell 5.1 has no `&&`: there, put `;` in its place. Want to choose the theme, the host and the rest yourself? Run the wizard instead:
+The first line is for Windows (cmd, PowerShell 5.1 or 7), the second for macOS and Linux. Run it from the folder that gets the clone. It clones the first time and pulls on later runs, so the same line installs, updates and repairs. Want to choose the theme, the host and the rest yourself? Run the wizard instead:
 
 ```bash
 npx geneseed setup
@@ -88,21 +88,21 @@ geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 
 ### 🧭 New to AI agents? One line, no questions
 
-Clone Geneseed where you like, then run one command at the root of the clone. It installs the **`starter`** profile into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check and prints the console's address. It asks nothing.
+Run one line from the folder that gets the clone. It clones Geneseed the first time and pulls on later runs, so the same line installs, updates and repairs. It installs the **`starter`** profile into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check and prints the console's address. It asks nothing.
 
-Windows (cmd or PowerShell 7; on Windows PowerShell 5.1, put `;` in place of each `&&`):
+Windows (cmd, PowerShell 5.1 or 7):
 
 ```bat
-git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && .\install.cmd --profile starter
+cmd /c "(if exist Geneseed (git -C Geneseed pull) else (git clone https://github.com/Arylmera/Geneseed.git)) && cd Geneseed && .\install.cmd --profile starter"
 ```
 
 macOS, Linux:
 
 ```bash
-git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
+{ [ -d Geneseed ] && git -C Geneseed pull || git clone https://github.com/Arylmera/Geneseed.git; } && cd Geneseed && ./install --profile starter
 ```
 
-`starter` is a neutral voice, a candid peer posture, the agent working each task itself, and every guardrail armed except the ownership gate. Run the same line again to update and repair. `geneseed profile save <name> --from claude-global` writes your own install as a Personal profile (in `~/.config/geneseed/profiles/`); with `--shipped`, from a clone, it writes [`profiles/`](profiles/) for a pull request, which is how a team adds one. `geneseed profile apply <name>` applies a profile globally, or with `--project <dir>` to one project folder. See [Install profiles](docs/reference/profiles.md).
+`starter` is a neutral voice, a candid peer posture, the agent working each task itself, and every guardrail armed except the ownership gate. `geneseed profile save <name> --from claude-global` writes your own install as a Personal profile (in `~/.config/geneseed/profiles/`); with `--shipped`, from a clone, it writes [`profiles/`](profiles/) for a pull request, which is how a team adds one. `geneseed profile apply <name>` applies a profile globally, or with `--project <dir>` to one project folder. See [Install profiles](docs/reference/profiles.md).
 
 ### ⚡ The short way — `npx`
 
