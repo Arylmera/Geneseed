@@ -1,0 +1,14 @@
+{
+  "description": "For a fluent user who delegates: expert posture, foreman mode, aggressive loops, every guardrail except the ownership gate.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "expert",
+  "mode": "foreman",
+  "trust": "aggressive",
+  "doctrines": "all",
+  "kits": [],
+  "contextWindow": "1m",
+  "gates": { "ownershipGate": false },
+  "login": true
+}

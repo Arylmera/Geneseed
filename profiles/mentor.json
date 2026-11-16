@@ -1,0 +1,13 @@
+{
+  "description": "For a learner (a junior, a student): neutral voice, mentor posture, every guardrail, the ownership gate included.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "mentor",
+  "mode": "direct",
+  "trust": "prudent",
+  "doctrines": "all",
+  "kits": [],
+  "contextWindow": "200k",
+  "login": true
+}

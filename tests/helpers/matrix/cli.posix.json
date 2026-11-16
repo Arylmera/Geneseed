@@ -5991,7 +5991,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[setup] no profile 'nope' — shipped: guillaume-claude-global, starter; personal: none"
+        "[setup] no profile 'nope' — shipped: autonomous, corporate, guillaume-claude-global, mentor, minimal, starter; personal: none"
       ],
       "expect_absent": [
         "Running:",

@@ -54,8 +54,9 @@ test('the shipped starter profile holds the values the spec decided (D4, D5, D27
 // `listProfiles` lists every file of both sources, Shipped first, each with its source and path.
 test('every shipped profile loads, and the doctor arm says nothing about them', () => {
   assert.deepEqual(listProfiles(SHIPPED_ONLY).map((e) => [e.name, e.source, e.shadowed]),
-    [['guillaume-claude-global', 'shipped', false], ['starter', 'shipped', false]]);
-  assert.equal(listProfiles(SHIPPED_ONLY)[1].file, path.join(PROFILES_DIR, 'starter.json'));
+    [['autonomous', 'shipped', false], ['corporate', 'shipped', false], ['guillaume-claude-global', 'shipped', false],
+      ['mentor', 'shipped', false], ['minimal', 'shipped', false], ['starter', 'shipped', false]]);
+  assert.equal(listProfiles(SHIPPED_ONLY)[5].file, path.join(PROFILES_DIR, 'starter.json'));
   assert.deepEqual(profileSetProblems(SHIPPED_ONLY), []);
 });
 

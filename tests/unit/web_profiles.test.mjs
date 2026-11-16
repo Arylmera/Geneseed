@@ -65,7 +65,8 @@ const req = async (method, p, body) => {
 test('the list names both sources, the shadowed file, and the installs that follow each', () => {
   const r = apiProfiles(st, '/api/profiles', { src: { personalDir: personal }, tools: ALL });
   assert.deepEqual(r.profiles.map((p) => [p.name, p.source, p.shadowed]), [
-    ['guillaume-claude-global', 'shipped', false], ['starter', 'shipped', false],
+    ['autonomous', 'shipped', false], ['corporate', 'shipped', false], ['guillaume-claude-global', 'shipped', false],
+    ['mentor', 'shipped', false], ['minimal', 'shipped', false], ['starter', 'shipped', false],
     ['mine', 'personal', false], ['starter', 'personal', true],
   ]);
   const by = (name, source) => r.profiles.find((p) => p.name === name && p.source === source);

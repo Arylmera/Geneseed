@@ -116,6 +116,90 @@ A gate that is off in the global install runs nowhere, so the line does not name
 
 `peer` and not `expert`, because `expert` does not explain the basics a new user needs; not `mentor`, because it checks understanding with questions. Every gate stays armed except the ownership gate, whose first-write stop is heavy for a new user. `200k`, because most machines run a 200k-token model, a locked-down work PC included; `guillaume-claude-global` sets `1m` for a 1M-token model.
 
+## `mentor`
+
+```json
+{
+  "description": "For a learner (a junior, a student): neutral voice, mentor posture, every guardrail, the ownership gate included.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "mentor",
+  "mode": "direct",
+  "trust": "prudent",
+  "doctrines": "all",
+  "kits": [],
+  "contextWindow": "200k",
+  "login": true
+}
+```
+
+`mentor`, because it explains the reasoning behind each step and checks understanding before it moves on. A learner needs that; a fluent user does not. `prudent`, so that a loop stops for a person at a lower risk score ([Loop risk](../concepts/loop-risk.md)). The profile turns no gate off. The ownership gate stays armed: in an application repo, it asks the learner to set up ownership, and then the learner decides each part of the code ([Ownership](../concepts/ownership.md)).
+
+## `corporate`
+
+```json
+{
+  "description": "For a locked-down work PC: neutral voice, every guardrail except the ownership gate, strict consent, no login item.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "peer",
+  "mode": "direct",
+  "trust": "prudent",
+  "doctrines": "all",
+  "kits": [],
+  "contextWindow": "200k",
+  "gates": { "ownershipGate": false, "ownBranchPass": false },
+  "login": false
+}
+```
+
+`prudent`, because a work machine holds code that other people answer for. `ownBranchPass: false` is `--strict-consent`: every commit and push asks, on your own branch too, not only on the main branch. The ownership gate is off, as in `starter`: a team that wants ownership writes `mode: on` in its repo's `AGENTS.md`, and that section binds with the gate off. `login: false`, because a policy often blocks a login item on a managed PC. Start the console by hand with `geneseed web start`.
+
+## `autonomous`
+
+```json
+{
+  "description": "For a fluent user who delegates: expert posture, foreman mode, aggressive loops, every guardrail except the ownership gate.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "expert",
+  "mode": "foreman",
+  "trust": "aggressive",
+  "doctrines": "all",
+  "kits": [],
+  "contextWindow": "1m",
+  "gates": { "ownershipGate": false },
+  "login": true
+}
+```
+
+`expert` and `foreman`, because this user gives a task and lets background workers do it. `aggressive` lets a loop accept a higher risk score before it stops for a person ([Loop risk](../concepts/loop-risk.md)). The deletion gate and the secrets gate stay armed: a worker that runs alone must not lose work or leak a key. Only the ownership gate is off, because its first-write stop interrupts the work. `1m`, because a user who delegates large tasks usually runs a 1M-token model. On a 200k-token model, save your own profile with `contextWindow` set to `200k`.
+
+## `minimal`
+
+```json
+{
+  "description": "For a small model or a tight token budget: the smallest always-on context, two doctrine packs, niche skills left out.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "assistant",
+  "mode": "direct",
+  "trust": "balanced",
+  "doctrines": ["craft", "rigor"],
+  "excludeSkills": ["brick-forge", "bruno", "daydream", "factory", "factory-forge", "forge-mcp", "prototype", "react-view-transitions"],
+  "kits": [],
+  "contextWindow": "200k",
+  "gates": { "ownershipGate": false },
+  "login": true
+}
+```
+
+Each choice makes the always-on context smaller. `assistant` does what you ask and stops, so a small model gets a narrow task and few chances to drift. `craft` and `rigor` are the packs about how code is written and proven; the other packs stay in `doctrines/` for reference. The excluded skills serve rare tasks. A skill that the harness links to cannot be excluded, so `council`, `deck`, `pipeline` and `workflow` stay. Every gate except the ownership gate stays armed, because a gate costs no context. To measure the gain on your machine, build `starter` and `minimal` into two empty folders with `geneseed profile apply <name> --project <dir> --hosts claude`, then compare the size of each `CLAUDE.md` and the number of skills.
+
 ## Save your own
 
 ```bash

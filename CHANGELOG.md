@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Four more Shipped install profiles.** `mentor` (a learner: mentor posture, prudent trust, every gate armed, the ownership gate included), `corporate` (a locked-down work PC: prudent trust, `--strict-consent`, no login item), `autonomous` (a fluent user who delegates: expert posture, foreman mode, aggressive trust, 1m context, the deletion and secrets gates armed) and `minimal` (a small model or a tight token budget: assistant posture, the `craft` and `rigor` packs only, eight niche skills left out). [Install profiles](docs/reference/profiles.md) gives the reason for each choice.
+
 ### Changed
 
 - `geneseed export` writes the harness release as the version of every entity, skills and agents included; it no longer reads the never-bumped per-entity versions of `registry.json`.
