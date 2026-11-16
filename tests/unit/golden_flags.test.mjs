@@ -7,7 +7,7 @@
 // what runs is a way to make a gate pass by running less of it, so each one is tested for what
 // it selects AND for whether it announces itself to the orphan check.
 //
-// NOTHING HERE SPAWNS. 259 emits belong in the cells job; this runs on every push on both
+// NOTHING HERE SPAWNS. 268 emits belong in the cells job; this runs on every push on both
 // operating systems and costs milliseconds.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -131,6 +131,15 @@ test('every narrowing flag selects fewer cells, and none selects none', () => {
     assert.ok(got.length < full.length && got.length > 0,
       `${argv.join(' ')} selected ${got.length} of ${full.length}`);
   }
+});
+
+test('--quick keeps the neutral theme only: 34 cells, which is what Windows CI re-emits', () => {
+  // ci.yml runs `--idempotent --quick` on windows-latest and names this count in its comment.
+  // 34 = the neutral theme's 9 emits x 2 footprints (18), plus the 11 cells on the extra axes and
+  // the 5 kit cells, which are all neutral. A theme added to the matrix changes nothing here; an
+  // axis cell added in another theme, or a neutral cell removed, moves the number.
+  assert.equal(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).length, 34);
+  assert.ok(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).every((c) => c.theme === 'neutral'));
 });
 
 test('--deletion selects the deletion matrix and nothing else', () => {

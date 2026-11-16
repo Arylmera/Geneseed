@@ -320,9 +320,15 @@ jobs:
       # another run of the same implementation. `--idempotent` is the re-emit path real users
       # are on from their second build onwards; `--deletion` is the only thing that makes the
       # write-before-delete prune actually delete.
+      #
+      # WINDOWS RE-EMITS THE NEUTRAL THEME ONLY (`--quick`, 34 of the 268 cells); Linux keeps the
+      # full run. The Windows jobs set CI's wall clock, and the other 13 themes buy nothing there:
+      # a theme holds 169 voice text tokens and nothing else, so it changes words, never a path or
+      # a write. The Windows defects this step exists for (CRLF, 8.3 short paths, cp1252) do not
+      # depend on the theme. And `doctor --all` already renders every theme on both OSes.
       - name: golden — idempotence
         if: matrix.cells == 'emit'
-        run: node tests/golden.mjs --idempotent
+        run: node tests/golden.mjs --idempotent ${{ matrix.os == 'windows-latest' && '--quick' || '' }}
       - name: golden — the prune
         if: matrix.cells == 'emit'
         run: node tests/golden.mjs --deletion
