@@ -86,6 +86,8 @@ const NPM = which('npm');
  * npm@11 step) and `package-no-python` installs the tarball once more, while the tier was the
  * slowest file of every Windows shard. What Windows alone could add is weak: `runEntry` spawns
  * `node <bin>`, never the `.cmd` shim npm writes, so the shim was never under test here anyway.
+ * One thing does go unexercised: the Windows quoting branch of `npm()` below (`"${NPM}"`,
+ * `shell: WIN`), whose every caller is in this tier. That loss was accepted with the skip.
  */
 const NO_NPM = WIN
   ? 'the npm tier runs on Linux only: CI packs and installs the tarball there four times, and '
