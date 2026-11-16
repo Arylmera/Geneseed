@@ -365,33 +365,105 @@ test('the alternate path key is read, and a well-formed but empty path defers', 
 // on Bob's (`tool-gate --host bob`, Bob's own payload shape with no `cwd`, so the process cwd is
 // the repo) it must exit 2 or pass. `--no-consent` takes process 5 out of the Claude run, so only
 // Law IV can speak; on Bob process 5 is a warning with exit 0, never a BLOCKED line.
-test('Law IV asks exactly on real loss, per the shared policy table, on Claude and Bob', () => {
+//
+// IN PROCESS FOR THE WHOLE TABLE, SPAWNED FOR A SAMPLE. 122 rows × 2 spawns cost most of this
+// file's time on Windows, and a spawn adds only the entry point (argv, stdin, stdout), which is the
+// same for every row. So every row is judged by `gitDecide` in process, through `guardGate` (the
+// host switch and the fail-closed catch the real verbs wrap it in) and, on Bob, through
+// `normaliseBobPayload` (Bob's entry's payload lift); and `SPAWNED_LOSS_ROWS` — the first stop row
+// and the first pass row of each `state` — still run as the real child processes, with the same
+// assertions.
+
+/** Claude's and Bob's verdicts on one loss-table row, judged by the same assertions either way. */
+function assertLossRow(row, what, claude, bob) {
+  if (row.stop) {
+    const dec = askDecision(claude, what);
+    assert.match(dec.permissionDecisionReason, /Deletion Is Deliberate/, what);
+  } else {
+    assertDefers(claude, what);
+  }
+  assert.equal(bob.rc, row.stop ? 2 : 0, `bob: ${what}: ${bob.err}`);
+  assert.equal(/BLOCKED: Tell the user this, word for word: [\s\S]*\(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
+  if (row.stop) {
+    // Claude can ask, so its reason offers the choice; Bob cannot (exit 2 is final), so
+    // promising one there sent the model to "disable the Geneseed hook" (live, 2026-10-23).
+    assert.match(askDecision(claude, what).permissionDecisionReason, /\nSafe choice: .*\nIt asks because .*\nIf you allow it, /, what);
+    assertBobBlockIsHonest(bob.err, what);
+  }
+}
+
+/** The first row of each (`state`, `stop`) pair: every state the table holds, both verdicts. */
+const SPAWNED_LOSS_ROWS = LOSS_ROWS.filter((row, i) =>
+  LOSS_ROWS.findIndex((r) => r.state === row.state && r.stop === row.stop) === i);
+
+/** The two real child processes for one row: `git-gate` on Claude, `tool-gate --host bob`. */
+function spawnLossRow(ws, cmd, { claudeExtra, bobExtra }) {
+  const claude = hookRun('git-gate', { env: ws.env, extra: claudeExtra,
+    stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) });
+  const bob = hookRun('tool-gate', { host: 'bob', cwd: ws.repo, env: ws.env, extra: bobExtra,
+    stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
+  return { claude, bob };
+}
+
+/**
+ * The same two verdicts in process. Each side mirrors its spawn: Claude's payload names the repo
+ * as `cwd` while the process stands elsewhere; Bob's payload has no `cwd`, so the process moves
+ * into the repo. The gate's own `git` inherits `process.env`, so the workspace's isolated git env
+ * is set around the call, and stdout and stderr are captured as a spawn's would be.
+ */
+function decideLossRow(hooks, ws, cmd, { claudeArgs, bobArgs }) {
+  const judge = (args, payload, verb, cwd) => {
+    const saved = { ...process.env };
+    const here = process.cwd();
+    const outs = [];
+    const errs = [];
+    const realOut = process.stdout.write;
+    const realErr = process.stderr.write;
+    Object.assign(process.env, ws.env);
+    if (cwd) process.chdir(cwd);
+    process.stdout.write = (s) => { outs.push(String(s)); return true; };
+    process.stderr.write = (s) => { errs.push(String(s)); return true; };
+    let rc;
+    try {
+      rc = hooks.guardGate((a) => hooks.gitDecide(a, payload), verb)({ root: null, ...args });
+    } finally {
+      process.stdout.write = realOut;
+      process.stderr.write = realErr;
+      process.chdir(here);
+      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+      Object.assign(process.env, saved);
+    }
+    return { rc, out: outs.join(''), err: errs.join('') };
+  };
+  const claude = judge({ host: null, ...claudeArgs },
+    { tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }, 'git-gate', null);
+  const bob = judge({ host: 'bob', ...bobArgs }, hooks.normaliseBobPayload(
+    { event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }), 'tool-gate', ws.repo);
+  // A gate that defers must not leave the host switch on Bob for the next Claude call.
+  hooks.guardGate(() => 0)({ host: null });
+  return { claude, bob };
+}
+
+test('Law IV asks exactly on real loss, per the shared policy table, on Claude and Bob', async () => {
+  const hooks = await import('../../js/hosts/hooks.mjs');
   const ws = makeLossWorkspace();
   try {
     for (const row of LOSS_ROWS) {
       const cmd = rowCommand(row, ws);
       const what = `${cmd} [${row.state}, ${row.branch || 'main'}]`;
       ws.inState(row.state, () => {
-        const claude = hookRun('git-gate', { env: ws.env, extra: ['--no-consent'],
-          stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) });
-        if (row.stop) {
-          const dec = askDecision(claude, what);
-          assert.match(dec.permissionDecisionReason, /Deletion Is Deliberate/, what);
-        } else {
-          assertDefers(claude, what);
-        }
-        const bob = hookRun('tool-gate', { host: 'bob', cwd: ws.repo, env: ws.env,
-          stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
-        assert.equal(bob.rc, row.stop ? 2 : 0, `bob: ${what}: ${bob.err}`);
-        assert.equal(/BLOCKED: Tell the user this, word for word: [\s\S]*\(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
-        if (row.stop) {
-          // Claude can ask, so its reason offers the choice; Bob cannot (exit 2 is final), so
-          // promising one there sent the model to "disable the Geneseed hook" (live, 2026-10-23).
-          assert.match(askDecision(claude, what).permissionDecisionReason, /\nSafe choice: .*\nIt asks because .*\nIf you allow it, /, what);
-          assertBobBlockIsHonest(bob.err, what);
+        const { claude, bob } = decideLossRow(hooks, ws, cmd,
+          { claudeArgs: { noConsent: true }, bobArgs: {} });
+        assertLossRow(row, `in process: ${what}`, claude, bob);
+        if (SPAWNED_LOSS_ROWS.includes(row)) {
+          const real = spawnLossRow(ws, cmd, { claudeExtra: ['--no-consent'], bobExtra: [] });
+          assertLossRow(row, `spawned: ${what}`, real.claude, real.bob);
         }
       }, row.branch);
     }
+    // The sample must reach every state the table holds, or a state is never met by a real spawn.
+    assert.deepEqual([...new Set(SPAWNED_LOSS_ROWS.map((r) => r.state))].sort(),
+      [...new Set(LOSS_ROWS.map((r) => r.state))].sort());
   } finally { ws.cleanup(); }
 });
 
@@ -608,27 +680,43 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
 
 // Only the `stop` rows, which is what "real-loss" names: a row that already passes ARMED is
 // asserted to pass by the Law IV test above, and disarming can only take a check away. Replaying
-// it here cost two hook spawns per row (55 of the 122) to re-prove nothing.
-test('--no-deletion-gate passes every real-loss row on Claude and Bob', () => {
+// it here cost two hook spawns per row (55 of the 122) to re-prove nothing. Like the Law IV table,
+// every stop row is judged in process and a sample is spawned: the first stop row of each state,
+// plus the second clean one, so the flag is parsed off the real argv on every state.
+const SPAWNED_DISARMED_ROWS = [
+  ...LOSS_ROWS.filter((row, i) => row.stop
+    && LOSS_ROWS.findIndex((r) => r.stop && r.state === row.state) === i),
+  LOSS_ROWS.filter((r) => r.stop && r.state === 'clean')[1],
+];
+
+test('--no-deletion-gate passes every real-loss row on Claude and Bob', async () => {
+  const hooks = await import('../../js/hosts/hooks.mjs');
+  const assertPasses = (what, { claude, bob }) => {
+    assertDefers(claude, what);
+    assert.equal(bob.rc, 0, `bob: ${what}: ${bob.err}`);
+    assert.doesNotMatch(bob.err, /BLOCKED/, `bob: ${what}`);
+  };
   const ws = makeLossWorkspace();
   try {
     let stops = 0;
+    let spawned = 0;
     for (const row of LOSS_ROWS.filter((r) => r.stop)) {
       const cmd = rowCommand(row, ws);
       const what = `${cmd} [${row.state}]`;
       stops += 1;
       ws.inState(row.state, () => {
-        assertDefers(hookRun('git-gate', { env: ws.env, extra: ['--no-consent', '--no-deletion-gate'],
-          stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) }), what);
-        const bob = hookRun('tool-gate', { host: 'bob', cwd: ws.repo, env: ws.env,
-          extra: ['--no-deletion-gate'],
-          stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
-        assert.equal(bob.rc, 0, `bob: ${what}: ${bob.err}`);
-        assert.doesNotMatch(bob.err, /BLOCKED/, `bob: ${what}`);
+        assertPasses(`in process: ${what}`, decideLossRow(hooks, ws, cmd, {
+          claudeArgs: { noConsent: true, noDeletionGate: true }, bobArgs: { noDeletionGate: true } }));
+        if (SPAWNED_DISARMED_ROWS.includes(row)) {
+          spawned += 1;
+          assertPasses(`spawned: ${what}`, spawnLossRow(ws, cmd, {
+            claudeExtra: ['--no-consent', '--no-deletion-gate'], bobExtra: ['--no-deletion-gate'] }));
+        }
       });
     }
     // The table must hold rows that ask when armed, or every assertion above is vacuous.
     assert.ok(stops >= 5, `only ${stops} asking rows in LOSS_ROWS`);
+    assert.equal(spawned, SPAWNED_DISARMED_ROWS.length, 'a sampled row was never spawned');
   } finally { ws.cleanup(); }
 });
 
