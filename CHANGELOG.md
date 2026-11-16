@@ -14,6 +14,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Fixed
 
+- The one-line `starter` install failed on a second run, and Windows PowerShell 5.1 could not run it: `git clone` refuses an existing folder, and PowerShell 5.1 has no `&&`. The README and the install guide now give a line that clones the first time and pulls on later runs, so the same line installs, updates and repairs. On Windows the line runs through `cmd /c`, so it works in cmd, PowerShell 5.1 and PowerShell 7.
 - `geneseed export` lost the constitution's `LAWS.md` index on Windows and macOS: it shared a folder with `laws.md`, the same file on a case-insensitive file system. The laws file is now `laws-<stem>.md` (`laws-universal.md`), and a test refuses any two exported paths that differ only by case. A library that took an earlier export holds a stale `laws.md`: remove it by hand.
 
 ## [5.5.0] — 2026-11-15

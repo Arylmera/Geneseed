@@ -10,21 +10,21 @@ Geneseed builds a harness (the rules, agents, skills and hooks your AI coding to
 
 ## New to AI agents: one line, no questions
 
-You need **git** and **Node 22.7 or newer**. Clone Geneseed where you like, then run the installer with the `starter` profile:
+You need **git** and **Node 22.7 or newer**. Run one line from the folder that gets the clone. It clones Geneseed the first time and pulls on later runs, so the same line installs, updates and repairs. It runs the installer with the `starter` profile:
 
-Windows (cmd or PowerShell 7; on Windows PowerShell 5.1, put `;` in place of each `&&`):
+Windows (cmd, PowerShell 5.1 or 7):
 
 ```bat
-git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && .\install.cmd --profile starter
+cmd /c "(if exist Geneseed (git -C Geneseed pull) else (git clone https://github.com/Arylmera/Geneseed.git)) && cd Geneseed && .\install.cmd --profile starter"
 ```
 
 macOS, Linux:
 
 ```bash
-git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
+{ [ -d Geneseed ] && git -C Geneseed pull || git clone https://github.com/Arylmera/Geneseed.git; } && cd Geneseed && ./install --profile starter
 ```
 
-It asks nothing. It installs the harness globally into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check, and prints a summary with the console's address. With no tool on the machine it installs nothing and prints where to get each one. Run the same line again to update and repair. `starter` is a neutral voice, a candid peer posture, and every guardrail armed except the ownership gate. [Install profiles](../reference/profiles.md) has the details: how to save your own setup as a Personal profile, apply a profile to one project with `geneseed profile apply`, and how a team adds a Shipped one.
+It asks nothing. It installs the harness globally into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check, and prints a summary with the console's address. With no tool on the machine it installs nothing and prints where to get each one. `starter` is a neutral voice, a candid peer posture, and every guardrail armed except the ownership gate. [Install profiles](../reference/profiles.md) has the details: how to save your own setup as a Personal profile, apply a profile to one project with `geneseed profile apply`, and how a team adds a Shipped one.
 
 ## The 5-minute path
 
