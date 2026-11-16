@@ -216,11 +216,11 @@ test('the verb needs --out, and reports what it wrote', () => {
 // reads when no `--profile` is given; `--profile none` exports without one (the test above).
 // It is the maintainer's, tracked on purpose and withheld from the npm package. What is held
 // here is that it loads, that the names it produces are ones a library can take, and that it
-// names a maintainer (a person's name, not a handle: the maintainer chose that, 2026-11).
+// names a maintainer (the @e56360 handle the receiving library expects; the owner stays a name).
 test('the checkout profile loads, and is the default the verb names', () => {
   const profile = loadProfile(DEFAULT_PROFILE);
   assert.match(profile.prefix, /^[a-z0-9]+(-[a-z0-9]+)*-$/);
-  assert.match(profile.maintainer, /^\S.*\S$/);
+  assert.match(profile.maintainer, /^@\S+$/);
   assert.ok(planExport({ profile: { ...profile, only: ['commit'], laws: false } }).entities.length === 1);
   const sb = makeSandbox('gs-export-default-');
   const chunks = [];
