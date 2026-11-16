@@ -15,6 +15,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Changed
 
 - `geneseed export` writes the harness release as the version of every entity, skills and agents included; it no longer reads the never-bumped per-entity versions of `registry.json`.
+- `geneseed export` writes the constitution as a side package: a skill or an agent that cites a law no longer lists the `laws` entity in its `requires`, so a library can take the skills and agents without the laws. The `laws` entity itself is still exported (the profile's `laws: false` still leaves it out).
 
 ### Fixed
 

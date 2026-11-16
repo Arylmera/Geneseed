@@ -9,7 +9,8 @@
 //   3. `metadata.yaml` carries the governance fields and, for a skill or an agent, neither
 //      `name` nor `description`.
 //   4. A reference to another exported entity is rewritten to its exported name and listed in
-//      `requires`; a citation of a rule requires the constitution.
+//      `requires`; a citation of a rule requires nothing, because the constitution is a side
+//      package a library may leave out.
 //   5. A skill's side files sit under `references/` and it loses its Self-improvement footer;
 //      an agent keeps its seven sections whole.
 //   6. Writes are claim-on-create: a file no earlier export wrote is kept, and a file an
@@ -107,12 +108,17 @@ test('a credited port carries its licence and origin', () => {
 });
 
 test('a reference to another entity takes its exported name and becomes a requirement', () => {
-  // The reviewer points at the architect; the commit skill cites laws.
+  // The reviewer points at the architect.
   const reviewer = text('agents/personas/acme-reviewer/AGENT.md');
   assert.match(reviewer, /use `acme-architect`/);
   assert.doesNotMatch(reviewer, /\]\(architect\.md\)/);
   assert.match(text('agents/personas/acme-reviewer/metadata.yaml'), /^requires:\n(?: {2}- .*\n)* {2}- acme-architect\n/m);
-  assert.match(text('skills/acme-commit/metadata.yaml'), /^ {2}- acme-laws$/m);
+  // The commit skill cites laws by principle name, yet requires nothing: the constitution is a
+  // side package, and no skill or agent may require it.
+  assert.match(text('skills/acme-commit/SKILL.md'), /Sealed Secrets|One Intent, One Act|Verify Before Asserting/);
+  for (const f of plan.files.filter((x) => x.rel.endsWith('metadata.yaml') && !x.rel.startsWith('laws/'))) {
+    assert.doesNotMatch(f.text, /^ {2}- acme-laws$/m, `${f.rel} requires the constitution`);
+  }
   // Every requirement names an entity this export wrote.
   const exported = new Set(plan.entities.map((e) => e.name));
   for (const f of plan.files.filter((x) => x.rel.endsWith('metadata.yaml'))) {
