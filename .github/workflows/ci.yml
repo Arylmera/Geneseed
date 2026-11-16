@@ -41,7 +41,9 @@ jobs:
         # one job bought nothing (see CONCURRENCY below), and the job was the wait on every PR.
         # `node --test --test-shard=i/n` splits by FILE, so each test still runs exactly once.
         # The steps that do not depend on the split (lint, typecheck, doctor, fuzz, the mutation
-        # anchors) run in the first shard only; the shim check runs in each, after its own tests.
+        # anchors, about 85 s together) run in one shard only: 2/3, the lightest. Median shard
+        # times before the move were 369 s for 1/3 (those steps included), 355 s for 3/3 and 317 s
+        # for 2/3. The shim check runs in each shard, after its own tests.
         include:
           - os: ubuntu-latest
             node: "24"
@@ -79,13 +81,13 @@ jobs:
       # Lint and tsc stay COLD here: their caches live in node_modules/.cache, which CI never
       # restores, so the flags in package.json speed up only a local run.
       - name: lint
-        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '2/3') }}
         run: npm run lint
       # TYPES, FROM INFERENCE AND JSDoc. `tsc --noEmit` over js/ and bin/ with `checkJs`
       # (tsconfig.json says why strict is off). A wrong call shape, a missing property, an
       # argument a function does not take — the class of slip a reader cannot check by eye.
       - name: typecheck
-        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '2/3') }}
         run: npm run typecheck
       # ON BOTH OPERATING SYSTEMS, which is stronger than the gate this replaces: the same
       # sweep used to run here from the reference and, bare, from a Linux-only cell job.
@@ -93,7 +95,7 @@ jobs:
       # `npm` is not on PATH, so it is not a gate this job can lean on — a conditional skip is
       # exactly the shape that turns a red gate green without a diff.
       - name: doctor (every theme + parity + authoring gates)
-        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '2/3') }}
         run: node bin/geneseed-cli.mjs doctor --all
       # THE FENCE AROUND THE MACHINE TIER. The change report writes only to a tier that exists, so
       # on a fresh runner a test running with the real home leaves no trace: the leak that reached
@@ -202,7 +204,7 @@ jobs:
       # generated garbage through the real entry point, a process per case — which is why it is
       # outside the unit glob. A failure prints fast-check's seed and the shrunk input.
       - name: fuzz the hook gates (fuzz/*.fuzz.mjs)
-        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '2/3') }}
         run: node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
 
       # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
@@ -215,7 +217,7 @@ jobs:
       # also the one nothing else reported. `--verify` answers only "does every anchor still
       # resolve", writes nothing, runs no gate, and takes about 50 ms.
       - name: the mutation matrix still describes this code
-        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '2/3') }}
         run: node tests/mutate.mjs --verify
 
       # ⚠ THE PACKAGING SUITE AGAIN, UNDER THE npm THE RELEASE ACTUALLY USES. Everything above
