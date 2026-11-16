@@ -80,7 +80,18 @@ const MANIFEST = path.join(ROOT, 'package.json');
 
 const WIN = process.platform === 'win32';
 const NPM = which('npm');
-const NO_NPM = NPM ? false : 'npm is not on PATH';
+/**
+ * The skip reason of the npm tier: every test that packs, installs or runs the tarball.
+ * NOT ON WINDOWS, by choice: Linux runs the tier three times in CI (node 22, node 24, and the
+ * npm@11 step) and `package-no-python` installs the tarball once more, while the tier was the
+ * slowest file of every Windows shard. What Windows alone could add is weak: `runEntry` spawns
+ * `node <bin>`, never the `.cmd` shim npm writes, so the shim was never under test here anyway.
+ */
+const NO_NPM = WIN
+  ? 'the npm tier runs on Linux only: CI packs and installs the tarball there four times, and '
+    + 'this tier spawns `node <bin>` rather than the Windows .cmd shim, so Windows would only '
+    + 'repeat the same proof at the cost of the slowest file in its shard'
+  : NPM ? false : 'npm is not on PATH';
 
 const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
 
