@@ -41,8 +41,9 @@ log.error("Payment failed for order {}", order.id(), e);                      //
 ```
 - Placeholders, never string concatenation. Guard only genuinely expensive arguments with `isDebugEnabled()`.
 - Pass the exception as the final argument; do not log `e.getMessage()` alone.
-- Log an exception once, where it is handled, not at every layer it passes through.
-- Never log secrets, tokens, passwords or personal data; log identifiers.
+- Log an exception once, where the flow ends (the exception handler, listener or job), not at every layer it passes through: a lower layer wraps it with context and rethrows, without logging. Expected business errors (404, validation) are `WARN` or `DEBUG` without a stack trace; only unexpected failures are `ERROR` with the throwable.
+- For fields a log platform should filter on, use the SLF4J 2 fluent API: `log.atError().addKeyValue("orderId", id).setCause(e).log("Order processing failed")`. Boot's structured formats write each pair as a JSON field.
+- Never log secrets, tokens, passwords, `Authorization` or `Cookie` headers, card data or personal data; log identifiers. A record prints every component in `toString()`: log its id, not the record, when it carries personal data. No full request or response bodies in production.
 - Lombok's `@Slf4j` is fine where the project uses Lombok; otherwise declare the logger as above.
 
 | Level | Meaning |
@@ -76,7 +77,7 @@ class MdcFilter extends OncePerRequestFilter {
 }
 ```
 
-MDC is thread-local, so it does not follow work handed to another thread (virtual or platform). For executor tasks, copy the context with a `TaskDecorator` (`MDC.getCopyOfContextMap()` before, `MDC.setContextMap(...)` inside the task, `MDC.clear()` in `finally`) and register it on the executor you use; check that Boot applies it to your executor in the version you run.
+MDC is thread-local, so it does not follow work handed to another thread (virtual or platform). For executor tasks, copy the context with a `TaskDecorator` (`MDC.getCopyOfContextMap()` before, `MDC.setContextMap(...)` inside the task, `MDC.clear()` in `finally`) and register it on the executor you use; check that Boot applies it to your executor in the version you run. `CompletableFuture.supplyAsync(...)` without an executor runs on the common pool and loses MDC: always pass the Spring executor.
 
 Useful fields for incident analysis: `requestId`, user or tenant id, and a duration on slow-path logs. Keep them to identifiers, not payloads.
 
@@ -86,4 +87,5 @@ Useful fields for incident analysis: `requestId`, user or tenant id, and a durat
 | JSON console | `logging.structured.format.console: logstash` |
 | Per-package level | `logging.level.com.example.orders: DEBUG` |
 | Correlate a request | MDC `requestId` set in a filter |
+| One event's fields as JSON | `log.atInfo().addKeyValue("k", v).log("msg")` |
 | Follow one request in JSON logs | `jq 'select(.requestId == "abc")' app.log` (field name depends on MDC key and format) |

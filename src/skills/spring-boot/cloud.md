@@ -78,7 +78,7 @@ spring:
 The `CircuitBreaker` filter needs a Spring Cloud CircuitBreaker starter (for example the reactor-Resilience4j one) on the classpath. Gateway is WebFlux; do not put it in the same module as a Spring MVC service.
 
 ## Observability
-- Health: `/actuator/health/liveness` and `/actuator/health/readiness` are on by default (`management.endpoint.health.probes.enabled=false` disables them); point the Kubernetes probes at those. Expose only what you need (`management.endpoints.web.exposure.include`), and protect the rest.
+- Health: `/actuator/health/liveness` and `/actuator/health/readiness` are on by default (`management.endpoint.health.probes.enabled=false` disables them); point the Kubernetes probes at those, and permit `/actuator/health/**` in the security chain. Expose only what you need (`management.endpoints.web.exposure.include`), and protect the rest. `management.endpoint.health.show-components: always` with `show-details: when-authorized` tells an anonymous caller which component is down without leaking hosts or versions.
 - Metrics: add `micrometer-registry-prometheus` and expose `prometheus`.
 - Traces over OTLP: add `org.springframework.boot:spring-boot-starter-opentelemetry` and configure `management.opentelemetry.tracing.export.otlp.endpoint` (the old `management.otlp.tracing.*` keys are not the Boot 4 names). Boot samples 10% by default; set `management.tracing.sampling.probability: 1.0` only where the volume allows.
 - Custom spans: `Observation.createNotStarted("order.process", registry).lowCardinalityKeyValue(...).observe(() -> ...)` (Micrometer Observation, unchanged by Boot 4 as far as the docs show).
@@ -99,5 +99,23 @@ Add a short Kubernetes `preStop` sleep so the endpoint leaves the load balancer 
 - GraalVM native: fast start and low memory, at the cost of build time and reflection hints; adopt it deliberately, not by default.
 - Use whatever CI the project already has; do not introduce a new one.
 
+## Local dependencies
+Give each Docker Compose dependency a healthcheck, and make the services that need it wait with `depends_on: { <dep>: { condition: service_healthy } }`; `docker compose up -d --wait` then also returns only once everything is usable. Write a shell check as `["CMD-SHELL", "<script>"]`, never `["CMD", "bash", "-c", "<script>"]`: Podman splits that array on spaces and reports the service healthy before it starts.
+
 ## Kubernetes manifest essentials
 Liveness and readiness probes on the actuator paths, a startup probe for slow starts, resource requests and limits, `runAsNonRoot`, config from ConfigMap and Secret. For TLS, let the platform terminate it (Ingress plus cert-manager) or mount the certificate and use an SSL bundle ([spring-boot/security.md](security.md)).
+
+No committed manifest names a cluster, host, registry, namespace or secret value: no `namespace:` (it comes from `-n`), the image is a bare name (Skaffold `--default-repo`), Secrets are referenced by name and created out of band.
+
+Dependencies deployed in the same namespace get the same three probes, or a redeploy routes traffic to a pod that is not ready:
+- PostgreSQL: `pg_isready -h 127.0.0.1` (over TCP: during the first `initdb` the server listens only on its socket), a fast startup probe; data on a PVC with `strategy: Recreate`, or every redeploy starts empty.
+- Keycloak: `KC_HEALTH_ENABLED=true`, then `/health/started`, `/health/ready`, `/health/live` on management port 9000, not 8080.
+
+Prove a new probe can fail: watch the service start and see Warning events before it is up (`kubectl get events --field-selector type=Warning`), with no restarts in the pods that depend on it.
+
+## One set of manifests for several platforms
+When one service deploys to a local cluster, plain Kubernetes and OpenShift, use Kustomize overlays (deployed with Skaffold or `kubectl -k`):
+- `deploy/base` is plain Kubernetes, valid anywhere; `deploy/overlays/<platform>` adds only what that platform needs (Routes on OpenShift, Ingresses elsewhere); environment overlays with hosts and TLS stay out of git.
+- Stay within the kustomize 3.8 features that Skaffold, `kubectl -k` and `oc -k` all support (`resources`, `patches`, generators); no `labels`, `replacements` or `components`.
+- Selectors stay `app: <name>`: a selector cannot change after the first deploy.
+- CI runs `kustomize build` on every overlay, so a broken patch fails the build, not the deploy.

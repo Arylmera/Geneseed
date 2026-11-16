@@ -24,12 +24,12 @@ Implements Spring Boot 4 / Java 21+ features, following the spring-boot, spring-
 ## Procedure
 0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md` and `_general.md` there, which win where they disagree.
 1. Follow the project's existing layout and build tool; match its group id, packages and CI. Lombok is fine when the project already uses it.
-2. Constructor injection; records for request and response DTOs; `@Valid` on request bodies; one `@RestControllerAdvice` for errors.
+2. Constructor injection; records for request and response DTOs; `@Valid` on request bodies; one `@RestControllerAdvice` for errors and `PagedModel` for lists, as the spring-boot skill's web side file shows.
 3. Services: `@Transactional(readOnly = true)` on the class, `@Transactional` on mutating methods. Never call a transactional or `@Async` method through `this`.
 4. Group related settings in `@ConfigurationProperties`, not scattered `@Value`.
 5. Outbound HTTP: `RestClient` for blocking calls, `@HttpExchange` interfaces for declarative clients; keep `WebClient` for reactive code only.
-6. Persistence uses `jakarta.persistence`; never return entities from controllers.
-7. Tests: positive and negative cases; `@MockitoBean` and `@MockitoSpyBean` for replaced beans; Testcontainers with `@ServiceConnection`.
+6. Persistence uses `jakarta.persistence`; never return entities from controllers. On a relational database the migration tool owns the schema (`ddl-auto: validate`): write the migration in the same change as the entity (spring-data-jpa skill).
+7. Tests: positive and negative cases; `@MockitoBean` and `@MockitoSpyBean` for replaced beans; Testcontainers with `@ServiceConnection`; what the integration tests must cover is in the spring-testing skill.
 8. Defaults worth setting: `server.shutdown=graceful` and `spring.lifecycle.timeout-per-shutdown-phase`.
 9. Run the affected build and tests before handing off ({{LAW:verify-before-asserting}}).
 
