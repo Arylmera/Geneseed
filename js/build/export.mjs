@@ -325,7 +325,9 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
         : tier === 'laws'
           ? ['Laws', `the invariants, always in force (${rules} rules)`]
           : ['Ontology', 'how the agent thinks, decides and behaves'];
-      const file = tier === 'doctrines' ? `doctrines-${stem}.md` : `${tier}.md`;
+      // `laws-<stem>.md`, never `laws.md`: beside the `LAWS.md` index that name is the SAME file
+      // on a case-insensitive file system (Windows, macOS), and the index was silently lost.
+      const file = tier === 'ontology' ? 'ontology.md' : `${tier}-${stem}.md`;
       parts.push({ rank: ['ontology', 'laws'].indexOf(tier) >= 0 ? ['ontology', 'laws'].indexOf(tier) : 2 + packs.indexOf(stem), file, title, what });
       files.push({ rel: `${dir}/${file}`, text: `# ${title}\n\n${body}\n` });
     }
