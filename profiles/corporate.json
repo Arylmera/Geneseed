@@ -1,0 +1,14 @@
+{
+  "description": "For a locked-down work PC: neutral voice, every guardrail except the ownership gate, strict consent, no login item.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "peer",
+  "mode": "direct",
+  "trust": "prudent",
+  "doctrines": "all",
+  "kits": [],
+  "contextWindow": "200k",
+  "gates": { "ownershipGate": false, "ownBranchPass": false },
+  "login": false
+}

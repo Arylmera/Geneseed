@@ -1,0 +1,15 @@
+{
+  "description": "For a small model or a tight token budget: the smallest always-on context, two doctrine packs, niche skills left out.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "assistant",
+  "mode": "direct",
+  "trust": "balanced",
+  "doctrines": ["craft", "rigor"],
+  "excludeSkills": ["brick-forge", "bruno", "daydream", "factory", "factory-forge", "forge-mcp", "prototype", "react-view-transitions"],
+  "kits": [],
+  "contextWindow": "200k",
+  "gates": { "ownershipGate": false },
+  "login": true
+}

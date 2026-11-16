@@ -235,7 +235,7 @@ test('an unknown profile refuses before anything runs', async () => {
     rc = await setupProfile('nope', { load, tools: tools('claude'), build: () => { throw new Error('built'); } });
   } finally { process.stderr.write = orig; }
   assert.equal(rc, 1);
-  assert.match(lines.join(''), /\[setup\] no profile 'nope' — shipped: guillaume-claude-global, starter; personal: none/);
+  assert.match(lines.join(''), /\[setup\] no profile 'nope' — shipped: autonomous, corporate, guillaume-claude-global, mentor, minimal, starter; personal: none/);
 });
 
 // ---------------------------------------------------------------------------------------------
