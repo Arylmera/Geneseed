@@ -29,7 +29,7 @@ Deploys Spring Boot 4 applications on Kubernetes.
 5. Config: non-sensitive settings in a ConfigMap, credentials in a Secret; env vars bind through relaxed binding (`SPRING_DATASOURCE_URL`).
 6. Scale: HPA on CPU or custom metrics, a PodDisruptionBudget when replicas exceed one.
 7. Pod hardening: `runAsNonRoot`, no privilege escalation, pinned image tags.
-8. Probes for dependencies deployed beside the service, and manifests for several platforms: follow the spring-boot skill's cloud side file.
+8. What committed manifests may name, probes for dependencies deployed beside the service, and manifests for several platforms: follow the spring-boot skill's cloud side file.
 9. Check the target before giving deploy steps (`kubectl config current-context`, `oc whoami --show-server`); on OpenShift expose through Routes, not port forwarding.
 10. Validate with a dry run or linter before handing off.
 

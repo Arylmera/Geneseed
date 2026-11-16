@@ -29,7 +29,7 @@ Spring-specific review only. Generic correctness, naming and structure belong to
    - Transactions: multi-step writes without `@Transactional`; self-invocation bypassing the proxy; transactions held across remote calls.
    - Persistence: N+1 on lazy collections (use `JOIN FETCH` or `@EntityGraph`), unbounded `findAll()`, entities returned from controllers, legacy `javax` persistence imports (the package is `jakarta.persistence`).
    - Schema: an entity change with no migration in the same change, an edited applied migration, `ddl-auto: update` or `create` outside tests.
-   - Web: `Page`/`PageImpl` returned from a controller (use `PagedModel`); a catch-all handler that returns the exception message; a stale update that does not answer 409.
+   - Web: `Page`/`PageImpl` returned from a controller (use `PagedModel`) unless `spring.data.web.pageable.serialization-mode: via-dto` is set; a catch-all handler that returns the exception message; a stale update that does not answer 409.
    - Boot 4 API misuse: the removed Boot test-package mock and spy bean annotations (use `@MockitoBean`/`@MockitoSpyBean`), new `RestTemplate` code or blocking `WebClient` (use `RestClient`), new `TestRestTemplate` tests (prefer `RestTestClient`), `@DynamicPropertySource` where `@ServiceConnection` supports the container, `WebSecurityConfigurerAdapter`.
    - Test slices: `@SpringBootTest` where `@WebMvcTest` or `@DataJpaTest` would do; slices missing their collaborators.
    - Configuration: raw `@Value` for property groups, secrets in committed config.

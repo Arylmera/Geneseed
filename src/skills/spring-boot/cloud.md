@@ -100,10 +100,12 @@ Add a short Kubernetes `preStop` sleep so the endpoint leaves the load balancer 
 - Use whatever CI the project already has; do not introduce a new one.
 
 ## Local dependencies
-Give each Docker Compose dependency a healthcheck so `docker compose up -d --wait` returns only once it is usable. Write a shell check as `["CMD-SHELL", "<script>"]`, never `["CMD", "bash", "-c", "<script>"]`: Podman splits that array on spaces and reports the service healthy before it starts.
+Give each Docker Compose dependency a healthcheck, and make the services that need it wait with `depends_on: { <dep>: { condition: service_healthy } }`; `docker compose up -d --wait` then also returns only once everything is usable. Write a shell check as `["CMD-SHELL", "<script>"]`, never `["CMD", "bash", "-c", "<script>"]`: Podman splits that array on spaces and reports the service healthy before it starts.
 
 ## Kubernetes manifest essentials
 Liveness and readiness probes on the actuator paths, a startup probe for slow starts, resource requests and limits, `runAsNonRoot`, config from ConfigMap and Secret. For TLS, let the platform terminate it (Ingress plus cert-manager) or mount the certificate and use an SSL bundle ([spring-boot/security.md](security.md)).
+
+No committed manifest names a cluster, host, registry, namespace or secret value: no `namespace:` (it comes from `-n`), the image is a bare name (Skaffold `--default-repo`), Secrets are referenced by name and created out of band.
 
 Dependencies deployed in the same namespace get the same three probes, or a redeploy routes traffic to a pod that is not ready:
 - PostgreSQL: `pg_isready -h 127.0.0.1` (over TCP: during the first `initdb` the server listens only on its socket), a fast startup probe; data on a PVC with `strategy: Recreate`, or every redeploy starts empty.
@@ -114,7 +116,6 @@ Prove a new probe can fail: watch the service start and see Warning events befor
 ## One set of manifests for several platforms
 When one service deploys to a local cluster, plain Kubernetes and OpenShift, use Kustomize overlays (deployed with Skaffold or `kubectl -k`):
 - `deploy/base` is plain Kubernetes, valid anywhere; `deploy/overlays/<platform>` adds only what that platform needs (Routes on OpenShift, Ingresses elsewhere); environment overlays with hosts and TLS stay out of git.
-- Nothing committed names a cluster, host, registry, namespace or secret value: no `namespace:` in any manifest (it comes from `-n`), the image is a bare name (Skaffold `--default-repo`), Secrets are referenced by name and created out of band.
 - Stay within the kustomize 3.8 features that Skaffold, `kubectl -k` and `oc -k` all support (`resources`, `patches`, generators); no `labels`, `replacements` or `components`.
 - Selectors stay `app: <name>`: a selector cannot change after the first deploy.
 - CI runs `kustomize build` on every overlay, so a broken patch fails the build, not the deploy.

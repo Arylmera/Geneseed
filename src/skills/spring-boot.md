@@ -54,6 +54,6 @@ Removed or renamed in Boot 4 (do not write them): `@MockBean` and `@SpyBean`, `C
 - **Logging and structured logs** -> read [spring-boot/logging.md](spring-boot/logging.md) and follow it.
 
 ## Done when
-- The project's clean build and tests pass, read from real output (`./mvnw clean verify`: classes the IDE compiled into `target` can hide `javac` errors); no deprecated Boot 2/3 idiom was introduced; every new endpoint validates input and has a negative test.
+- The project's clean build and tests pass, read from real output (`./mvnw clean verify`: classes the IDE compiled into `target` can hide `javac` errors), with the integration tests run, not skipped (the spring-testing skill); no deprecated Boot 2/3 idiom was introduced; every new endpoint validates input and has a negative test.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
