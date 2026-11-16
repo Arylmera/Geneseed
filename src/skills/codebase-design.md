@@ -27,8 +27,8 @@ a design talk that keeps stumbling over ambiguous terms, or another {{SKILL}} ne
 3. Aim for **deep modules** — much behaviour behind a small interface: callers
    get leverage, maintainers get locality. To find what to deepen, start from
    `git log` hot spots — what keeps changing. Design a new or reshaped interface
-   twice before choosing: 2–3 radically different shapes (in parallel subagents
-   where the host runs them), compared on depth, locality and seam placement;
+   twice before choosing: 2–3 radically different shapes (in parallel fresh
+   subagents, never forks, where the host runs them), compared on depth, locality and seam placement;
    recommend one — a hybrid if parts combine — never a menu.
 4. Seams sparingly: the interface is the test surface. Internal seams for the
    module's own tests are fine but never exposed; a test that must reach past

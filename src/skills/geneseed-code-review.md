@@ -21,7 +21,8 @@
 4. For a large change, consider dispatching the
    [reviewer {{AGENT}}](../{{DIR_AGENTS}}/reviewer.md) to keep the main context clean.
    When a spec exists and the diff spans more than a few files, run pass 3 in its own
-   subagent, handed only the diff command and the spec, alongside passes 1–2: a pass
+   subagent — started fresh, never a fork of your own context — handed only the diff
+   command and the spec, alongside passes 1–2: a pass
    that has already filled up on code findings stops reading the spec closely, and
    kept apart, one axis's findings never mask the other's.
 5. Pass 1 — correctness: logic errors, edge cases, error handling, race
