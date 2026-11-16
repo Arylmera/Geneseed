@@ -23,14 +23,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
-  existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+  cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { checkExpectations, cloneCheckout, repoint } from '../helpers/cli_golden.mjs';
+import { checkExpectations, repoint } from '../helpers/cli_golden.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -1300,6 +1300,42 @@ test('the link shim names this runtime\'s own entry point', {
   }
 });
 
+/**
+ * A git checkout holding only what the CLI loads (`bin/`, `js/`, the two manifests), committed
+ * once, on `main` tracking `origin/main`, with `origin` at `url`. `dirty` edits a tracked file.
+ *
+ * NOT `cloneCheckout`: its template copies and commits the whole tree, then bare-clones it, for
+ * ~20 s on Windows, and the two bootstrap tests below need none of that. One fails at the fetch
+ * and the other at the argv, both before anything reads a file outside these four. The upgrade
+ * itself, pull to rebuild, is the golden CLI matrix's `upgrade/*` cells, on the full template.
+ */
+function slimCheckout(dst, url, { dirty = false } = {}) {
+  for (const rel of ['bin', 'js', 'package.json', 'harness.config.json']) {
+    cpSync(path.join(ROOT, rel), path.join(dst, rel), { recursive: true });
+  }
+  // `nul`, not `os.devNull`: git rejects Node's spelling of the Windows null device
+  // (`GIT_FIXTURE_ENV` in tests/helpers/cli_golden.mjs says why).
+  const nul = process.platform === 'win32' ? 'nul' : '/dev/null';
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: nul, GIT_CONFIG_SYSTEM: nul,
+    GIT_AUTHOR_NAME: 'fixture', GIT_AUTHOR_EMAIL: 'fixture@geneseed.invalid',
+    GIT_COMMITTER_NAME: 'fixture', GIT_COMMITTER_EMAIL: 'fixture@geneseed.invalid' };
+  const git = (...args) => {
+    const r = spawnSync('git', args, { cwd: dst, env, encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, `fixture: git ${args.join(' ')}: ${r.stderr}`);
+  };
+  git('init', '-q', '-b', 'main');
+  // The same repo-own config `cloneCheckout` sets: no CRLF rewrite, no background maintenance.
+  git('config', 'core.autocrlf', 'false');
+  git('config', 'gc.auto', '0');
+  git('config', 'maintenance.auto', 'false');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'the slim fixture');
+  git('remote', 'add', 'origin', url);
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git('branch', '-q', '--set-upstream-to=origin/main');
+  if (dirty) writeFileSync(path.join(dst, 'harness.config.json'), '{}\n');
+}
+
 test('the install log names this runtime\'s own command', () => {
   // THE SAME DEBT IN A FILE. `command: <argv>` is persisted into the install log so a user can
   // re-run the step that failed, and the harness normalises the line for the same reason. The
@@ -1311,7 +1347,7 @@ test('the install log names this runtime\'s own command', () => {
   const sb = makeSandbox('hookcli-log-');
   try {
     const ck = path.join(sb.path, 'checkout');
-    cloneCheckout(ck, 'origin=https://127.0.0.1:1/owner/repo.git', {});
+    slimCheckout(ck, 'https://127.0.0.1:1/owner/repo.git');
     const log = path.join(sb.path, 'install.log');
     const env = {
       ...cellEnv(path.join(sb.path, 'home')),
@@ -1327,6 +1363,8 @@ test('the install log names this runtime\'s own command', () => {
       { cwd: ck, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     assert.equal(r.status, 1, 'the step was expected to FAIL — without a failed step nothing '
       + `writes a diagnosis at all\n${r.stdout.slice(-600)}`);
+    // The failure is the fetch, as in the cell: a slim fixture that broke earlier would also fail.
+    assert.match(r.stdout, /could not reach the remote/, r.stdout.slice(-600));
     const written = readFileSync(log, 'utf8');
     const line = written.split('\n').find((ln) => ln.startsWith('command: '));
     assert.ok(line, `no \`command:\` line in the install log:\n${written.slice(-600)}`);
@@ -1354,7 +1392,7 @@ test('a mistyped flag on bootstrap is refused', () => {
   const sb = makeSandbox('hookcli-sink-');
   try {
     const ck = path.join(sb.path, 'checkout');
-    cloneCheckout(ck, 'dirty', {});
+    slimCheckout(ck, 'https://127.0.0.1:1/owner/repo.git', { dirty: true });
     const env = {
       ...cellEnv(path.join(sb.path, 'home')),
       GIT_ALLOW_PROTOCOL: 'file',
