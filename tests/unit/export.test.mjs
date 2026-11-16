@@ -44,10 +44,14 @@ test('a skill, an agent and the constitution each land in their own folder', () 
     'agents/personas/acme-reviewer/AGENT.md', 'agents/personas/acme-reviewer/metadata.yaml',
     'laws/acme-laws/LAWS.md', 'laws/acme-laws/metadata.yaml',
     // The constitution is one file per category, and LAWS.md is their index.
-    'laws/acme-laws/ontology.md', 'laws/acme-laws/laws.md', 'laws/acme-laws/doctrines-craft.md',
+    'laws/acme-laws/ontology.md', 'laws/acme-laws/laws-universal.md', 'laws/acme-laws/doctrines-craft.md',
     'laws/acme-laws/doctrines-rigor.md', 'laws/acme-laws/doctrines-ops.md',
     'laws/acme-laws/doctrines-process.md', 'laws/acme-laws/doctrines-comms.md',
   ]) assert.ok(file(rel), `${rel} is missing`);
+  // No two paths may differ only by case: on Windows and macOS they are one file, and the export
+  // keeps the first and drops the second (LAWS.md beside laws.md lost the index that way).
+  const folded = plan.files.map((f) => f.rel.toLowerCase());
+  assert.deepEqual(folded.filter((r, i) => folded.indexOf(r) !== i), []);
   const types = plan.entities.map((e) => e.type);
   assert.ok(types.includes('skill') && types.includes('persona'));
   assert.equal(types.filter((t) => t === 'laws').length, 1);
@@ -227,5 +231,5 @@ test('the constitution index names every category file, and holds no rule text i
   assert.deepEqual(named.sort(), written.sort());
   assert.equal(named.length, 7);
   assert.ok(index.length < 1000, 'the index carries rule text');
-  assert.match(text('laws/acme-laws/laws.md'), /Sealed Secrets/);
+  assert.match(text('laws/acme-laws/laws-universal.md'), /Sealed Secrets/);
 });

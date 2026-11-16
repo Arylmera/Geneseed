@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- `geneseed export` lost the constitution's `LAWS.md` index on Windows and macOS: it shared a folder with `laws.md`, the same file on a case-insensitive file system. The laws file is now `laws-<stem>.md` (`laws-universal.md`), and a test refuses any two exported paths that differ only by case. A library that took an earlier export holds a stale `laws.md`: remove it by hand.
+
 ## [5.5.0] — 2026-11-15
 
 **Upgrade note.** The new behaviour reaches an install only when it is emitted again: `geneseed upgrade` (or `rebuild-all`) does it for every active install. An existing install reads as `--context-window 200k`, so on a machine whose model has a 1M-token window, rebuild it once with `--context-window 1m` or apply a profile that says `1m`. Project notes written by earlier versions move to `<project>/notebook/` on that rebuild, with no loss.
