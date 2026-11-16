@@ -132,9 +132,14 @@ test('a failed precondition returns 3 and writes no bundle at all', async () => 
 test('a checkout behind its origin pulls, then rebuilds, and returns 0', async () => {
   // `test_ready_pulls_then_rebuilds`, with both halves observed rather than counted: HEAD really
   // moves and the bundle really appears. ⚠ THIS ARM CONSUMES THE PENDING COMMIT — the `uptodate`
-  // test below depends on it having run first. ⚠ THE ONE REAL `doctor --all` THROUGH THE WHOLE
-  // `upgrade()`, beside `update_git.test.mjs`'s clean fast-forward through `pullAndValidate`: the
-  // log line asserted below shows a real doctor answered the gate. Keep this arm real.
+  // test below depends on it having run first.
+  //
+  // THE DOCTOR IS A STAND-IN that passes and records what it was asked. This arm owns the
+  // orchestration: the gate asks the pulled tree for a full sweep, logs the answer, and a pass
+  // lets the rebuild run. A real `doctor --all` here cost about a minute of CPU on Windows to say
+  // nothing more. The real doctor through the whole `upgrade` is proven by the golden CLI cell
+  // `upgrade/a-new-commit-is-pulled-validated-and-rebuilt`, and through `pullAndValidate` by
+  // `update_git.test.mjs`'s "a pulled source that fails the doctor is rolled back", which runs it.
   fs.writeFileSync(path.join(OTHER, 'an-upstream-change.txt'), 'from upstream\n');
   git(OTHER, 'add', '-A');
   git(OTHER, 'commit', '-qm', 'something to pull');
@@ -142,15 +147,28 @@ test('a checkout behind its origin pulls, then rebuilds, and returns 0', async (
   const out = freshOut('ready');
   const before = git(CO, 'rev-parse', 'HEAD');
 
-  const rc = await U.upgrade(null);
+  const asked = [];
+  const verdict = '[doctor] ok — the stand-in answered the gate';
+  const real = cp.spawnSync;
+  cp.spawnSync = (exe, args, opts) => {
+    if (!args?.includes('doctor')) return real(exe, args, opts);
+    asked.push(args);
+    return { status: 0, stdout: `${verdict}\n`, stderr: '' };
+  };
+  syncBuiltinESMExports();
+  let rc;
+  try { rc = await U.upgrade(null); } finally {
+    cp.spawnSync = real;
+    syncBuiltinESMExports();
+  }
   assert.equal(rc, 0, 'a clean fast-forward onto a valid tree did not succeed');
   assert.notEqual(git(CO, 'rev-parse', 'HEAD'), before, 'the pull never happened');
   assert.ok(fs.existsSync(path.join(CO, 'an-upstream-change.txt')), 'the pulled file never arrived');
   assert.ok(!isEmpty(out), 'the upgrade succeeded without rebuilding the bundle');
-  const themes = fs.readdirSync(path.join(CO, 'themes'))
-    .filter((f) => f.endsWith('.json') && !f.startsWith('_')).length;
-  assert.ok(fs.readFileSync(U.logfile(), 'utf8').includes(`[doctor] ok — ${themes} theme(s) clean`),
-    'the gate did not run a real doctor over every theme');
+  assert.deepEqual(asked, [[path.join(CO, 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle']],
+    'the gate did not ask the pulled tree, once, for a full sweep');
+  assert.ok(fs.readFileSync(U.logfile(), 'utf8').includes(verdict),
+    'the gate did not log the doctor\'s answer');
 });
 
 test('an up-to-date checkout still rebuilds, and still returns 0', async () => {
