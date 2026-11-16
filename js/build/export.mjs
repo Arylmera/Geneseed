@@ -161,13 +161,6 @@ function metadataYaml(m) {
 
 const frontmatter = (name, description) => `---\nname: ${name}\ndescription: ${yamlStr(description)}\n---\n\n`;
 
-/** The registry's row for one entity: its version and nothing else is read. */
-function registryVersions() {
-  try {
-    return JSON.parse(readText(path.join(ROOT, 'registry.json'))).entities ?? {};
-  } catch { return {}; }
-}
-
 /**
  * Rewrite every reference to another exported entity to its exported name, and collect them.
  * Two spellings carry a reference in the sources: a Markdown link to the entity's spec
@@ -226,7 +219,6 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
   // a lean line.
   const { items } = renderAll(cfg, theme, { footprint: 'full' });
   const srcRel = (it) => relPosix(cfg.src, it.src);
-  const versions = registryVersions();
   const release = sourceReleaseVersion(cfg);
 
   // The roster: flat specs under skills/ and agents/, minus templates and what the profile drops.
@@ -293,7 +285,9 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     files.push({ rel: `${dir}/${s.kind === 'skill' ? 'SKILL.md' : 'AGENT.md'}`, text: frontmatter(s.name, description) + body });
     files.push({ rel: `${dir}/metadata.yaml`, text: metadataYaml({
       ...base, type: s.kind, requires: [...requires].sort(),
-      version: versions[`${s.kind === 'skill' ? 'skills' : 'agents'}/${s.stem}`]?.version ?? release,
+      // Every entity carries the harness release, as the laws do: the set ships as one, and the
+      // per-entity versions in registry.json were never bumped (the user decided, 2026-11).
+      version: release,
       ...creditsOf(s.it.src, cfg.src),
     }) });
     entities.push({ type: s.kind, name: s.name, source: srcRel(s.it), path: dir });

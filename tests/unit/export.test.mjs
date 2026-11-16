@@ -75,6 +75,15 @@ test('frontmatter is name and description only, and the name is the folder', () 
   }
 });
 
+// ONE VERSION. Every exported entity carries the harness release, read here from its one home,
+// harness.config.json, never a per-entity version: the library sees the set move together.
+test('every metadata.yaml carries the harness release', () => {
+  const release = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'harness.config.json'), 'utf8')).version;
+  const metas = plan.files.filter((f) => f.rel.endsWith('/metadata.yaml'));
+  assert.ok(metas.length > 3);
+  for (const f of metas) assert.ok(f.text.split('\n').includes(`version: ${release}`), f.rel);
+});
+
 test('metadata.yaml holds the governance fields, and no name or description for a skill or an agent', () => {
   const meta = text('skills/acme-commit/metadata.yaml');
   assert.match(meta, /^type: skill\nowner: "Platform Team"\nmaintainer: "@jdoe"\nversion: \d+\.\d+\.\d+\nstatus: experimental\n/);

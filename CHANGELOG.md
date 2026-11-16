@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- `geneseed export` writes the harness release as the version of every entity, skills and agents included; it no longer reads the never-bumped per-entity versions of `registry.json`.
+
 ### Fixed
 
 - `geneseed export` lost the constitution's `LAWS.md` index on Windows and macOS: it shared a folder with `laws.md`, the same file on a case-insensitive file system. The laws file is now `laws-<stem>.md` (`laws-universal.md`), and a test refuses any two exported paths that differ only by case. A library that took an earlier export holds a stale `laws.md`: remove it by hand.
