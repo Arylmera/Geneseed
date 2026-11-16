@@ -323,7 +323,8 @@ jobs:
       # are on from their second build onwards; `--deletion` is the only thing that makes the
       # write-before-delete prune actually delete.
       #
-      # WINDOWS RE-EMITS THE NEUTRAL THEME ONLY (`--quick`, 34 of the 268 cells); Linux keeps the
+      # WINDOWS RE-EMITS THE NEUTRAL THEME ONLY (`--quick`; tests/unit/golden_flags.test.mjs holds
+      # the count); Linux keeps the
       # full run. The Windows jobs set CI's wall clock, and the other 13 themes buy nothing there:
       # a theme holds 169 voice text tokens and nothing else, so it changes words, never a path or
       # a write. The Windows defects this step exists for (CRLF, 8.3 short paths, cp1252) do not

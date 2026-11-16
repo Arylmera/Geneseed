@@ -139,7 +139,8 @@ test('every narrowing flag selects fewer cells, and none selects none', () => {
 });
 
 test('--quick keeps the neutral theme only: 34 cells, which is what Windows CI re-emits', () => {
-  // ci.yml runs `--idempotent --quick` on windows-latest and names this count in its comment.
+  // ci.yml runs `--idempotent --quick` on windows-latest. This row is the one home of the count:
+  // the workflow comment points here rather than repeating the number.
   // 34 = the neutral theme's 9 emits x 2 footprints (18), plus the 11 cells on the extra axes and
   // the 5 kit cells, which are all neutral. A theme added to the matrix changes nothing here; an
   // axis cell added in another theme, or a neutral cell removed, moves the number.
