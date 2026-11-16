@@ -124,7 +124,7 @@ Notes that matter:
   held to it as a sum) because `node --test` over a glob that matches nothing prints `# tests 0`
   and **exits 0**. Node's default reporter changed between majors, which is how a green 1043-test
   suite once reported zero.
-- `--cli` runs the ~320-cell CLI/hook matrix against the expectations written in each cell —
+- `--cli` runs the ~280-cell CLI/hook matrix against the expectations written in each cell —
   the only end-to-end gate on what a verb prints. CI runs it in `node-cells` on both platforms.
   A cell that needs a broken checkout plants its fault as an **edit of the real file**
   (`{ "edit": [[find, replace]] }` in `tests/helpers/matrix/cli.*.json`), never as a copy of it;

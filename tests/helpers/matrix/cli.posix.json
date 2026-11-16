@@ -648,68 +648,6 @@
     },
     {
       "env": {
-        "GENESEED_STACK_GLOBAL": "1"
-      },
-      "expect": [
-        "PROJECT CONTEXT",
-        "The readme."
-      ],
-      "id": "context/global-stacking-opt-out",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{home}/.claude"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect": [
-        "PROJECT CONTEXT",
-        "The readme."
-      ],
-      "id": "context/project-hook-does-not-stand-down-for-itself",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{repo}/.claude"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "env": {
         "CLAUDE_PROJECT_DIR": "{repo}"
       },
       "expect": [
@@ -741,121 +679,6 @@
       }
     },
     {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/project-dir-below-an-install-never-stands-down",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{home}/.claude"
-          ],
-          "cwd": "repo/docs"
-        }
-      ],
-      "world": {
-        "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "context/relocated-claude-root-stands-down",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/.geneseed-emit": "claude-global\n",
-        "cfg/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": [], \"managed\": {\"settings_hooks\": [{\"event\": \"SessionStart\", \"group\": {\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}}]}}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n",
-        "repo/.claude/settings.json": "{\"hooks\": {\"SessionStart\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}]}}\n"
-      }
-    },
-    {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/relocated-other-host-root-never-stands-down",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}",
-            "--host",
-            "openclaude"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "context/sovereign-bypass",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/excludes.json": "{\"excludes\": [{\"path\": \"{repo/}\"}]}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
       "expect_silent": true,
       "id": "context/sovereign-bypass-bare-string",
       "steps": [
@@ -870,88 +693,6 @@
       ],
       "world": {
         "cfg/excludes.json": "{\"excludes\": [\"{repo/}\"]}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "context/sovereign-bypass-subfolder",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/excludes.json": "{\"excludes\": [{\"path\": \"{sb/}\"}]}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/sovereign-miss",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/excludes.json": "{\"excludes\": [{\"path\": \"{sb/}/elsewhere\"}]}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/sovereign-prefix-is-not-a-match",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/excludes.json": "{\"excludes\": [{\"path\": \"{sb/}/rep\"}]}\n",
         "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
         "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
         "repo/README.md": "# Project\n\nThe readme.\n",
@@ -1006,61 +747,6 @@
       ],
       "world": {
         "cfg/excludes.json": "{\"excludes\": [{\"path\": \"~nosuchuser/repo\"}]}\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/sovereign-malformed-degrades-to-off",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "cfg/excludes.json": "{not json\n",
-        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
-        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
-        "repo/README.md": "# Project\n\nThe readme.\n",
-        "repo/apps/site/README.md": "# site\n",
-        "repo/docs/architecture.md": "# Architecture\n",
-        "repo/docs/nested/deep.md": "# Deep\n",
-        "repo/docs/node_modules/vendored.md": "must never be listed\n",
-        "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
-      }
-    },
-    {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/sovereign-absent-file-degrades-to-off",
-      "steps": [
-        {
-          "argv": [
-            "context",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
         "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
         "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
         "repo/README.md": "# Project\n\nThe readme.\n",
@@ -1149,60 +835,6 @@
       "expect": [
         "permissionDecision"
       ],
-      "id": "git-gate/push",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"git push origin main\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "permissionDecision"
-      ],
-      "id": "git-gate/chained",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"git add . && git commit -m x && git push\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "permissionDecision"
-      ],
-      "id": "git-gate/dash-C",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"git -C /some/other/repo commit -m x\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "permissionDecision"
-      ],
       "id": "git-gate/inside-a-longer-line",
       "steps": [
         {
@@ -1211,22 +843,6 @@
           ],
           "cwd": "repo",
           "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"cd /tmp; git commit -m x; echo done\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "git-gate/status-is-not-gated",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"git status --porcelain\"}}"
         }
       ],
       "world": {
@@ -1251,22 +867,6 @@
     },
     {
       "expect_silent": true,
-      "id": "git-gate/git-without-commit-or-push",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"git log --oneline -5\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
       "id": "git-gate/git-and-commit-on-separate-lines",
       "steps": [
         {
@@ -1283,57 +883,6 @@
     },
     {
       "expect_silent": true,
-      "id": "git-gate/empty-stdin",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": ""
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "\"permissionDecision\": \"ask\"",
-        "Geneseed gate error"
-      ],
-      "id": "git-gate/unparseable-stdin",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "not json at all"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "git-gate/payload-without-tool-input",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Bash\"}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
       "id": "git-gate/non-string-command",
       "steps": [
         {
@@ -1342,22 +891,6 @@
           ],
           "cwd": "repo",
           "stdin": "{\"tool_input\": {\"command\": 17}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "git-gate/null-tool-input",
-      "steps": [
-        {
-          "argv": [
-            "git-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_input\": null}"
         }
       ],
       "world": {
@@ -1426,56 +959,6 @@
     },
     {
       "expect_silent": true,
-      "id": "rule-gate/memory-index",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{repo/}/memory/MEMORY.md\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/memory-index-anywhere",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{sb/}/elsewhere/MEMORY.md\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "permissionDecision"
-      ],
-      "id": "rule-gate/windows-path-on-any-host",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"C:\\\\work\\\\repo\\\\user-rules.md\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
       "id": "rule-gate/drive-relative-path-has-no-separator",
       "steps": [
         {
@@ -1527,130 +1010,6 @@
     },
     {
       "expect_silent": true,
-      "id": "rule-gate/memory-file-nested-under-root",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{cfg/}/memory/agents/explore.md\"}}"
-        }
-      ],
-      "world": {
-        "cfg/memory/agents/.keep": "",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/unrelated-memory-dir-is-not-gated",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{repo/}/memory/notes.md\"}}"
-        }
-      ],
-      "world": {
-        "cfg/.keep": "",
-        "repo/memory/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/memory-file-without-root",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{cfg/}/memory/some-fact.md\"}}"
-        }
-      ],
-      "world": {
-        "cfg/memory/.keep": "",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/non-markdown-under-memory",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate",
-            "--root",
-            "{cfg}"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{cfg/}/memory/notes.txt\"}}"
-        }
-      ],
-      "world": {
-        "cfg/memory/.keep": "",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/ordinary-file",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{repo/}/src/main.py\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/ordinary-markdown",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"{repo/}/README.md\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "permissionDecision"
-      ],
-      "id": "rule-gate/path-key-instead-of-file-path",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"path\": \"{repo/}/user-rules.md\"}}"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
       "id": "rule-gate/case-insensitive-name",
       "steps": [
         {
@@ -1675,41 +1034,6 @@
           ],
           "cwd": "repo",
           "stdin": ""
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect": [
-        "\"permissionDecision\": \"ask\"",
-        "Geneseed gate error"
-      ],
-      "id": "rule-gate/unparseable-stdin",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "}{"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "expect_silent": true,
-      "id": "rule-gate/empty-path",
-      "steps": [
-        {
-          "argv": [
-            "rule-gate"
-          ],
-          "cwd": "repo",
-          "stdin": "{\"tool_input\": {\"file_path\": \"\"}}"
         }
       ],
       "world": {
@@ -2738,25 +2062,6 @@
     {
       "bin": "cli",
       "expect": [
-        "no global install found"
-      ],
-      "id": "exclude/list-with-no-global-install",
-      "steps": [
-        {
-          "argv": [
-            "exclude",
-            "list"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
         "no folders excluded"
       ],
       "id": "exclude/list-with-nothing-excluded",
@@ -2947,32 +2252,6 @@
     {
       "bin": "cli",
       "expect": [
-        "rules/geneseed.md already exists (kept, not ours)",
-        "excluded."
-      ],
-      "expect_files": [
-        "repo/.bob/rules/geneseed.md"
-      ],
-      "id": "exclude/add-keeps-a-foreign-bob-stub",
-      "steps": [
-        {
-          "argv": [
-            "exclude",
-            "add",
-            "{repo}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.bob/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.bob/rules/geneseed.md": "# my own rules\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
         "claude: claudeMdExcludes already present (kept)",
         "bob: rules/geneseed.md already exists (kept, not ours)"
       ],
@@ -3019,31 +2298,6 @@
         }
       ],
       "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "does not exist (excluded anyway)",
-        "excluded."
-      ],
-      "expect_absent": [
-        "claudeMdExcludes already present"
-      ],
-      "id": "exclude/add-a-folder-that-does-not-exist",
-      "steps": [
-        {
-          "argv": [
-            "exclude",
-            "add",
-            "{sb}/ghost"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
         "repo/.keep": ""
       }
     },
@@ -3113,40 +2367,6 @@
       "world": {
         "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
         "home/.claude/excludes.json": "{not json\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "re-included."
-      ],
-      "expect_files": [
-        "home/.claude/excludes.json",
-        "home/.bob/excludes.json"
-      ],
-      "id": "exclude/remove-unwires-what-add-wired",
-      "steps": [
-        {
-          "argv": [
-            "exclude",
-            "add",
-            "{repo}"
-          ],
-          "cwd": "repo"
-        },
-        {
-          "argv": [
-            "exclude",
-            "remove",
-            "{repo}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.bob/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
         "repo/.keep": ""
       }
     },
@@ -5279,33 +4499,6 @@
     {
       "bin": "cli",
       "checkout": {
-        "src/agents/advocate.md": "# Advocate\n\nProse first.\n\n> and the purpose line only later.\n"
-      },
-      "expect": [
-        "[authoring] agents/advocate.md: first block after the title is not a '>' blockquote: 'Prose first.' — desc_of() would silently extract the wrong description"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-purpose-blockquote-that-is-not-the-first-block",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
         "adapters/opencode/plugins/geneseed-learn.js": "// nothing to extract\n"
       },
       "expect": [
@@ -5391,84 +4584,6 @@
         "registry.json": {
           "edit": [
             [
-              "    }\n  }\n}\n",
-              "    },\n    \"skills/zzz-doctor\": {\n      \"status\": \"invented\",\n      \"version\": \"one\",\n      \"owner\": \"\",\n      \"added\": \"yesterday\",\n      \"last_verified\": \"\"\n    }\n  }\n}\n"
-            ]
-          ]
-        }
-      },
-      "expect": [
-        "[authoring] registry.json lists 'skills/zzz-doctor' but no such entity exists"
-      ],
-      "expect_absent": [
-        ".status ",
-        ".version "
-      ],
-      "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-registry-row-no-spec-provides",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
-        "registry.json": {
-          "edit": [
-            [
-              "    \"agents/advocate\": {\n      \"status\": \"approved\",\n      \"version\": \"1.0.0\",\n      \"owner\": \"Guillaume Lemer\",\n      \"added\": \"2026-06-08\",\n",
-              "    \"agents/advocate\": {\n      \"status\": \"invented\",\n      \"version\": \"one\",\n      \"owner\": \"  \",\n      \"added\": \"yesterday\",\n"
-            ]
-          ]
-        }
-      },
-      "expect": [
-        "[authoring] registry.json['agents/advocate'].status 'invented' is not one of ['experimental', 'approved', 'deprecated']",
-        "[authoring] registry.json['agents/advocate'].version 'one' is not a semver (N.N.N)",
-        "[authoring] registry.json['agents/advocate'] has no owner",
-        "[authoring] registry.json['agents/advocate'].added 'yesterday' is not an ISO date (YYYY-MM-DD) or empty"
-      ],
-      "expect_absent": [
-        ".last_verified"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 4 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-registry-row-with-four-malformed-fields",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
-        "registry.json": {
-          "edit": [
-            [
               "  \"entities\": {\n    \"agents/advocate\": {\n      \"status\": \"approved\",\n      \"version\": \"1.0.0\",\n      \"owner\": \"Guillaume Lemer\",\n      \"added\": \"2026-06-08\",\n      \"last_verified\": \"\"\n    },\n",
               "  \"entities\": {\n    \"agents/advocate\": \"approved\",\n"
             ]
@@ -5482,36 +4597,6 @@
         "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
       ],
       "id": "doctor/a-registry-row-that-is-not-an-object",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
-        "registry.json": "{\"version\": 1}\n"
-      },
-      "expect": [
-        "[authoring] registry.json has no 'entities' object"
-      ],
-      "expect_absent": [
-        "has no row in registry.json"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-registry-with-no-entities-object",
       "steps": [
         {
           "argv": [
@@ -5587,33 +4672,6 @@
     {
       "bin": "cli",
       "checkout": {
-        "src/upstreams.json": "{\n  \"daydream\": {\n    \"repo\": \"glebis/claude-skills\",\n    \"commit\": \"f47170dee300dd3d5da2a1c3c708986faeea3d5a\",\n    \"author\": \"Gleb Kalinin\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"skills/daydream/LICENSE\"\n  },\n  \"react-view-transitions\": {\n    \"repo\": \"vercel-labs/agent-skills\",\n    \"commit\": \"main\",\n    \"author\": \"Vercel Engineering\",\n    \"license\": \"MIT\",\n    \"licenseFile\": null\n  },\n  \"mattpocock-skills\": {\n    \"repo\": \"mattpocock/skills\",\n    \"commit\": \"391a2701dd948f94f56a39f7533f8eea9a859c87\",\n    \"author\": \"Matt Pocock\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/mattpocock-skills.txt\"\n  },\n  \"superpowers\": {\n    \"repo\": \"obra/superpowers\",\n    \"commit\": \"bb92a77741419a4ab5f06e711a283343f1ada0c3\",\n    \"author\": \"Jesse Vincent\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/superpowers.txt\"\n  },\n  \"vibe-wise\": {\n    \"repo\": \"nykooi1/vibe-wise\",\n    \"commit\": \"eefb53df406ab89e31444684ff32c1df205221f8\",\n    \"author\": \"Noah Kim\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/vibe-wise.txt\"\n  },\n  \"mattpocock-skills-2509\": {\n    \"repo\": \"mattpocock/skills\",\n    \"commit\": \"a7d038f6bf7f01b516408e95e2fb56e0b338fa6f\",\n    \"author\": \"Matt Pocock\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/mattpocock-skills.txt\"\n  },\n  \"piomin-spring-boot\": {\n    \"repo\": \"piomin/claude-ai-spring-boot\",\n    \"commit\": \"cf876a1041ac4692f32422261f6d67d7f12140d5\",\n    \"author\": \"Piotr Mińkowski\",\n    \"license\": \"Apache-2.0\",\n    \"licenseFile\": \"licenses/piomin-spring-boot.txt\"\n  },\n  \"mattpocock-skills-frozen\": {\n    \"repo\": \"mattpocock/skills\",\n    \"commit\": \"391a2701dd948f94f56a39f7533f8eea9a859c87\",\n    \"author\": \"Matt Pocock\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/mattpocock-skills.txt\",\n    \"frozen\": true\n  },\n  \"everything-claude-code\": {\n    \"repo\": \"affaan-m/everything-claude-code\",\n    \"commit\": \"90606c8315ee09cafc303515c5f33024db6b9882\",\n    \"author\": \"Affaan Mustafa\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/everything-claude-code.txt\"\n  },\n  \"herdr\": {\n    \"repo\": \"herdrdev/herdr\",\n    \"commit\": \"1cbd794559fb139f95f1bdb4b2a8998082017d0e\",\n    \"author\": \"herdrdev\",\n    \"license\": \"Apache-2.0\",\n    \"licenseFile\": \"licenses/herdr.txt\"\n  },\n  \"i-have-adhd\": {\n    \"repo\": \"ayghri/i-have-adhd\",\n    \"commit\": \"1ecea1993b7fce257ffbd686c070948b5e07eda6\",\n    \"author\": \"Ayoub Ghriss\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/i-have-adhd.txt\"\n  },\n  \"diagram-design\": {\n    \"repo\": \"cathrynlavery/diagram-design\",\n    \"commit\": \"0cf73c3fcc56667ad91a9a04c439ac6ccfabc9d1\",\n    \"author\": \"Cathryn Lavery\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"skills/diagram-design/LICENSE\"\n  }\n}\n"
-      },
-      "expect": [
-        "[authoring] src/upstreams.json entry 'react-view-transitions' pins 'main', a moving branch — record the commit sha instead"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-vendored-skill-pinned-to-a-moving-branch",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
         "src/skills/react-view-transitions/VENDOR.md": null
       },
       "expect": [
@@ -5658,99 +4716,6 @@
         "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
       ],
       "id": "doctor/a-law-with-no-summary-line",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
-        "src/laws/universal.md": {
-          "edit": [
-            [
-              "### {{LAW:sealed-secrets}} Sealed Secrets\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n",
-              "### {{LAW:sealed-secrets}} Sealed Secrets\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n"
-            ]
-          ]
-        }
-      },
-      "expect": [
-        "[authoring] laws/universal.md: rule I 'sealed-secrets' has 2 summary lines — the console shows one; keep exactly one"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-law-with-two-summary-lines",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
-        "src/laws/universal.md": {
-          "edit": [
-            [
-              "<!-- LEAN:begin -->\n<!-- note: Each law:",
-              "<!-- note: summary: Stray. -->\n<!-- LEAN:begin -->\n<!-- note: Each law:"
-            ]
-          ]
-        }
-      },
-      "expect": [
-        "[authoring] laws/universal.md: a summary line sits outside any rule declaration — it describes no rule"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/a-summary-line-in-the-preamble",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {},
-      "expect": [
-        "[doctor] ok — 1 theme(s) clean"
-      ],
-      "expect_absent": [
-        "summary"
-      ],
-      "id": "doctor/every-rule-summary-in-place-is-clean",
       "steps": [
         {
           "argv": [
@@ -5911,36 +4876,6 @@
         "home/.config/opencode/opencode.json": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"instructions\": [\n    \"{home/}/.config/opencode/AGENT.md\",\n    \"./MY-OWN.md\"\n  ],\n  \"theme\": \"mine\"\n}\n",
         "home/.config/opencode/prompts/mine.md": "# my own prompt, unowned\n",
         "home/.config/opencode/skills/vend/references/deep.md": "# nested owned\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[uninstall] target: <HOME>",
-        "(claude:global)"
-      ],
-      "expect_absent": [
-        "opencode:global"
-      ],
-      "expect_files": [
-        "home/.claude/agents/advocate.md"
-      ],
-      "id": "uninstall/a-claude-only-machine-resolves-to-its-claude-install",
-      "steps": [
-        {
-          "argv": [
-            "uninstall"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.claude/.geneseed-emit": "claude-global\n",
-        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
-        "home/.claude/.geneseed-theme": "neutral\n",
-        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
-        "home/.claude/agents/advocate.md": "# owned agent\n",
         "repo/.keep": ""
       }
     },
@@ -6406,38 +5341,6 @@
     },
     {
       "bin": "cli",
-      "expect": [
-        "[uninstall] done — removed 2 file(s); settings.json updated where needed"
-      ],
-      "expect_files": [
-        "home/.claude/settings.json",
-        "home/.claude/PROFILE.md"
-      ],
-      "id": "uninstall/the-recorded-hook-group-goes-and-the-users-does-not",
-      "steps": [
-        {
-          "argv": [
-            "uninstall",
-            "--yes",
-            "--target",
-            "{home}/.claude"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.claude/.geneseed-emit": "claude-global\n",
-        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"CLAUDE.md\",\n    \"agents/advocate.md\"\n  ],\n  \"managed\": {\n    \"claude_md\": {\n      \"rel\": \"CLAUDE.md\"\n    },\n    \"settings_file\": \"settings.json\",\n    \"settings_hooks\": [\n      {\n        \"event\": \"PreToolUse\",\n        \"group\": {\n          \"matcher\": \"Bash\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"geneseed-hook git-gate\"\n            }\n          ]\n        }\n      }\n    ],\n    \"settings_excludes\": [\n      \"geneseed/**\"\n    ]\n  },\n  \"scope\": \"global\"\n}\n",
-        "home/.claude/.geneseed-theme": "neutral\n",
-        "home/.claude/CLAUDE.md": "# My own notes\n\nProse I wrote myself.\n\n<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\nProse after the block.\n",
-        "home/.claude/PROFILE.md": "# my own profile, unowned\n",
-        "home/.claude/agents/advocate.md": "# owned agent\n",
-        "home/.claude/settings.json": "{\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"geneseed-hook git-gate\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"Write\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"my-own-linter\"\n          }\n        ]\n      }\n    ]\n  },\n  \"claudeMdExcludes\": [\n    \"geneseed/**\",\n    \"mine/**\"\n  ],\n  \"model\": \"opus\"\n}\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
       "expect_absent_files": [
         "home/.claude/CLAUDE.md"
       ],
@@ -6459,40 +5362,6 @@
       "world": {
         "home/.claude/.geneseed-emit": "claude-global\n",
         "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"CLAUDE.md\",\n    \"agents/advocate.md\"\n  ],\n  \"managed\": {\n    \"claude_md\": {\n      \"rel\": \"CLAUDE.md\"\n    },\n    \"settings_file\": \"settings.json\",\n    \"settings_hooks\": [\n      {\n        \"event\": \"PreToolUse\",\n        \"group\": {\n          \"matcher\": \"Bash\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"geneseed-hook git-gate\"\n            }\n          ]\n        }\n      }\n    ],\n    \"settings_excludes\": [\n      \"geneseed/**\"\n    ]\n  },\n  \"scope\": \"global\"\n}\n",
-        "home/.claude/.geneseed-theme": "neutral\n",
-        "home/.claude/CLAUDE.md": "# My own notes\n\nProse I wrote myself.\n\n<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\nProse after the block.\n",
-        "home/.claude/PROFILE.md": "# my own profile, unowned\n",
-        "home/.claude/agents/advocate.md": "# owned agent\n",
-        "home/.claude/settings.json": "{\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"geneseed-hook git-gate\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"Write\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"my-own-linter\"\n          }\n        ]\n      }\n    ]\n  },\n  \"claudeMdExcludes\": [\n    \"geneseed/**\",\n    \"mine/**\"\n  ],\n  \"model\": \"opus\"\n}\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[uninstall] done — removed 1 file(s)"
-      ],
-      "expect_absent_files": [
-        "home/.claude/agents/advocate.md"
-      ],
-      "expect_files": [
-        "home/.claude/CLAUDE.md"
-      ],
-      "id": "uninstall/prose-around-the-block-survives-when-the-carrier-is-not-owned",
-      "steps": [
-        {
-          "argv": [
-            "uninstall",
-            "--yes",
-            "--target",
-            "{home}/.claude"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.claude/.geneseed-emit": "claude-global\n",
-        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"managed\": {\n    \"claude_md\": {\n      \"rel\": \"CLAUDE.md\"\n    },\n    \"settings_file\": \"settings.json\",\n    \"settings_hooks\": [\n      {\n        \"event\": \"PreToolUse\",\n        \"group\": {\n          \"matcher\": \"Bash\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"geneseed-hook git-gate\"\n            }\n          ]\n        }\n      }\n    ],\n    \"settings_excludes\": [\n      \"geneseed/**\"\n    ]\n  },\n  \"scope\": \"global\"\n}\n",
         "home/.claude/.geneseed-theme": "neutral\n",
         "home/.claude/CLAUDE.md": "# My own notes\n\nProse I wrote myself.\n\n<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\nProse after the block.\n",
         "home/.claude/PROFILE.md": "# my own profile, unowned\n",
@@ -6999,76 +5868,6 @@
     {
       "bin": "cli",
       "expect": [
-        "[uninstall] done — removed 2 file(s)"
-      ],
-      "expect_absent": [
-        "project install(s) remain"
-      ],
-      "id": "uninstall/a-global-uninstall-with-nothing-registered-is-silent",
-      "steps": [
-        {
-          "argv": [
-            "uninstall",
-            "--yes"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
-        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\",\n    \"agents/gone.md\",\n    \"skills/vend/references/deep.md\"\n  ]\n}\n",
-        "home/.config/opencode/.geneseed-theme": "neutral\n",
-        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
-        "home/.config/opencode/AGENT.md": "# deployed\n",
-        "home/.config/opencode/MY-OWN.md": "# my own file, unowned\n",
-        "home/.config/opencode/opencode.json": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"instructions\": [\n    \"{home/}/.config/opencode/AGENT.md\",\n    \"./MY-OWN.md\"\n  ],\n  \"theme\": \"mine\"\n}\n",
-        "home/.config/opencode/prompts/mine.md": "# my own prompt, unowned\n",
-        "home/.config/opencode/skills/vend/references/deep.md": "# nested owned\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[uninstall] also found claude:project here — run `geneseed uninstall` again to remove it."
-      ],
-      "expect_files": [
-        "repo/.claude/.geneseed-manifest.json",
-        "repo/.claude/CLAUDE.md"
-      ],
-      "id": "uninstall/a-project-uninstall-names-the-other-host-at-the-same-root",
-      "steps": [
-        {
-          "argv": [
-            "uninstall",
-            "--yes",
-            "--target",
-            "{repo}/.opencode"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"CLAUDE.md\"\n  ],\n  \"managed\": {\n    \"claude_md\": {\n      \"rel\": \"CLAUDE.md\"\n    },\n    \"settings_file\": \"settings.json\",\n    \"settings_hooks\": [\n      {\n        \"event\": \"PreToolUse\",\n        \"group\": {\n          \"matcher\": \"Bash\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"geneseed-hook git-gate\"\n            }\n          ]\n        }\n      }\n    ],\n    \"settings_excludes\": [\n      \"geneseed/**\"\n    ]\n  },\n  \"scope\": \"global\"\n}\n",
-        "repo/.claude/CLAUDE.md": "# My own notes\n\nProse I wrote myself.\n\n<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\nProse after the block.\n",
-        "repo/.geneseed-emit": "opencode\n",
-        "repo/.geneseed-theme": "neutral\n",
-        "repo/.keep": "",
-        "repo/.opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ]\n}\n",
-        "repo/.opencode/agents/advocate.md": "# owned agent\n",
-        "repo/.opencode/agents/mine.md": "# my own agent, unowned\n",
-        "repo/.opencode/context.json": "{\"eager\": []}\n",
-        "repo/AGENT.md": "# deployed\n",
-        "repo/README.md": "# my repo, untouched\n",
-        "repo/agents/advocate.md": "# bundle agent\n",
-        "repo/laws/universal.md": "# law\n",
-        "repo/opencode.json": "{\n  \"instructions\": [\n    \"AGENT.md\",\n    \"./MY-OWN.md\"\n  ]\n}\n",
-        "repo/skills/wayfinder/SKILL.md": "# bundle skill\n"
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
         "(opencode:project)"
       ],
       "expect_absent": [
@@ -7455,30 +6254,6 @@
     },
     {
       "bin": "cli",
-      "checkout": {},
-      "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "This Geneseed install isn't a git checkout"
-      ],
-      "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle"
-      ],
-      "id": "upgrade/a-checkout-that-is-not-a-git-repo-is-refused",
-      "steps": [
-        {
-          "argv": [
-            "upgrade"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
       "expect": [
         "[geneseed] preflight: checking the local checkout ...",
         "HEAD is detached (a tag/commit is checked out)"
@@ -7517,55 +6292,6 @@
         {
           "argv": [
             "upgrade"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "You have local changes in the Geneseed folder"
-      ],
-      "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle"
-      ],
-      "git": "dirty",
-      "id": "upgrade/local-changes-are-refused-before-anything-is-fetched",
-      "steps": [
-        {
-          "argv": [
-            "upgrade"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {},
-      "expect": [
-        "unrecognized arguments"
-      ],
-      "expect_absent": [
-        "preflight: checking the local checkout",
-        "is IGNORED"
-      ],
-      "id": "upgrade/a-second-positional-is-refused-before-anything-runs",
-      "steps": [
-        {
-          "argv": [
-            "upgrade",
-            "main",
-            "imperial"
           ],
           "cwd": "repo"
         }
@@ -8260,31 +6986,6 @@
         {
           "argv": [
             "bootstrap"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "You have local changes in the Geneseed folder"
-      ],
-      "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle",
-        "invalid choice"
-      ],
-      "git": "dirty",
-      "id": "update/reaches-the-same-preflight-upgrade-does",
-      "steps": [
-        {
-          "argv": [
-            "update"
           ],
           "cwd": "repo"
         }

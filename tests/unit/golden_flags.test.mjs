@@ -110,10 +110,15 @@ test('the three modes are mutually exclusive', () => {
 test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow it', () => {
   // The CLI matrix is its own document; `--cli` must read it rather than the emit matrix, and
   // `--only`/`--shard`/`--limit` must apply to it (the emit-only flags do not).
+  //
+  // The count is written out per platform: 284 posix cells and 283 win32 cells. The halves share
+  // all but the link/unlink cells (6 posix-only, 5 win32-only). The matrix lost 53 cells in
+  // 2026-11 that an in-process or spawned unit test already covered, so a cell that disappears
+  // now must be removed on purpose, with this row and this sentence changed in the same commit.
   const doc = loadCliMatrix();
   const all = selectCells(doc, parseArgs(['--cli']));
   assert.equal(all.length, doc.cells.length);
-  assert.ok(all.length > 300, `only ${all.length} CLI cells`);
+  assert.equal(all.length, process.platform === 'win32' ? 283 : 284, `${all.length} CLI cells`);
   for (const argv of [['--only', 'git-gate/'], ['--shard', '0/4'], ['--limit', '5']]) {
     const got = selectCells(doc, parseArgs(['--cli', ...argv]));
     assert.ok(got.length < all.length && got.length > 0, `${argv.join(' ')} selected ${got.length}`);

@@ -332,7 +332,7 @@ jobs:
       - name: golden — the prune
         if: matrix.cells == 'emit'
         run: node tests/golden.mjs --deletion
-      # The CLI/hook matrix's WRITTEN expectations: ~320 cells, each in its own sandbox, each
+      # The CLI/hook matrix's WRITTEN expectations: ~280 cells, each in its own sandbox, each
       # asserting what the verb must print (and must not). Only that absolute tier — the byte
       # recordings it once also compared were retired with the Python reference. Nothing ran
       # these for a month, and 27 had gone stale meanwhile.
