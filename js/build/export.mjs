@@ -31,8 +31,9 @@
  *     An agent keeps the whole of its seven sections, step 0 and Self-improvement included: that
  *     shape is the contract a persona library reads;
  *   - host keys (`disable-model-invocation`, `disallowedTools`, ...) are not written at all.
- * A citation of a law or doctrine stays the principle's name, and the entity `requires` the
- * exported constitution, which is where that name is defined.
+ * A citation of a law or doctrine stays the principle's name, and the entity does NOT `require`
+ * the exported constitution: the laws are a side package a library may take or leave, and a
+ * skill or an agent installs without them (the user decided, 2026-11).
  *
  * NOT EXPORTED: an alias (a second name for one skill), the authoring templates, and a vendored
  * folder skill. The last is a third party's folder shipped verbatim under its own licence and
@@ -88,7 +89,6 @@ const PROFILE_DEFAULTS = {
 };
 const LIST_KEYS = ['compatibleTools', 'exclude'];
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const CITES_RE = /\{\{(?:LAW|DOCTRINE):[a-z0-9-]+\}\}/;
 
 /** A refusal: the message is the whole of what the user needs, so no stack is printed. */
 class ExportError extends Error {}
@@ -281,7 +281,6 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
       description = agentDescription(s.it.text);
       body = link(body);
     }
-    if (profile.laws && CITES_RE.test(readText(s.it.src))) requires.add(lawsName);
     files.push({ rel: `${dir}/${s.kind === 'skill' ? 'SKILL.md' : 'AGENT.md'}`, text: frontmatter(s.name, description) + body });
     files.push({ rel: `${dir}/metadata.yaml`, text: metadataYaml({
       ...base, type: s.kind, requires: [...requires].sort(),
@@ -328,8 +327,8 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     parts.sort((x, y) => x.rank - y.rank);
     files.push({ rel: `${dir}/LAWS.md`, text: [
       `# ${lawsName}`, '',
-      'The constitution the skills and agents of this collection cite by principle name. One '
-        + 'file per category:', '',
+      'The constitution the skills and agents of this collection cite by principle name. It is a '
+        + 'side package: no skill or agent requires it. One file per category:', '',
       ...parts.map((x) => `- \`${x.file}\` — ${x.title}: ${x.what}`), '',
     ].join('\n') });
     files.push({ rel: `${dir}/metadata.yaml`, text: metadataYaml({
