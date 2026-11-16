@@ -1,7 +1,7 @@
 {
   "prefix": "geneseed-",
   "owner": "Guillaume Lemer",
-  "maintainer": "Guillaume Lemer",
+  "maintainer": "@e56360",
   "status": "experimental",
   "compatibleTools": ["claude", "bob", "opencode", "openclaude"]
 }
