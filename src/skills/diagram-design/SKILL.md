@@ -1,6 +1,6 @@
 ---
 name: diagram-design
-description: "Branded HTML/SVG diagrams and charts — architecture, flowchart, sequence, ER, timeline, Gantt, Sankey and dozens more — with .drawio, Mermaid and .excalidraw import. Use when the user asks for a diagram, chart or visual map."
+description: "Branded HTML/SVG diagrams and charts — architecture, flowchart, sequence, ER, timeline, Gantt, Sankey and dozens more — with .drawio, Mermaid, .excalidraw and PlantUML import. Use when the user asks for a diagram, chart or visual map."
 license: MIT
 metadata:
   version: "2.6"
@@ -10,7 +10,7 @@ metadata:
 
 Create diagrams as self-contained HTML files with inline SVG and an editorial design system.
 
-Forty-five visual types. Semantic patterns describe behavior; type references describe layout.
+Fifty visual types. Semantic patterns describe behavior; type references describe layout.
 
 ---
 
@@ -49,7 +49,7 @@ Applied to schematics:
 
 ## 2. When to Use
 
-Use for any of the 45 visual types (§3) when a reader will learn more from a visual than from prose, a table, or a bulleted list.
+Use for any of the 50 visual types (§3) when a reader will learn more from a visual than from prose, a table, or a bulleted list.
 
 **Don't use for:**
 
@@ -80,7 +80,7 @@ When behavior, state, enforcement, or risk carries the meaning, first load [`ref
 
 The pattern owns semantic primitives and its tighter budget; the type owns layout grammar. Use [`references/animation.md`](references/animation.md) only when motion is requested or materially clarifies ordered change; static remains the default.
 
-### Visual-type guide (45)
+### Visual-type guide (50)
 
 | If you're showing… | Use | Reference |
 |---|---|---|
@@ -91,6 +91,7 @@ The pattern owns semantic primitives and its tighter budget; the type owns layou
 | Time-ordered messages between actors | **Sequence** | [type-sequence.md](references/type-sequence.md) |
 | States + transitions + guards | **State machine** | [type-state.md](references/type-state.md) |
 | Entities + fields + relationships | **ER / data model** | [type-er.md](references/type-er.md) |
+| A short ordered method with numbered stages, icons, and brief explanations | **Steps** | [type-steps.md](references/type-steps.md) |
 | Events positioned in time | **Timeline** | [type-timeline.md](references/type-timeline.md) |
 | Cross-functional process with handoffs | **Swimlane** | [type-swimlane.md](references/type-swimlane.md) |
 | Two-axis positioning / prioritization | **Quadrant** | [type-quadrant.md](references/type-quadrant.md) |
@@ -125,10 +126,14 @@ The pattern owns semantic primitives and its tighter budget; the type owns layou
 | What a person does across stages of an experience, and how it feels | **User journey** | [type-journey.md](references/type-journey.md) |
 | What the customer does vs what the service hides, across stages, with a line of visibility | **Service blueprint** | [type-service-blueprint.md](references/type-service-blueprint.md) |
 | Where software runs — zones, hosts, artifacts, replicas, ports | **Deployment** | [type-deployment.md](references/type-deployment.md) |
-| What depends on what, with fan-in and cycles a tree cannot express | **Dependency graph** | [type-dependency.md](references/type-dependency.md) |
+| What depends on what, with fan-in and cycles a tree cannot express; arc diagram (nodes on a line, height is skip-span) variant | **Dependency graph** | [type-dependency.md](references/type-dependency.md) |
 | Classes with operations, inheritance, composition (other UML routes elsewhere) | **UML class** | [type-uml-class.md](references/type-uml-class.md) |
 | Narrative backbone sliced into releases, with the cut line | **Story map** | [type-story-map.md](references/type-story-map.md) |
 | Physical tables: SQL types, constraints, indexes, column-level FKs | **Database schema** | [type-db-schema.md](references/type-db-schema.md) |
+| A biological process as a bipartite species/process graph | **SBGN** | [type-sbgn.md](references/type-sbgn.md) |
+| Source requirements, design elements, and tests linked by stable IDs, with gaps explicit | **Requirement traceability** | [type-requirement-traceability.md](references/type-requirement-traceability.md) |
+| Commands, resulting events, and read models across ordered stages | **Event modeling** | [type-event-modeling.md](references/type-event-modeling.md) |
+| One bounded whole counted in equal discrete units out of 100 | **Unit Grid** | [type-unit-grid.md](references/type-unit-grid.md) |
 
 Rules of thumb:
 
@@ -338,9 +343,9 @@ Every diagram ships in three variants (see `assets/`):
 
 ---
 
-## 11. Importing an Existing Diagram (draw.io), Mermaid, and Excalidraw
+## 11. Importing an Existing Diagram (draw.io), Mermaid, Excalidraw, and PlantUML
 
-Sources: `.drawio*`, `.mmd`, `.mermaid`, Markdown containing a fenced `mermaid` block, and `.excalidraw`. Follow this section for "convert this", "redraw this diagram", and "make this presentable".
+Sources: `.drawio*`, `.mmd`, `.mermaid`, Markdown containing a fenced `mermaid` block, `.excalidraw`, `.puml`, `.plantuml`, `.pu`, and Markdown containing a fenced `plantuml` / `puml` block. Follow this section for "convert this", "redraw this diagram", and "make this presentable".
 
 The short version:
 

@@ -21,19 +21,20 @@ The skill follows the [Agent Skills](https://agentskills.io/) format (`SKILL.md`
 
 ## What was trimmed
 
-Upstream's `skills/diagram-design/` is about 5.9 MB. This copy keeps about 0.8 MB:
+Upstream's `skills/diagram-design/` is about 6.4 MB. This copy keeps about 0.8 MB:
 
-- **Kept:** `SKILL.md`; every `references/*.md` except the six below; the five
+- **Kept:** `SKILL.md`; every `references/*.md` except the seven below; the five
   `assets/template*.html` files (§10 tells the agent to copy them); two examples,
   `assets/example-venn.html` and `assets/example-architecture.html`.
-- **Dropped:** `scripts/` (six Python helpers — Geneseed carries no Python at runtime); the other
-  ~218 `assets/example-*.html` files and `assets/icons.html` (a gallery of the icons
-  `references/primitive-icons.md` already holds); `references/export.md` and
-  `references/export-registry.md` (the Python/Playwright export helpers); `references/doctor.md`
-  (Python and host-plugin diagnostics); `references/import-drawio.md`,
-  `references/import-mermaid.md` and `references/import-excalidraw.md` (built around the
-  Python extractors). Upstream's repository files (plugin manifests, `commands/`, `prompts/`,
-  `docs/`, the repository-level `scripts/verify-*.py`) were never part of the skill folder.
+- **Dropped:** `scripts/` (eight Python helpers — Geneseed carries no Python at runtime); the other
+  ~230 `assets/example-*.html` files, `assets/index.html` (the example gallery) and
+  `assets/icons.html` (a gallery of the icons `references/primitive-icons.md` already holds);
+  `references/export.md` and `references/export-registry.md` (the Python/Playwright export
+  helpers); `references/doctor.md` (Python and host-plugin diagnostics);
+  `references/import-drawio.md`, `references/import-mermaid.md`, `references/import-excalidraw.md`
+  and `references/import-plantuml.md` (built around the Python extractors). Upstream's
+  repository files (plugin manifests, `commands/`, `prompts/`, `docs/`, the repository-level
+  `scripts/verify-*.py`) were never part of the skill folder.
 
 SKILL.md §10 and some references still name `example-<type>.html` files and `assets/icons.html` in
 code spans; those files are not shipped. Many type references name upstream's repository-level
@@ -47,8 +48,9 @@ Each one removes a dependency on a dropped file. Re-apply them on update.
   tells the agent to run the geometry verifier.
 - `SKILL.md` §9: the geometry-verifier and motion-verifier runs are cut; the `self_check.py` item
   is now a check by hand of the same five properties.
-- `SKILL.md` §11: the route-by-source links to the three import references are replaced by the
-  list of source formats, and step 1 reads the source file as text instead of running an extractor.
+- `SKILL.md` §11: the route-by-source links to the four import references are replaced by the
+  list of source formats (PlantUML included), and step 1 reads the source file as text instead of
+  running an extractor.
 - `SKILL.md` §12: the "Exporting to PNG / SVG" body is replaced by one paragraph: this copy ships no
   export helpers, so an `.svg` is the `<svg>` node copied out of the `.html`, and a `.png` cannot be
   made.
@@ -72,9 +74,11 @@ Each one removes a dependency on a dropped file. Re-apply them on update.
 - `references/animation.md`: the three-command verifier block is replaced by "check these by hand".
 - `references/output-spec.md`: two links to `export.md` are removed; the render-linter
   command is named as upstream's and not shipped.
-- `references/primitives-core.md`: three geometry-verifier commands are cut.
+- `references/primitives-core.md`: three geometry-verifier commands are cut, and the font
+  substitution paragraph says to check masks by hand instead of naming `self_check.py`.
 - `references/style-guide.md`: the export/self-check commands become "check that the Google Fonts
-  link is no longer present".
+  link is no longer present"; the width-budget paragraph names `scripts/self_check.py` as
+  upstream's and not shipped, and makes its 0.3em label check one to hold by hand.
 - `references/type-architecture-delta.md`: the verifier commands are named as upstream's and not
   shipped.
 - `references/type-treemap.md`: the render-linter command is named as upstream's and not shipped.
