@@ -75,7 +75,8 @@ Each one removes a dependency on a dropped file. Re-apply them on update.
 - `references/output-spec.md`: two links to `export.md` are removed; the render-linter
   command is named as upstream's and not shipped.
 - `references/primitives-core.md`: three geometry-verifier commands are cut, and the font
-  substitution paragraph says to check masks by hand instead of naming `self_check.py`.
+  substitution paragraph says to check masks by hand instead of naming `self_check.py`; the
+  accessible-name rule names `scripts/self_check.py` as upstream's and not shipped.
 - `references/style-guide.md`: the export/self-check commands become "check that the Google Fonts
   link is no longer present"; the width-budget paragraph names `scripts/self_check.py` as
   upstream's and not shipped, and makes its 0.3em label check one to hold by hand.
