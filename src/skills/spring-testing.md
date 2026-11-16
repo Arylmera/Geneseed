@@ -42,7 +42,7 @@ class UserControllerTests {
 
 `MockMvcTester` is AssertJ-based (`assertThat(mvc.get().uri(...)).hasStatusOk()`); do not mix it with the `expectStatus()` chain, which belongs to the other clients. Security: `@WithMockUser` still works on slices; `@Import` your security config.
 
-`@WebMvcTest` creates no services or repositories: every bean the controller injects needs a `@MockitoBean`, including a repository newly added to an existing controller. Assert error bodies as Problem Details fields (`$.status`, `$.errors[*].field`), never on message texts.
+`@WebMvcTest` creates no services or repositories: every bean the controller injects needs a `@MockitoBean`, including a repository newly added to an existing controller. Assert error bodies as Problem Details fields (`$.status`, `$.title`; `$.errors[*].field` only when your handler adds an `errors` extension), never on message texts.
 
 ## Full-server test
 

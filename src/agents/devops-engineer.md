@@ -25,8 +25,8 @@ Builds CI/CD pipelines and delivery automation for Spring Boot applications.
 1. Detect the CI the project already uses (GitHub Actions, GitLab CI, Jenkins, other) and extend it; do not switch providers. With none present, ask the user which to use.
 2. Pipeline order: checkout, restore build cache, `./mvnw verify` (or `./gradlew build`), publish test results, build image, scan, push, deploy.
 3. Cache the Maven or Gradle repository keyed on the build files.
-4. Gates: tests, a coverage threshold if the project has one, dependency and image vulnerability scan, `kustomize build` of every overlay when the project has them. Testcontainers needs a Docker daemon local to the job (on CircleCI the machine executor: a remote Docker's container ports are unreachable); check the integration tests ran, not skipped.
-5. Local dependencies in Docker Compose get a healthcheck each and `depends_on.condition: service_healthy`; write a shell check as `["CMD-SHELL", "<script>"]` (Podman splits a `CMD` array on spaces and reports healthy too early).
+4. Gates: tests, a coverage threshold if the project has one, dependency and image vulnerability scan, `kustomize build` of every overlay when the project has them. Testcontainers needs a Docker daemon local to the job (on CircleCI the machine executor: a remote Docker's container ports are unreachable).
+5. Docker Compose for local dependencies: follow the spring-boot skill's cloud side file (healthchecks).
 6. Build images with the project's chosen method (`spring-boot:build-image` by default); tag with version or commit SHA, never `latest` in production.
 7. Stages dev, staging, prod, with approval before prod.
 8. Secrets come from the CI secret store or a vault, never from files in the repository.

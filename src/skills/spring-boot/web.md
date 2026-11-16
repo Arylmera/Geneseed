@@ -36,7 +36,7 @@ class UserController {
 
 Version the path (`/api/v1`). Use GET for reads, POST/PUT/PATCH/DELETE for state changes; never change state on GET.
 
-Paged lists return `PagedModel` (`{content, page}`): the JSON of `Page`/`PageImpl` is not a stable format and Spring Data warns when it serializes one. Do not get that shape by putting `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` on the application class: `@WebMvcTest` then registers the web support twice and fails. Cap the page size (`spring.data.web.pageable.max-page-size: 100`).
+Paged lists return Spring Data's `org.springframework.data.web.PagedModel` (`{content, page}`; not the HATEOAS class of the same name): the JSON of `Page`/`PageImpl` is not a stable format and Spring Data warns when it serializes one. To get that shape for every `Page`, set `spring.data.web.pageable.serialization-mode: via-dto`, not `@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)` on the application class: `@WebMvcTest` then registers the web support twice and fails. Cap the page size (`spring.data.web.pageable.max-page-size: 100`).
 
 ## DTOs and validation
 Records for request and response. Constraints sit on the record components (`jakarta.validation.constraints`); `@Valid` on the controller parameter triggers them. Put the entity-to-DTO mapping in a static factory or a mapper, not in the controller.
@@ -83,7 +83,12 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(PropertyReferenceException.class)   // ?sort=unknownProperty
     ProblemDetail badSort(PropertyReferenceException ex) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Unknown sort property: " + ex.getPropertyName());
+    }
+
+    @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
+    void security(RuntimeException ex) {
+        throw ex;                                          // back to Spring Security: 403/401, not 500
     }
 
     @ExceptionHandler(Exception.class)
@@ -94,7 +99,7 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 }
 ```
 
-A domain exception can carry its own problem by extending `ErrorResponseException`; a plain `ResponseStatusException(NOT_FOUND, ...)` also renders as Problem Details with no extra handler. Never put stack traces, SQL text or an unexpected exception's message in `detail`. To answer a duplicate with the field at fault, read the constraint name from Hibernate's `ConstraintViolationException` (the cause), and name constraints explicitly in migrations so that name is stable. Deleting a record that others still reference answers 409; it never cascades.
+A domain exception can carry its own problem by extending `ErrorResponseException`; a plain `ResponseStatusException(NOT_FOUND, ...)` also renders as Problem Details with no extra handler. Never put stack traces, SQL text or an unexpected exception's message in `detail`. A catch-all on `Exception` also catches method-security failures, so rethrow `AccessDeniedException` and `AuthenticationException` before it, as above. To answer a duplicate with the field at fault, read `getConstraintName()` from the cause, `org.hibernate.exception.ConstraintViolationException`, and name constraints explicitly in migrations so that name is stable. Deleting a record that others still reference answers 409; it never cascades.
 
 ## Outbound HTTP
 Blocking calls use `RestClient`; build it from the injected `RestClient.Builder` so Boot's customizers (timeouts, SSL, observability) apply.

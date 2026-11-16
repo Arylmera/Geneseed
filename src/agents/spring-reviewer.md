@@ -33,7 +33,7 @@ Spring-specific review only. Generic correctness, naming and structure belong to
    - Boot 4 API misuse: the removed Boot test-package mock and spy bean annotations (use `@MockitoBean`/`@MockitoSpyBean`), new `RestTemplate` code or blocking `WebClient` (use `RestClient`), new `TestRestTemplate` tests (prefer `RestTestClient`), `@DynamicPropertySource` where `@ServiceConnection` supports the container, `WebSecurityConfigurerAdapter`.
    - Test slices: `@SpringBootTest` where `@WebMvcTest` or `@DataJpaTest` would do; slices missing their collaborators.
    - Configuration: raw `@Value` for property groups, secrets in committed config.
-   - Actuator: endpoints exposed beyond need, `show-details` open to anonymous callers, security that permits `/actuator/health` but not `/actuator/health/**` (the probes then fail).
+   - Actuator: endpoints exposed beyond need, `show-details` open to anonymous callers, probe paths blocked by security (cloud side file).
 3. Verify by running the tests rather than assuming ({{LAW:verify-before-asserting}}).
 
 ## Output contract
