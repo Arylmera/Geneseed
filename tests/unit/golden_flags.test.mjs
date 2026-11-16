@@ -7,7 +7,7 @@
 // what runs is a way to make a gate pass by running less of it, so each one is tested for what
 // it selects AND for whether it announces itself to the orphan check.
 //
-// NOTHING HERE SPAWNS. 259 emits belong in the cells job; this runs on every push on both
+// NOTHING HERE SPAWNS. 268 emits belong in the cells job; this runs on every push on both
 // operating systems and costs milliseconds.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -110,10 +110,15 @@ test('the three modes are mutually exclusive', () => {
 test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow it', () => {
   // The CLI matrix is its own document; `--cli` must read it rather than the emit matrix, and
   // `--only`/`--shard`/`--limit` must apply to it (the emit-only flags do not).
+  //
+  // The count is written out per platform: 284 posix cells and 283 win32 cells. The halves share
+  // all but the link/unlink cells (6 posix-only, 5 win32-only). The matrix lost 53 cells in
+  // 2026-11 that an in-process or spawned unit test already covered, so a cell that disappears
+  // now must be removed on purpose, with this row and this sentence changed in the same commit.
   const doc = loadCliMatrix();
   const all = selectCells(doc, parseArgs(['--cli']));
   assert.equal(all.length, doc.cells.length);
-  assert.ok(all.length > 300, `only ${all.length} CLI cells`);
+  assert.equal(all.length, process.platform === 'win32' ? 283 : 284, `${all.length} CLI cells`);
   for (const argv of [['--only', 'git-gate/'], ['--shard', '0/4'], ['--limit', '5']]) {
     const got = selectCells(doc, parseArgs(['--cli', ...argv]));
     assert.ok(got.length < all.length && got.length > 0, `${argv.join(' ')} selected ${got.length}`);
@@ -131,6 +136,16 @@ test('every narrowing flag selects fewer cells, and none selects none', () => {
     assert.ok(got.length < full.length && got.length > 0,
       `${argv.join(' ')} selected ${got.length} of ${full.length}`);
   }
+});
+
+test('--quick keeps the neutral theme only: 34 cells, which is what Windows CI re-emits', () => {
+  // ci.yml runs `--idempotent --quick` on windows-latest. This row is the one home of the count:
+  // the workflow comment points here rather than repeating the number.
+  // 34 = the neutral theme's 9 emits x 2 footprints (18), plus the 11 cells on the extra axes and
+  // the 5 kit cells, which are all neutral. A theme added to the matrix changes nothing here; an
+  // axis cell added in another theme, or a neutral cell removed, moves the number.
+  assert.equal(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).length, 34);
+  assert.ok(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).every((c) => c.theme === 'neutral'));
 });
 
 test('--deletion selects the deletion matrix and nothing else', () => {
