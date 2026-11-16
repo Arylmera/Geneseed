@@ -1,7 +1,7 @@
 // S5: the web console reads and writes the shared tier on a global install, and uninstall never
 // reaches it. Every test here populates the tier first: an assertion that "the tier survived"
 // over an empty one passes by describing an absence nobody created (D8, B5).
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -25,19 +25,57 @@ import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 const ENV_KEYS = ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR', 'CLAUDE_CONFIG_DIR',
   'GENESEED_MEMORY', 'GENESEED_HARNESS', 'GENESEED_WIKI'];
 
-/** Run `fn` with a sandboxed home, a real claude-global install in it, and the tier populated. */
-async function withTier(fn) {
-  const sb = makeSandbox('s5-');
-  const home = sb.path;
+// ONE EMIT PER FILE, A FRESH COPY PER TEST. The emit took most of each test's time, and every test
+// got the same tree. An install writes its own home's absolute path into what it emits (settings,
+// manifests, the registry), so a copy is only the same install at the SAME path: `HOME` is one
+// fixed directory, the emit runs there once, the tree is kept aside as `TEMPLATE`, and each test
+// starts by replacing `HOME` with a copy of it. The tests stay independent: nothing one of them
+// writes survives into the next.
+const FILE_SB = makeSandbox('s5-');
+const HOME = path.join(FILE_SB.path, 'home');
+const TEMPLATE = path.join(FILE_SB.path, 'template');
+after(() => FILE_SB.cleanup());
+
+/** The process env a test runs under: `home` as every home variable, no relocation variable. */
+function tierEnv(home) {
   const env = { ...homeOverrides(home) };
   for (const k of ENV_KEYS) env[k] = undefined;
+  return env;
+}
+
+function withEnv(env, fn) {
   const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
   for (const [k, v] of Object.entries(env)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
-  try {
+  const restore = () => {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  };
+  let result;
+  try { result = fn(); } catch (e) { restore(); throw e; }
+  if (result && typeof result.then === 'function') return result.finally(restore);
+  restore();
+  return result;
+}
+
+/** The real claude-global emit into `HOME`, once, kept aside as `TEMPLATE`. */
+function template() {
+  if (fs.existsSync(TEMPLATE)) return;
+  fs.mkdirSync(HOME);
+  withEnv(tierEnv(HOME), () => {
     const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit',
-      'claude-global', '--theme', 'neutral', '--footprint', 'lean', '--out', path.join(home, 'bundle')],
+      'claude-global', '--theme', 'neutral', '--footprint', 'lean', '--out', path.join(HOME, 'bundle')],
     { cwd: ROOT, encoding: 'utf8', env: { ...process.env }, windowsHide: true, maxBuffer: 1 << 26 });
     assert.equal(r.status, 0, r.stderr);
+  });
+  fs.cpSync(HOME, TEMPLATE, { recursive: true, verbatimSymlinks: true });
+}
+
+/** Run `fn` with a sandboxed home, a real claude-global install in it, and the tier populated. */
+async function withTier(fn) {
+  template();
+  fs.rmSync(HOME, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  fs.cpSync(TEMPLATE, HOME, { recursive: true, verbatimSymlinks: true });
+  const home = HOME;
+  return withEnv(tierEnv(home), async () => {
     const cfg = path.join(home, '.claude');
     const tier = path.join(home, '.config', 'geneseed');
     fs.writeFileSync(path.join(tier, 'user-rules.md'), '# User rules\n\n## R1 — Shared rule\n(scope: global)\nBe terse.\n');
@@ -48,10 +86,7 @@ async function withTier(fn) {
     fs.writeFileSync(path.join(tier, 'notes', 'skill-notes', 'n.md'), 'a note\n');
     fs.writeFileSync(path.join(cfg, 'memory', 'host-fact.md'), '---\nname: host-fact\ndescription: h\n---\nh\n');
     return await fn({ home, cfg, tier });
-  } finally {
-    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
-    sb.cleanup();
-  }
+  });
 }
 
 /** Every file under `dir` with its bytes: a before/after of this must be equal. */

@@ -333,13 +333,31 @@ test('a pull blocked by an untracked collision returns collision and changes not
 });
 
 test('a clean fast-forward passes the doctor and does not roll back', () => {
-  // The SAME commit as above, now unblocked. `runDoctor` really spawns and really passes, so
-  // this also asserts the copied checkout is a valid Geneseed source tree — which is what makes
-  // the rollback test below a statement about the pulled commit rather than about the fixture.
+  // The SAME commit as above, now unblocked. The doctor is a STAND-IN that passes and records its
+  // argv: this arm owns what the gate does with a pass (keep the pull, report `ready`), and a real
+  // `doctor --all` cost about a minute of CPU on Windows to say nothing more about it. The real
+  // doctor is proven by the rollback test below, which runs it against a real fault and requires
+  // red, and through the whole `upgrade` by the golden CLI cell
+  // `upgrade/a-new-commit-is-pulled-validated-and-rebuilt`.
   fs.unlinkSync(path.join(CO2, COLLIDE));
   const before = git(CO2, 'rev-parse', 'HEAD');
 
-  const [ok, code] = U2.pullAndValidate(() => {});
+  const asked = [];
+  const real = cp.spawnSync;
+  cp.spawnSync = (exe, args, opts) => {
+    if (!args?.includes('doctor')) return real(exe, args, opts);
+    asked.push(args);
+    return { status: 0, stdout: '[doctor] ok — the stand-in\n', stderr: '' };
+  };
+  syncBuiltinESMExports();
+  let ok;
+  let code;
+  try { [ok, code] = U2.pullAndValidate(() => {}); } finally {
+    cp.spawnSync = real;
+    syncBuiltinESMExports();
+  }
+  assert.deepEqual(asked, [[path.join(CO2, 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle']],
+    'the gate did not ask the pulled tree, once, for a full sweep');
   assert.equal(ok, true, 'a clean fast-forward onto a healthy tree was rejected');
   assert.equal(code, 'ready');
   assert.notEqual(git(CO2, 'rev-parse', 'HEAD'), before, 'the fast-forward did not happen');

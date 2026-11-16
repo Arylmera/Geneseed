@@ -1583,8 +1583,11 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
  * for PreToolUse), so `gitDecide`/`ruleDecide` keep reading the Claude shape unchanged and
  * never learn Bob exists. A no-op for an already-Claude-shaped payload: every field it sets
  * is only filled in when the Claude-named field is absent.
+ *
+ * Exported for the in-process loss-table rows of tests/unit/hook_gates.test.mjs, which hand
+ * Bob's own payload shape to `gitDecide` without a spawn per row.
  */
-function normaliseBobPayload(payload) {
+export function normaliseBobPayload(payload) {
   if (!payload || typeof payload !== 'object') return payload;
   const out = { ...payload };
   if (!out.tool_input && payload.input && typeof payload.input === 'object') {
