@@ -40,11 +40,13 @@ Removed or renamed in Boot 4 (do not write them): `@MockBean` and `@SpyBean`, `C
 | Security configuration | Spring Security 7: lambda DSL, `authorizeHttpRequests` |
 | `org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest` | `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest`: slices moved to per-technology modules; import from the new packages |
 | Jackson 2 (`com.fasterxml.jackson`) | Jackson 3 is the default (`tools.jackson`); Jackson 2 support is deprecated, `spring.jackson.use-jackson2-defaults` eases migration |
+| Inject `ObjectMapper`, `@JsonComponent`, `@JsonMixin` | Inject the auto-configured `JsonMapper`; use `@JacksonComponent`, `@JacksonMixin`. Only the annotations keep their package (`com.fasterxml.jackson.annotation`) |
 | `@DynamicPropertySource` for container URLs | `@ServiceConnection` on the container |
 | MockMvc status assertions via Hamcrest | `MockMvcTester` (AssertJ) or `RestTestClient` with `@AutoConfigureRestTestClient` |
 | OpenFeign for declarative clients | `@HttpExchange` interfaces, registered with `@ImportHttpServices` |
 | Zipkin-only tracing setup | `spring-boot-starter-opentelemetry`, `management.opentelemetry.tracing.export.otlp.*` |
-| Starters assumed to pull everything | Boot 4 starters are modular; add the matching starter or test starter for each technology, and read the migration guide when a class vanishes |
+| Starters assumed to pull everything | Boot 4 starters are modular; add the matching starter or test starter (`spring-boot-starter-<technology>-test`) for each technology, and read the migration guide when a class vanishes |
+| `spring-boot-starter-web`, `-aop`, `-oauth2-*`; `flyway-core` or `liquibase-core` alone | `spring-boot-starter-webmvc`, `-aspectj`, `-security-oauth2-*`; `spring-boot-starter-flyway`, `-liquibase`. The old web and OAuth2 names are deprecated |
 
 ## Side files
 - **Web/REST** -> read [spring-boot/web.md](spring-boot/web.md) and follow it.

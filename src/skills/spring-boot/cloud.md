@@ -56,7 +56,13 @@ public Quote fetch(String id) { ... }
 public void sendNotification() { ... }
 ```
 
-Retry only idempotent calls. Circuit breaking: at the edge, use the Gateway `CircuitBreaker` filter; in-service, Resilience4j is still the common choice but its annotation and property names were not re-verified for Boot 4 here, so check its current docs before copying old config.
+Retry only idempotent calls.
+- `maxRetries` counts the retries after the first call: total attempts are 1 + `maxRetries`. The default is 3 retries, 1 second apart.
+- Every exception is retried unless `includes` or `excludes` narrow the set; both also match nested causes.
+- `@ConcurrencyLimit` caps simultaneous calls, like a pool size. It is not a rate limiter over time.
+- Boot 4 no longer manages a Spring Retry version (`org.springframework.retry`): use the Framework annotations above, or declare the version yourself.
+
+Framework 7 has no circuit breaker. At the edge, use the Gateway `CircuitBreaker` filter. In-service, Resilience4j publishes a Boot 4 module (`resilience4j-spring-boot4`), but its annotation and property names were not re-verified for Boot 4 here, so check its current docs before copying old config.
 
 ## Gateway
 Spring Cloud Gateway's reactive server uses the `spring.cloud.gateway.server.webflux.*` prefix in current releases (older guides show `spring.cloud.gateway.*`). Prefer YAML routes over the Java DSL for simple cases.
@@ -75,7 +81,7 @@ spring:
                 - CircuitBreaker=usersBreaker
 ```
 
-The `CircuitBreaker` filter needs a Spring Cloud CircuitBreaker starter (for example the reactor-Resilience4j one) on the classpath. Gateway is WebFlux; do not put it in the same module as a Spring MVC service.
+The `CircuitBreaker` filter needs a Spring Cloud CircuitBreaker starter (for example the reactor-Resilience4j one) on the classpath. Pick the starter for the server stack: `spring-cloud-starter-gateway-server-webflux` (reactive, the YAML above) or `spring-cloud-starter-gateway-server-webmvc` (Servlet, its properties under `spring.cloud.gateway.server.webmvc.*`). The WebFlux server cannot share a module with a Spring MVC service.
 
 ## Observability
 - Health: `/actuator/health/liveness` and `/actuator/health/readiness` are on by default (`management.endpoint.health.probes.enabled=false` disables them); point the Kubernetes probes at those, and permit `/actuator/health/**` in the security chain. Expose only what you need (`management.endpoints.web.exposure.include`), and protect the rest. `management.endpoint.health.show-components: always` with `show-details: when-authorized` tells an anonymous caller which component is down without leaking hosts or versions.
