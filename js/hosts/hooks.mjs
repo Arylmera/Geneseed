@@ -136,6 +136,14 @@ const ARG_RE = '[\\w./:@^~=+,-]+';
 const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`);
 const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`);
 const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`);
+// A fetch writes only remote-tracking refs, FETCH_HEAD and tags git will not clobber, never a
+// local branch, as long as no refspec names a destination (`a:b`, `+a:b`) and no option names a
+// program (`--upload-pack=<cmd>` runs one). So: a few flags that take no value, then at most one
+// remote and its branches, each a plain name whose first character is alphanumeric (no `:`, no
+// `+`, no flag, no `.` or path for the remote). Added for the own-branch and worker passes
+// (2026-11-17): `git fetch origin && git merge origin/main && git commit …` is how a branch
+// catches up with its base, and the fetch alone made the whole chain ask.
+const SEG_FETCH_RE = /^git\s+fetch(?:\s+(?:--prune|-p|--tags|-t|--no-tags|--all|--quiet|-q))*(?:\s+[A-Za-z0-9][A-Za-z0-9._-]*(?:\s+[A-Za-z0-9][\w./-]*)*)?$/;
 
 /**
  * `git push`, exactly: `[-u|--set-upstream] <remote> HEAD:<branch>` or
@@ -209,8 +217,9 @@ const SHARED_BRANCH_RE = /^(?:main|master|develop|development|(?:release|hotfix)
  *   sets on tool events inside a subagent or in-process teammate). A session that merely runs in
  *   a worktree, as the desktop app's do, has none and asks. A host that sends none asks always.
  * - The command: none of `UNSAFE_CHARS_RE` or `SUBSHELL_CHARS_RE`, no `push` word anywhere (a mixed
- *   command asks), every segment an add, a read-only look, or `SEG_LOCAL_RE`, after at most one
- *   leading `cd <path>` (an agent's shell starts in the parent's checkout). The `cd` target and
+ *   command asks), every segment an add, a read-only look, a fetch (`SEG_FETCH_RE`) or
+ *   `SEG_LOCAL_RE`, after at most one leading `cd <path>` (an agent's shell starts in the
+ *   parent's checkout). The `cd` target and
  *   `cwd` are resolved with `realpathSync`, git's physical path; `cd -`, `~` or a path that does
  *   not resolve asks.
  * - The tree: `cwd` a linked worktree (`mainWorktreeOf`, read off disk, no spawn), its branch
@@ -232,7 +241,7 @@ export function worktreeExempt(command, cwd, agentId) {
       segments.shift();
     }
     if (!segments.length || !segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg)
-      || SEG_LOCAL_RE.test(seg))) return false;
+      || SEG_FETCH_RE.test(seg) || SEG_LOCAL_RE.test(seg))) return false;
     const main = mainWorktreeOf(dir);
     const branch = main && currentBranch(dir);
     if (!branch || branch.includes('..') || SHARED_BRANCH_RE.test(branch)) return false;
@@ -339,7 +348,8 @@ function maskMessages(command, shell) {
  * - No `agentId`: a sub-agent never pushes, and its local commits are `worktreeExempt`'s to judge.
  * - The command, with its messages masked (`maskMessages`): none of `UNSAFE_CHARS_RE` or
  *   `SUBSHELL_CHARS_RE`; every segment an add, a
- *   read-only look, a plain commit or merge (`SEG_LOCAL_RE`, or the loop's `-F` commit), or a
+ *   read-only look, a fetch (`SEG_FETCH_RE`), a plain commit or merge (`SEG_LOCAL_RE`, or the
+ *   loop's `-F` commit), or a
  *   plain push (`SEG_PUSH_RE`) of THIS branch, spelled `<branch>`, `HEAD:<branch>` or
  *   `HEAD:refs/heads/<branch>`; after at most one leading `cd <path>`. Bare `git push` asks:
  *   `push.default` and the global config decide where it goes, and this read cannot see them.
@@ -384,7 +394,8 @@ export function ownBranchExempt(command, cwd, agentId, shell = null) {
     const taken = [...protectedBranches(root), main && currentBranch(main)].filter(Boolean);
     if (taken.some((b) => b.toLowerCase() === branch.toLowerCase())) return false;
     return segments.every((seg) => {
-      if (SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg) || SEG_LOCAL_RE.test(seg) || SEG_COMMIT_RE.test(seg)) return true;
+      if (SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg) || SEG_FETCH_RE.test(seg) || SEG_LOCAL_RE.test(seg)
+        || SEG_COMMIT_RE.test(seg)) return true;
       const push = SEG_PUSH_RE.exec(seg);
       if (!push) return false;
       const ref = push[2];
