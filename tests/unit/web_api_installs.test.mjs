@@ -398,9 +398,9 @@ test('GET /api/kits carries rules, budget, banned list and resolved credits per 
     ['@MockBean', '@SpyBean', 'javax.persistence', 'ClientHttpRequestFactories', 'Spring Security 6']);
   assert.deepEqual(k.credits, [{
     key: 'piomin-spring-boot', repo: 'piomin/claude-ai-spring-boot', author: 'Piotr Mińkowski',
-    license: 'Apache-2.0', commit: '647d768a5d333e15b6a50dc0e8fc41e41a330e92',
+    license: 'Apache-2.0', commit: 'cbd289d4adadef06bd2ac118294319a2f49f79ee',
     compareUrl: 'https://github.com/piomin/claude-ai-spring-boot/compare/'
-      + '647d768a5d333e15b6a50dc0e8fc41e41a330e92...HEAD' }]);
+      + 'cbd289d4adadef06bd2ac118294319a2f49f79ee...HEAD' }]);
   const r = apiKits(neutral()).kits.find((x) => x.name === 'react');
   assert.equal(r.rulesWordBudget, 300);
   assert.deepEqual(r.banned,

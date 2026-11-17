@@ -58,7 +58,7 @@
   },
   "piomin-spring-boot": {
     "repo": "piomin/claude-ai-spring-boot",
-    "commit": "647d768a5d333e15b6a50dc0e8fc41e41a330e92",
+    "commit": "cbd289d4adadef06bd2ac118294319a2f49f79ee",
     "author": "Piotr Mińkowski",
     "license": "Apache-2.0",
     "licenseFile": "licenses/piomin-spring-boot.txt"

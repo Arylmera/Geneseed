@@ -18,9 +18,9 @@ Target stack: Spring Boot 4, JUnit 5, Mockito, AssertJ.
 | Controller mapping, validation, serialization | `@WebMvcTest(X.class)` + `MockMvcTester` + `@MockitoBean` |
 | Repository queries, mappings | `@DataJpaTest` against the real database engine |
 | Whole app over HTTP | `@SpringBootTest(webEnvironment = RANDOM_PORT)` + `@AutoConfigureRestTestClient` |
-| Whole app, no server | `@SpringBootTest` + `@AutoConfigureMockMvc` |
+| Whole app, no server | `@SpringBootTest` + `@AutoConfigureMockMvc` (`@SpringBootTest` alone no longer gives MockMvc) |
 
-Boot 4 split the test support into modules: slice annotations live in `org.springframework.boot.<module>.test.autoconfigure` (e.g. `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`); `@AutoConfigureTestDatabase` is in `org.springframework.boot.jdbc.test.autoconfigure`. Let the IDE import them. Use the matching test starter (`spring-boot-starter-data-jpa-test`, and so on) so each slice is on the classpath.
+Boot 4 split the test support into modules: slice annotations live in `org.springframework.boot.<module>.test.autoconfigure` (e.g. `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`); `@AutoConfigureTestDatabase` is in `org.springframework.boot.jdbc.test.autoconfigure`. Let the IDE import them. Use the matching test starter (`spring-boot-starter-data-jpa-test`, and so on) so each slice is on the classpath. `@AutoConfigureRestTestClient` is in the `spring-boot-resttestclient` module, which `spring-boot-starter-webmvc-test` brings in; without that starter, add the module in test scope.
 
 ## Mocking beans
 
@@ -80,7 +80,7 @@ class ContainersConfig {
 class AuthorRepositoryTests { /* ... */ }
 ```
 
-- Testcontainers 2 containers are non-generic and live in per-module packages (`org.testcontainers.postgresql.PostgreSQLContainer`, artifact `testcontainers-postgresql`).
+- Testcontainers 2 containers are non-generic and live in per-module packages (`org.testcontainers.postgresql.PostgreSQLContainer`, artifact `testcontainers-postgresql`). With them, add `spring-boot-testcontainers` and, for `@Testcontainers`/`@Container`, `org.testcontainers:testcontainers-junit-jupiter`, all in test scope.
 - The default `replace = NON_TEST` already keeps a `@ServiceConnection` data source; `replace = NONE` is only needed for a non-test `DataSource` you defined yourself.
 - Where `@ServiceConnection` has no support for the container, use `@Testcontainers` + `@Container static` + `@DynamicPropertySource` to register the properties.
 - Share one container configuration across tests so the context cache is reused.
