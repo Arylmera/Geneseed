@@ -48,9 +48,10 @@
    actually close — report the blocker instead ({{ONTOLOGY}}: {{ONT_EVIDENCE}}).
 
 ## Output contract
-- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR`: `OK` the contract is met;
+- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR|RELAY`: `OK` the contract is met;
   `BLOCKED` an input or a decision is missing; `OUT_OF_SCOPE` not this task; `ERROR` a step failed,
-  red tests included.
+  red tests included; `RELAY` a task worker hands off at its ceiling: work in progress committed,
+  handoff note follows.
 - The files changed in the worktree and a one-line summary of what changed and
   why, ready for the tester's pass.
 - If the scoped task cannot be implemented as given (missing input, contradictory
@@ -61,8 +62,15 @@
 ### Task worker (Foreman)
 
 Dispatched as Foreman's task worker, there is no tester seat: explore, implement and test
-in your own context, and after two repair rounds on your own red tests return red with the
-findings ({{DOCTRINE:bound-the-loop}}). As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
+in your own context. While you iterate, run the targeted test file, not the full suite.
+Send its output to a file, and read only the count line and the failing test names. Wait
+for a background run's completion notice; never poll it with a monitor or a sleep loop.
+Count your proof runs (one run of a check command); these bounds are starting values
+({{DOCTRINE:bound-the-loop}}). After the 3rd run in a row that leaves the same test red,
+return `STATUS: ERROR` with the findings. At about 150k tokens of context, or after about
+20 proof runs, hand off: commit your work in progress, and return `STATUS: RELAY` with a
+handoff note (the failing tests, what you tried, the next step). A hand-off is no failure.
+As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
 at start and on each change, as the mode says. Return the branch, its commit list, any
 uncommitted work, and the raw test + lint output — the parent re-runs it before any merge.
 That output is a full run to completion, with the runner's own count line, never a
