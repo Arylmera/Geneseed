@@ -1,10 +1,11 @@
 import { Bar } from '../../components/StackBar.jsx'
 
 // The aside's pack panel: each pack's share of its rules switched on, and its switch (the
-// selection is hooks/useRuleSelection.js). Revert and the Apply that rebuilds the install live
-// in the page's "Unapplied changes" bar (Laws.jsx), which shows only while something is staged.
+// selection is hooks/useRuleSelection.js, which rebuilds the install on its own once the
+// switches settle). A failed rebuild's Retry and Revert live in the page's "Unapplied changes"
+// bar (Laws.jsx).
 export default function PackPanel({ packs, sel, canApply, install, gateArmed }) {
-  const { isOn, packOn, togglePack, dirty, losingConsent } = sel
+  const { isOn, packOn, togglePack, dirty, running, failed, losingConsent } = sel
   const maxPack = Math.max(1, ...packs.map((p) => p.rules.length))
   return (
     <section className="panel" aria-labelledby="doc-packs">
@@ -36,6 +37,8 @@ export default function PackPanel({ packs, sel, canApply, install, gateArmed }) 
                       p.rules.length && on === p.rules.length ? 'true' : on ? 'mixed' : 'false'
                     }
                     aria-label={`${p.title} pack`}
+                    disabled={running}
+                    title={running ? 'Rebuilding…' : undefined}
                     onClick={() => togglePack(p)}
                   />
                 ) : null}
@@ -59,10 +62,13 @@ export default function PackPanel({ packs, sel, canApply, install, gateArmed }) 
             </p>
           )}
           <p className="panel-note" role="status" aria-live="polite">
-            {dirty
-              ? `Not applied yet. Apply rebuilds ${install.host} · ${install.scope} once, ` +
-                'with every change together.'
-              : 'Matches the deployed install. Changing a pack rebuilds it.'}
+            {running
+              ? `Rebuilding ${install.host} · ${install.scope}…`
+              : failed && dirty
+                ? 'The rebuild did not go through. Retry or Revert below.'
+                : dirty
+                  ? `Applying… ${install.host} · ${install.scope} rebuilds once the switches settle.`
+                  : 'Matches the deployed install. A change rebuilds it automatically.'}
           </p>
         </>
       )}

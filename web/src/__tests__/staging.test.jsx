@@ -213,4 +213,27 @@ describe('StagingProvider — doctrine rules', () => {
     await settled()
     expect(rule().getAttribute('aria-checked')).toBe('true')
   })
+
+  // The switches apply on their own; while that rebuild runs they lock. A click then would be
+  // staged against the old base, dropped the moment the rebuild lands, and its `finish` would
+  // mark it applied without ever sending it. Done but not yet refetched still counts as running.
+  it('applies on its own, then locks the switches until the rebuild lands', async () => {
+    const install = { host: 'opencode', scope: 'global', path: 'C:/o' }
+    const lawsPage = (onAction, rev) => (
+      <Laws overview={{ install }} onAction={onAction} dataRev={rev} />
+    )
+    const rule = (name) => document.querySelector(`[aria-label="${name} rule text"]`)
+    const { onAction, update } = await mountShell(lawsPage)
+    await waitFor(() => expect(document.querySelector('.pack-wrap:not(.pack-off)')).toBeTruthy())
+    fireEvent.click(rule('English Configuration'))
+    await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
+    expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
+    await update({ activeId: 'job-1' })
+    expect(rule('Automate Repetition').disabled).toBe(true)
+    expect(screen.getByText(/^Rebuilding opencode · global…$/)).toBeTruthy()
+    await update({ activeId: null, finish: { id: 'job-1', status: 'done' } })
+    expect(rule('Automate Repetition').disabled).toBe(true) // the refetch has not landed
+    expect(rule('English Configuration').getAttribute('aria-checked')).toBe('true')
+    expect(onAction).toHaveBeenCalledTimes(1)
+  })
 })

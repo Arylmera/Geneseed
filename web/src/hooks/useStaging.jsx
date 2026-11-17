@@ -83,16 +83,33 @@ function useStore(activeId, finish) {
       }),
     [],
   )
+  // `sent` marks the value as handed to a job, so a page that applies on its own (the doctrine
+  // switches) does not send it twice while the job's `finish` is still on its way. A later `put`
+  // writes a fresh entry without it.
   const startApply = (kind, key) => {
     setApplying({ kind, key })
     setMaps((ms) => {
       const e = ms[kind].get(key)
-      if (!e?.failed) return ms
-      return { ...ms, [kind]: new Map(ms[kind]).set(key, { value: e.value, base: e.base }) }
+      if (!e) return ms
+      return {
+        ...ms,
+        [kind]: new Map(ms[kind]).set(key, { value: e.value, base: e.base, sent: true }),
+      }
     })
   }
+  // The server refused the job outright (no id came back): the value stays, marked failed, so an
+  // automatic apply does not retry it in a loop. A new `put` or `startApply` clears the mark.
+  const fail = (kind, key) =>
+    setMaps((ms) => {
+      const e = ms[kind].get(key)
+      if (!e) return ms
+      return {
+        ...ms,
+        [kind]: new Map(ms[kind]).set(key, { value: e.value, base: e.base, failed: true }),
+      }
+    })
   const running = (kind, key) => !!activeId && applying?.kind === kind && applying?.key === key
-  return { get, put, drop, prune, startApply, running, busy: !!activeId }
+  return { get, put, drop, prune, startApply, fail, running, busy: !!activeId }
 }
 
 export function StagingProvider({ activeId, finish, children }) {

@@ -23,6 +23,15 @@ import Laws from '../pages/Laws.jsx'
 import GateAsks from '../pages/Laws/GateAsks.jsx'
 import { api } from '../api/index.js'
 import { clearAsyncCache } from '../hooks/useAsync.js'
+import { AUTO_APPLY_MS } from '../hooks/useRuleSelection.js'
+
+// The doctrine switches apply on their own once they have been still for AUTO_APPLY_MS: wait that
+// out on the real clock, then let the confirm (when one is asked) and the action land.
+const autoApplied = async () => {
+  await act(() => new Promise((r) => setTimeout(r, AUTO_APPLY_MS + 30)))
+  await answered()
+  await answered()
+}
 
 const ONT = ['telos', 'evidence', 'decisions', 'conduct'].map((id) => ({
   name: `ont:${id}`,
@@ -480,7 +489,6 @@ const settled = (c) =>
   waitFor(() => expect(c.querySelector('.pack-wrap:not(.pack-off)')).toBeTruthy())
 
 const sw = (c, name) => c.querySelector(`[aria-label="${name} rule text"]`)
-const applyBtn = () => screen.getByText(/^Apply/).closest('button')
 const withInstall = (onAction = () => {}) => (
   <Laws overview={{ install: INSTALL }} onAction={onAction} />
 )
@@ -508,25 +516,63 @@ describe('Constitution page — doctrine toggles', () => {
       'false',
     )
     expect(container.querySelector('.pack-state').textContent).toBe('2 of 3 active')
-    // Nothing staged, so nothing to apply: no Apply at all, not a disabled one.
+    // The switches apply on their own: there is no Apply button to click, ever.
     expect(screen.queryByRole('button', { name: /^Apply/ })).toBeNull()
   })
 
-  // ⚠ ONE FILLED BUTTON PER VIEW. Apply is the page's primary action, so it sits in the
-  // "Unapplied changes" bar, which appears only once something is staged; it is then the only
-  // filled button on the page: every other control is secondary (ghost, soft, danger-line) or
-  // not a `.btn` at all. Its label counts the staged rules: craft.3 switched on makes 5 of the 7.
-  it('shows Apply as the one primary action, in the unapplied-changes bar, only once something is staged', async () => {
-    const { container } = render(withInstall())
+  // Owner decision 2026-11: a switch applies itself, no Apply to click. A plain rule asks nothing
+  // (no gate or hook goes with it): the rebuild simply starts once the switches settle.
+  it('applies a switch on its own once the switches settle, without asking', async () => {
+    askConfirm.mockClear()
+    const onAction = vi.fn(async () => 'job-1')
+    const { container } = render(withInstall(onAction))
     await settled(container)
-    expect(screen.queryAllByRole('button', { name: /^Apply/ })).toHaveLength(0)
     fireEvent.click(sw(container, 'Documentation in Step'))
-    const apply = screen.getAllByRole('button', { name: /^Apply/ })
-    expect(apply).toHaveLength(1)
-    expect(apply[0].textContent).toBe('Apply (5/7 rules)')
-    expect(apply[0].closest('[role="region"]').getAttribute('aria-label')).toBe('Unapplied changes')
+    expect(onAction).not.toHaveBeenCalled() // not before the pause
+    expect(screen.getByText(/Applying…/)).toBeTruthy()
+    await autoApplied()
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
+    expect(askConfirm).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: 'Unapplied changes' })).toBeNull()
+  })
+
+  // ⚠ ONE FILLED BUTTON PER VIEW. The bar appears only when the rebuild did not go through (here
+  // the server refuses it: no job id). Retry is then the only filled button on the page, its
+  // label counting the staged rules: craft.3 switched on makes 5 of the 7. The failed value is
+  // never re-sent on its own: that would retry a refusal in a loop.
+  it('a refused rebuild keeps the change, with Retry as the one primary action', async () => {
+    const onAction = vi.fn(async () => undefined)
+    const { container } = render(withInstall(onAction))
+    await settled(container)
+    fireEvent.click(sw(container, 'Documentation in Step'))
+    await autoApplied()
+    const retry = screen.getAllByRole('button', { name: /^Retry/ })
+    expect(retry).toHaveLength(1)
+    expect(retry[0].textContent).toBe('Retry (5/7 rules)')
+    expect(retry[0].closest('[role="region"]').getAttribute('aria-label')).toBe('Unapplied changes')
     const filled = container.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)')
-    expect([...filled]).toEqual([apply[0]])
+    expect([...filled]).toEqual([retry[0]])
+    await autoApplied()
+    expect(onAction).toHaveBeenCalledTimes(1)
+    fireEvent.click(retry[0])
+    await answered()
+    expect(onAction).toHaveBeenCalledTimes(2)
+  })
+
+  // A change that takes a hook with it still asks; a no puts the switch back where the install
+  // is, rather than leaving a change staged that nothing will apply.
+  it('a declined confirm reverts the switch and sends nothing', async () => {
+    askConfirm.mockClear()
+    askConfirm.mockResolvedValueOnce(false)
+    const onAction = vi.fn()
+    const { container } = render(withInstall(onAction))
+    await settled(container)
+    fireEvent.click(sw(container, 'Consent Before Push'))
+    await autoApplied()
+    expect(askConfirm).toHaveBeenCalledTimes(1)
+    expect(onAction).not.toHaveBeenCalled()
+    expect(sw(container, 'Consent Before Push').getAttribute('aria-checked')).toBe('true')
   })
 
   // The pack bars were aria-hidden spans, telling a reader nothing. Each is now an image whose
@@ -547,7 +593,7 @@ describe('Constitution page — doctrine toggles', () => {
     // The usual tri-state rule: a pack with every rule on turns all off (so the pack drops out
     // of --doctrines); a pack with some or none on turns every rule on (so no exclusion
     // survives inside it). A partial pack therefore goes ON first, never off. Nothing is sent
-    // until Apply.
+    // until the switches settle, and then once.
     const onAction = vi.fn()
     const { container } = render(withInstall(onAction))
     await settled(container)
@@ -561,14 +607,14 @@ describe('Constitution page — doctrine toggles', () => {
     fireEvent.click(container.querySelector('[aria-label="Ops pack"]')) // none -> all on
     expect(sw(container, 'Tool Discovery').getAttribute('aria-checked')).toBe('true')
     expect(onAction).not.toHaveBeenCalled()
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
+    expect(onAction).toHaveBeenCalledTimes(1)
     expect(onAction.mock.calls[0][1].doctrines).toEqual(['craft', 'ops'])
     expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
     vi.restoreAllMocks()
   })
 
-  it('stages every toggle and rebuilds ONCE on Apply', async () => {
+  it('stages a burst of toggles and rebuilds ONCE when they settle', async () => {
     // ⚠ THE WHOLE POINT. Acting per click would re-emit the install once per switch — each
     // rebuild describing a state nobody asked for, each writing a different marker pair.
     const onAction = vi.fn()
@@ -577,8 +623,7 @@ describe('Constitution page — doctrine toggles', () => {
     fireEvent.click(sw(container, 'Documentation in Step')) // off -> on
     fireEvent.click(sw(container, 'English Configuration')) // on  -> off
     expect(onAction).not.toHaveBeenCalled() // still nothing — this is the claim
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     expect(onAction).toHaveBeenCalledTimes(1)
     const [action, body] = onAction.mock.calls[0]
     expect(action).toBe('install')
@@ -605,8 +650,7 @@ describe('Constitution page — doctrine toggles', () => {
     const { container } = render(withInstall(onAction))
     await waitFor(() => expect(sw(container, 'Codes That Persist')).toBeTruthy())
     fireEvent.click(sw(container, 'Codes That Persist'))
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     const body = onAction.mock.calls[0][1]
     expect(body.doctrines).toContain('process')
     expect(body.excludeRules).toEqual(['craft.3', 'process.7'])
@@ -622,8 +666,7 @@ describe('Constitution page — doctrine toggles', () => {
     await settled(container)
     fireEvent.click(sw(container, 'Automate Repetition'))
     fireEvent.click(sw(container, 'English Configuration')) // craft.3 is already off
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     const body = onAction.mock.calls[0][1]
     expect(body.doctrines).toEqual(['process'])
     expect(body.excludeRules).toEqual([])
@@ -644,8 +687,7 @@ describe('Constitution page — doctrine toggles', () => {
     ]) {
       fireEvent.click(sw(container, name))
     }
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     expect(onAction.mock.calls[0][1].doctrines).toEqual([])
     expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
     vi.restoreAllMocks()
@@ -671,14 +713,13 @@ describe('Constitution page — doctrine toggles', () => {
     const { container } = render(withInstall(onAction))
     await waitFor(() => expect(sw(container, 'Codes That Persist')).toBeTruthy())
     fireEvent.click(sw(container, 'Codes That Persist'))
-    fireEvent.click(applyBtn())
-    await answered()
-    expect(confirm.mock.calls[0][0]).not.toMatch(/consent/) // a sibling rule costs no gate
+    await autoApplied()
+    expect(confirm).not.toHaveBeenCalled() // a sibling rule costs no gate, so nothing is asked
     fireEvent.click(sw(container, 'Consent Before Push'))
-    fireEvent.click(applyBtn())
-    await answered()
-    expect(confirm.mock.calls[1][0]).toMatch(/process 5/)
-    expect(confirm.mock.calls[1][0]).toMatch(/consent/)
+    await autoApplied()
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm.mock.calls[0][0]).toMatch(/process 5/)
+    expect(confirm.mock.calls[0][0]).toMatch(/consent/)
     expect(onAction).toHaveBeenCalledTimes(2)
     vi.restoreAllMocks()
   })
@@ -1110,8 +1151,8 @@ describe('Constitution page — the Ownership row and its gate', () => {
 const lawRow = (c, addr) => c.querySelector(`[data-addr="${addr}"]`)
 
 // Doctrine rigor 5 holds two switches that must not be confused, one per column: Rule text keeps
-// the rule's text (it stages), Hook gate keeps the hook (it rebuilds at once). Owner rule 2026-11:
-// excluding the text switches the gate off in the same Apply, and including it again offers,
+// the rule's text (it applies once the switches settle), Hook gate keeps the hook (it rebuilds at
+// once). Owner rule 2026-11: excluding the text switches the gate off in the same rebuild, and including it again offers,
 // checked by default, to re-arm the gate. The hooked rules with no switch show a locked cell.
 describe('Constitution page — the External Gate switch', () => {
   const RIGOR5 = {
@@ -1161,6 +1202,7 @@ describe('Constitution page — the External Gate switch', () => {
     await settled(container)
     fireEvent.click(sw(container, 'External Gate'))
     expect(onAction).not.toHaveBeenCalled()
+    fireEvent.click(sw(container, 'External Gate')) // back: nothing left to apply
     fireEvent.click(hookSw(container))
     await waitFor(() => expect(onAction).toHaveBeenCalled())
     expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, externalGate: false }]])
@@ -1173,10 +1215,9 @@ describe('Constitution page — the External Gate switch', () => {
     await waitFor(() => expect(hookSw(container)).toBeTruthy())
     await settled(container)
     fireEvent.click(sw(container, 'External Gate'))
-    // Staged off with the gate armed: Apply turns the gate off too, so no "still asks" note.
+    // Staged off with the gate armed: the rebuild turns the gate off too, so no "still asks" note.
     expect(note(container, 'rigor.5')).toBeNull()
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     expect(askConfirm.mock.calls[0][0]).toMatch(
       /Excluding External Gate also switches the external gate off: its text goes, and its hook stops asking/,
     )
@@ -1203,8 +1244,7 @@ describe('Constitution page — the External Gate switch', () => {
     await waitFor(() => expect(hookSw(container)).toBeTruthy())
     await settled(container)
     fireEvent.click(sw(container, 'External Gate'))
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     expect(askConfirm.mock.calls[0][1].check).toEqual({
       label: 'Also turn the external gate back on',
       checked: true,
@@ -1222,8 +1262,7 @@ describe('Constitution page — the External Gate switch', () => {
     await waitFor(() => expect(hookSw(container)).toBeTruthy())
     await settled(container)
     fireEvent.click(sw(container, 'External Gate'))
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     expect(onAction).toHaveBeenCalledTimes(1)
     expect(onAction.mock.calls[0][1].externalGate).toBe(false)
     expect(onAction.mock.calls[0][1].doctrines).toContain('rigor')
@@ -1309,8 +1348,7 @@ describe('Constitution page — the External Gate switch', () => {
     expect(note(container, 'ops.2')).toBeNull()
     fireEvent.click(sw(container, 'Commands Must Return'))
     expect(note(container, 'ops.2')).toBeNull()
-    fireEvent.click(applyBtn())
-    await answered()
+    await autoApplied()
     expect(askConfirm.mock.calls[0][0]).toMatch(
       /Excluding Commands Must Return also drops its hook: it stops asking on every host\./,
     )
@@ -1614,7 +1652,7 @@ describe('Constitution page — themed tier nouns', () => {
 // ---------------------------------------------------------------------------------------------
 // The V6b layout (the "precedence ladder" mockup): the two narrowing toggles beside the tier
 // tabs, folding packs, the asks count on a gated row, the rung state pills, ranks 5 and 6, and
-// the bar that holds every staged change with its Review / Revert / Apply.
+// the bar that holds every change a failed rebuild left staged, with its Review / Revert / Retry.
 
 describe('Constitution page — the ladder layout', () => {
   // Gated: a hook enforces the row now. In the fixture that is laws I and III, process.5 and the
@@ -1637,20 +1675,22 @@ describe('Constitution page — the ladder layout', () => {
   })
 
   // Changed: a doctrine rule whose staged switch differs from the install. Nothing is staged at
-  // first; switching craft.3 on stages exactly one.
+  // first; switching craft.3 on stages exactly one. The default `onAction` returns no job id,
+  // i.e. a refused rebuild, which is what leaves the change staged and brings the bar up.
   it('narrows to the staged changes, which the bar lists and reviews', async () => {
     const { container } = render(withInstall())
     await settled(container)
     expect(screen.getByRole('button', { name: 'Changed 0' })).toBeTruthy()
     expect(screen.queryByRole('region', { name: 'Unapplied changes' })).toBeNull()
     fireEvent.click(sw(container, 'Documentation in Step'))
+    await autoApplied()
     // Hide the staged row three ways; Review must lift all three.
     fireEvent.click(screen.getByRole('button', { name: 'Craft' }))
     fireEvent.click(screen.getByRole('button', { name: /^Dictates/ }))
     fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'Sealed' } })
     expect(container.querySelector('[data-addr="craft.3"]')).toBeNull()
     const bar = screen.getByRole('region', { name: 'Unapplied changes' })
-    expect(bar.querySelector('.law-bar-n').textContent).toBe('1 unapplied change')
+    expect(bar.querySelector('.law-bar-n').textContent).toBe('Rebuild failed · 1 unapplied change')
     expect([...bar.querySelectorAll('.badge')].map((b) => b.textContent)).toEqual([
       '+ craft 3 Documentation in Step',
     ])
@@ -1668,6 +1708,7 @@ describe('Constitution page — the ladder layout', () => {
     const { container } = render(withInstall())
     await settled(container)
     fireEvent.click(sw(container, 'English Configuration'))
+    await autoApplied()
     expect(sw(container, 'English Configuration').getAttribute('aria-checked')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }))
     expect(sw(container, 'English Configuration').getAttribute('aria-checked')).toBe('true')

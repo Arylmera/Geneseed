@@ -1,11 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useConfirm } from './useConfirm.jsx'
 import { sortedKey, useStaging } from './useStaging.jsx'
 import { installTag } from '../lib/hosts.js'
 import { ALWAYS_ASKS, GATE_SWITCH, WITH_TEXT } from '../lib/constitution.js'
 
+// How long the switches must stay still before the selection rebuilds the install on its own.
+export const AUTO_APPLY_MS = 700
+
 // The Constitution's doctrine selection: which rules the switches have STAGED, against what the
-// deployed install carries, and the one Apply that rebuilds with the whole set. `items` is the
+// deployed install carries, and the rebuild that applies the whole set on its own once the
+// switches settle. `items` is the
 // catalog's `laws` payload (empty while loading), `packs` the page's doctrine rows grouped by
 // pack. Called before the page's early returns — it holds state, so the number of hooks must
 // not differ between the loading render and the loaded one.
@@ -36,15 +40,25 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
     if (loaded) prune('rules', (k, e) => k === key && e.base !== base)
   }, [loaded, key, base, prune])
   const entry = store.get('rules', key)
-  const picked = entry && entry.base === base ? entry.value : deployedRules
-  const setPicked = (next) => store.put('rules', key, next(picked), base)
+  const live = entry && entry.base === base ? entry : null
+  const picked = live ? live.value : deployedRules
+  // Applied but not yet refetched counts as running, as on the kit switches. While it runs the
+  // switches are locked: a change made now would be staged against the old base and dropped the
+  // moment the rebuild lands, and the job's `finish` would mark it applied without sending it.
+  const running = store.running('rules', key) || !!live?.applied
+  const failed = !!live?.failed
+  const setPicked = (next) => {
+    if (!running) store.put('rules', key, next(picked), base)
+  }
   const isOn = (addr) => picked.includes(addr)
 
-  // ---- the pack selection: STAGED here, applied once -------------------------------------
+  // ---- the pack selection: STAGED here, applied on its own -------------------------------
   //
-  // ⚠ ONE REBUILD, NOT ONE PER TOGGLE. A selection is a SET: acting on each click would
-  // re-emit the install once per switch, each rebuild describing a state nobody asked for.
-  // So the switches edit local state and `Apply` sends the whole selection.
+  // ⚠ APPLIED AUTOMATICALLY, BUT ONCE PER BURST (owner decision, 2026-11: no Apply button to
+  // click). A selection is a SET: rebuilding on each click would re-emit the install once per
+  // switch, each rebuild describing a state nobody asked for — a pack switch alone flips up to
+  // seven rules. So a click still only stages; the rebuild starts once the switches have been
+  // still for AUTO_APPLY_MS, and sends the whole selection.
   const toggleRule = (addr) =>
     setPicked((cur) => (cur.includes(addr) ? cur.filter((a) => a !== addr) : [...cur, addr]))
   // A pack is on when any of its rules is. Its switch is tri-state: with every rule on it turns
@@ -74,8 +88,9 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
   // ⚠ TWO AXES OUT OF ONE SELECTION. The user only ever touches rules; the request carries
   // both `doctrines` (the packs with at least one rule left) and `excludeRules` (the rules
   // dropped from the packs that survive).
+  const sending = useRef(false)
   const applyPacks = async () => {
-    if (!canApply || !dirty) return
+    if (!canApply || !dirty || running || sending.current) return
     const keptPacks = packs.filter((p) => p.rules.some((r) => isOn(r.addr))).map((p) => p.pack)
     const excludeRules = packs
       .filter((p) => keptPacks.includes(p.pack))
@@ -135,25 +150,61 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
           checked: true,
         }
       : undefined
-    const ok = await confirm(
-      `Rebuild ${installTag(install)} with ${what}? ` +
-        `It rebuilds in place, non-destructive.${warn}${both}`,
-      { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild', check },
-    )
-    if (!ok) return
-    // `ok.checked` is the re-arm box; a plain `true` (no box shown, or a stub) keeps its default.
-    const gates = { ...gateOff }
-    if (ok?.checked !== false) for (const g of reArm) gates[g.key] = true
-    // runAction resolves to the job id, or undefined when the server refused it.
-    const job = await onAction('install', {
-      ...install,
-      doctrines: keptPacks,
-      excludeRules,
-      ...gates,
-    })
-    if (job) store.startApply('rules', key)
+    // ⚠ ASKED ONLY WHEN THE CHANGE COSTS MORE THAN ITS TEXT. A plain rule goes straight to the
+    // rebuild; one that takes a gate or a hook with it (or offers to re-arm one) still asks, and
+    // a no puts the switches back where the install is, rather than leaving a change staged
+    // that nothing will apply.
+    sending.current = true
+    try {
+      let ok = true
+      if (warn || lines.length || check) {
+        ok = await confirm(
+          `Rebuild ${installTag(install)} with ${what}? ` +
+            `It rebuilds in place, non-destructive.${warn}${both}`,
+          { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild', check },
+        )
+      }
+      if (!ok) {
+        store.drop('rules', key)
+        return
+      }
+      // `ok.checked` is the re-arm box; a plain `true` (no box shown, or a stub) keeps its default.
+      const gates = { ...gateOff }
+      if (ok?.checked !== false) for (const g of reArm) gates[g.key] = true
+      // runAction resolves to the job id, or undefined when the server refused it.
+      const job = await onAction('install', {
+        ...install,
+        doctrines: keptPacks,
+        excludeRules,
+        ...gates,
+      })
+      if (job) store.startApply('rules', key)
+      else store.fail('rules', key)
+    } finally {
+      sending.current = false
+    }
   }
-  const revert = () => store.drop('rules', key)
+  const revert = () => {
+    if (!running) store.drop('rules', key)
+  }
+
+  // The automatic apply. It waits for the switches to settle, for any job this console started
+  // (the server runs one at a time and would answer a second with a 409), and never re-sends a
+  // value already handed to a job or one that failed: a failure stays on screen with Retry.
+  // The timer calls the latest render's applyPacks, refreshed after every commit.
+  const apply = useRef(applyPacks)
+  useEffect(() => {
+    apply.current = applyPacks
+  })
+  const pickedKey = pickedRules.join(',')
+  const pending = Boolean(
+    canApply && dirty && live && !live.sent && !running && !failed && !store.busy,
+  )
+  useEffect(() => {
+    if (!pending) return undefined
+    const t = setTimeout(() => apply.current(), AUTO_APPLY_MS)
+    return () => clearTimeout(t)
+  }, [pending, pickedKey])
 
   return {
     deployedRules,
@@ -165,6 +216,10 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
     allRules,
     pickedRules,
     dirty,
+    pending,
+    running,
+    failed,
+    busy: store.busy,
     losingConsent,
     applyPacks,
     revert,
