@@ -40,7 +40,7 @@ In [foreman mode](foreman-mode.md) the session hands each task that would block 
 
 ### Model tiers
 
-Each agent source names a tier on a line of its own, `<!-- tier: strong|light -->`; an unmarked agent is `standard`. `strong` is the judgement seats (`reviewer`, `security`, `architect`, `performance`), `light` is the read-only seats (`explorer`, `researcher` and the ten council debaters), and the rest are `standard`. The line never reaches an install.
+Each agent source names a tier on a line of its own, `<!-- tier: strong|light -->`; an unmarked agent is `standard`. `strong` is the judgement seats (`reviewer`, `security`, `architect`, `performance`, and the kit seats `react-reviewer`, `spring-reviewer`, `spring-security`), `light` is the read-only seats (`explorer`, `researcher` and the ten council debaters), and the rest are `standard`. The line never reaches an install.
 
 By default nothing changes: every agent runs on your session model. A build with `--tiers auto` (recorded in the install, kept by `rebuild-all`) makes a **Claude Code** install write `model: sonnet` for `standard` agents and `model: haiku` for `light` ones; `strong` agents write no line and inherit. OpenClaude and Bob inherit, and OpenCode records the choice and still inherits (its resolver is not built yet).
 

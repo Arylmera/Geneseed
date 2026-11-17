@@ -6,6 +6,7 @@
 
 Spring Security 7 audit only. The generic audit (injection, secrets, dependencies beyond Spring) belongs to [security](security.md); defer to it.
 
+<!-- tier: strong -->
 ## When to dispatch
 - A Spring change touches authentication, authorization, CORS, CSRF, headers, TLS or secrets handling.
 

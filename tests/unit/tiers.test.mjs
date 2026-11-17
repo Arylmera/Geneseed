@@ -2,7 +2,8 @@
 //
 // Written out, not recorded. The rules this file holds:
 //   1. An agent source names its tier on a line of its own, `<!-- tier: strong|light -->`; no
-//      line is `standard`. The seat table below is the spec's. The line is stripped from every
+//      line is `standard`. The seat table below is the spec's, plus the kit judgement seats (react-reviewer,
+//      spring-reviewer, spring-security: strong, user decision Q9). The line is stripped from every
 //      output, and stripping it leaves the text a build rendered before the marker existed.
 //   2. The model of a Claude Code agent follows one precedence, highest first: the user's pin
 //      (`agents.<name>.model`) > the `tiers` map > the tier's default alias > inherit (no line).
@@ -80,6 +81,15 @@ test('the seats are the spec table: four strong, twelve light, every other agent
   assert.deepEqual(items.filter((i) => i.tier === 'strong').map((i) => path.basename(i.rel, '.md')).sort(), STRONG);
   assert.deepEqual(items.filter((i) => i.tier === 'light').map((i) => path.basename(i.rel, '.md')).sort(), LIGHT);
   for (const name of ['developer', 'tester', 'docs', 'memory-curator']) assert.equal(tierOf(name), 'standard', name);
+});
+
+test('the kit seats react-reviewer, spring-reviewer and spring-security are strong, like the core judgement seats', () => {
+  // Only rendered with their kits on, so the default table above does not see them.
+  const items = renderAll(makeCfg({ kits: ['react', 'spring-boot'] }), 'neutral').items;
+  const tier = (n) => items.find((i) => i.rel === `agents/${n}.md`)?.tier;
+  for (const n of ['react-reviewer', 'spring-reviewer', 'spring-security']) assert.equal(tier(n), 'strong', n);
+  // And the other kit agents stay standard.
+  for (const n of ['react-engineer', 'spring-boot-engineer']) assert.equal(tier(n), 'standard', n);
 });
 
 test('no rendered agent carries the tier line', () => {
