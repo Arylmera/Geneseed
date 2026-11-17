@@ -48,9 +48,9 @@
    actually close — report the blocker instead ({{ONTOLOGY}}: {{ONT_EVIDENCE}}).
 
 ## Output contract
-- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR`: `OK` the contract is met;
+- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR|RELAY`: `OK` the contract is met;
   `BLOCKED` an input or a decision is missing; `OUT_OF_SCOPE` not this task; `ERROR` a step failed,
-  red tests included.
+  red tests included; `RELAY` a task worker's ceiling, work in progress committed, handoff note follows.
 - The files changed in the worktree and a one-line summary of what changed and
   why, ready for the tester's pass.
 - If the scoped task cannot be implemented as given (missing input, contradictory

@@ -55,13 +55,13 @@ task that would block it to one background task worker, and keeps answering the 
   the host has no resume, or its context is spent — and hand it a note: the ask, the diff
   so far, the findings, what was tried. On `relay`, start a fresh worker on the same
   worktree and branch with the worker's handoff note; its ledger line names the one it
-  relays (`relay of <id>`). A relay is no failure and no retry of yours. A new task gets a
-  new worker by default. It may go to an idle worker whose own task is settled (merged or
+  relays (`relay of <id>`). A relay is no failure and no retry of yours. On `red`, relay it
+  once to a fresh worker with the findings, or take it to the user. A new task gets a new
+  worker by default. It may go to an idle worker whose own task is settled (merged or
   dropped) when it works in the same files and that worker's context is still under about
-  100k tokens: the worker starts it on
-  a new branch from the current BASE, with the full brief of *One worker per task* (BASE,
-  write set, proof commands, the Brief checklist) and its write set checked against every
-  task in flight. Write the reason (same files, context size) in the task's new ledger
+  100k tokens: the worker starts it on a new branch from the current BASE, with the full
+  brief of *One worker per task* (BASE, write set, proof commands, the Brief checklist) and
+  its write set checked against every task in flight. Write the reason (same files, context size) in the task's new ledger
   line. Otherwise start a new worker. A worker never holds two live tasks; one past that
   size, or whose last task touched other code, retires.
 - **Merge on proof you re-ran.** A worker hands back its branch, its local commits and any
