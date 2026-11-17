@@ -19,6 +19,10 @@
    repo has no discernible convention, default to **Conventional Commits**:
    `type(scope): subject` (`feat`, `fix`, `docs`, `refactor`, `test`, `chore`…),
    with a `!` before the colon or a `BREAKING CHANGE:` footer for a breaking change.
+   **Pass the message as data the commit gate can read:** one quoted `-m '…'` for a
+   subject alone; for a body, under bash, `git commit -F - <<'EOF'` … `EOF` with the
+   delimiter quoted. Never `-m "$(cat <<'EOF' … EOF)"`: the gate cannot see inside a `$(`,
+   so it asks even on your own branch.
 5. **Commit on your own branch; never on the main branch ({{DOCTRINE:consent-before-push}}).**
    On your own branch, commit without asking once steps 1–4 hold. The main branch
    (`main`, `master`, the remote's default, and from a linked worktree the main checkout's branch) takes no direct
