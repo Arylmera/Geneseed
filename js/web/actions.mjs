@@ -27,7 +27,7 @@
  */
 import { spawn } from 'node:child_process';
 import {
-  copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync,
+  copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -662,6 +662,13 @@ export function apiRestore(state, files) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-restore-'));
   try {
     const expected = resolvePath(path.join(tmp, 'expected'));
+    // The user's own overrides (pins and the tiers map), seeded before the emit that reads them
+    // (`diff.mjs` `renderExpected`): or a restore writes the default model over a chosen one.
+    try {
+      const own = readFileSync(path.join(target, 'agent-overrides.json'));
+      mkdirSync(expected, { recursive: true });
+      writeFileSync(path.join(expected, 'agent-overrides.json'), own);
+    } catch { /* none: the emit seeds its stub */ }
     withStdoutSwallowed(() => emitGlobalInto(globalEmitHostFor(state.emit), {
       theme: state.theme,
       out: path.join(tmp, 'bundle'),
@@ -687,6 +694,8 @@ export function apiRestore(state, files) {
       kits: kitsOfDir(target),
       sharedTier: sharedTierOfDir(target),
       contextWindow: contextWindowOfDir(target),
+      // The tier routing, or a restored AGENT.md drops its `Model tiers: auto` line and the agents their model lines.
+      tiers: tiersOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));

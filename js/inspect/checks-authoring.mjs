@@ -13,7 +13,7 @@
  * `node --check` over every OpenCode plugin. See `doctor.mjs` for what that allow-list costs.
  */
 import path from 'node:path';
-import { PLUGIN_SRC, SRC } from '../build/source.mjs';
+import { PLUGIN_SRC, SRC, TIER_MARKER_RE } from '../build/source.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
@@ -147,6 +147,26 @@ export function factoryProblems(opts = {}) {
  * registry describes exactly what `src/` provides, no credential ships, and every vendored
  * folder carries an immutable upstream pin.
  */
+/**
+ * The tier marker's shape in one agent spec, or '' when it holds. The build strips the whole line
+ * (`splitTier`), and that leaves the pre-marker text byte for byte only because the marker sits on
+ * a line of its own DIRECTLY ABOVE `## When to dispatch`; one anywhere else, twice, or naming a
+ * tier that does not exist would ship as live text or move a heading.
+ */
+export function tierMarkerProblem(text) {
+  const lines = text.split(/\r?\n/);
+  const at = lines.map((l, i) => (/^\s*<!--\s*tier:/.test(l) ? i : -1)).filter((i) => i >= 0);
+  if (!at.length) return '';
+  if (at.length > 1) return 'has more than one tier marker';
+  if (!TIER_MARKER_RE.test(`${lines[at[0]]}\n`)) {
+    return `the tier marker '${lines[at[0]].trim()}' is not '<!-- tier: strong|light -->' on a line of its own`;
+  }
+  if (lines[at[0] + 1] !== '## When to dispatch') {
+    return "the tier marker is not directly above '## When to dispatch' (the line the build strips must leave the text unchanged)";
+  }
+  return '';
+}
+
 export function authoringProblems() {
   const problems = [];
   for (const folder of ['agents', 'skills']) {
@@ -158,6 +178,8 @@ export function authoringProblems() {
         problems.push(`[authoring] ${folder}/${path.basename(spec)} unreadable: ${e.message}`);
         continue;
       }
+      const tierWhy = folder === 'agents' ? tierMarkerProblem(text) : '';
+      if (tierWhy) problems.push(`[authoring] agents/${path.basename(spec)}: ${tierWhy}`);
       if (!firstBlockquote(text)) {
         problems.push(`[authoring] ${folder}/${path.basename(spec)} has no '>' purpose line `
           + '(its OpenCode description would render empty)');

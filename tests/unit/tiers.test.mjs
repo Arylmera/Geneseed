@@ -32,7 +32,11 @@ import { claudeConfigDir } from '../../js/hosts/hosts.mjs';
 import { tiersOfDir } from '../../js/hosts/installs.mjs';
 import { claudeTierModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { tierEnvNotes } from '../../js/inspect/checks-build.mjs';
+import { tierMarkerProblem } from '../../js/inspect/checks-authoring.mjs';
 import { statusData } from '../../js/inspect/status.mjs';
+import { diffCollect } from '../../js/inspect/diff.mjs';
+import { apiRestore } from '../../js/web/actions.mjs';
+import { emitInto, webState } from '../helpers/web_api_fixture.mjs';
 import { installedDefaults } from '../../js/hosts/installs.mjs';
 import {
   loadProfile, profileBuildArgs, profileDiff, profileFromInstall, profileProblems,
@@ -174,10 +178,47 @@ test('defaults with an empty map: standard sonnet, light haiku, strong none', ()
   assert.deepEqual(STRONG.map((a) => modelOf(dir, a)), [null, null, null, null]);
 });
 
-test('tiers off or absent: every agent file is the one an emit without the option writes', () => {
+test('with the option off an agent is its pre-marker text: the strip removes the marker line and nothing else', () => {
+  // THE REAL SOURCES, not a null-against-undefined comparison. Byte identity with a build from before
+  // the marker existed holds iff (1) stripping leaves each spec equal to the spec minus that one line,
+  // and (2) that line sat on a blank-bounded boundary, directly above the heading, so no blank line
+  // is lost or doubled. A marked spec is checked line by line; an unmarked one must come back as is.
+  const dir = path.join(makeCfg().src, 'agents');
+  let marked = 0;
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.md') && !n.startsWith('_'))) {
+    const raw = fs.readFileSync(path.join(dir, f), 'utf8');
+    const lines = raw.split('\n');
+    const at = lines.findIndex((l) => /^<!-- tier: (strong|light) -->$/.test(l));
+    const { text, tier } = splitTier(raw);
+    if (at < 0) {
+      assert.equal(text, raw, `${f}: an unmarked spec changed`);
+      assert.equal(tier, 'standard', f);
+      continue;
+    }
+    marked += 1;
+    assert.equal(text, lines.filter((_, i) => i !== at).join('\n'), `${f}: the strip removed more than the marker line`);
+    assert.equal(lines[at - 1], '', `${f}: the marker must follow a blank line`);
+    assert.equal(lines[at + 1], '## When to dispatch', `${f}: the marker must sit directly above the heading`);
+    assert.doesNotMatch(text, /<!--\s*tier:/, f);
+  }
+  assert.equal(marked, STRONG.length + LIGHT.length + 3, 'the marked seats are the spec table plus the three kit seats');
+});
+
+test('a tier marker anywhere but directly above "## When to dispatch" fails the authoring check', () => {
+  const ok = '# a\n\n> d\n\n<!-- tier: light -->\n## When to dispatch\n- x\n';
+  assert.equal(tierMarkerProblem(ok), '');
+  assert.equal(tierMarkerProblem('# a\n\n> d\n\n## When to dispatch\n- x\n'), '', 'no marker: nothing to check');
+  for (const [why, text, re] of [
+    ['a blank line between marker and heading', ok.replace('-->\n', '-->\n\n'), /directly above/],
+    ['inside the body', ok.replace('- x', '<!-- tier: light -->\n- x'), /more than one/],
+    ['an unknown tier', ok.replace('light', 'heavy'), /not '<!-- tier: strong\|light -->'/],
+    ['trailing text on the line', ok.replace('-->\n', '--> note\n'), /not '<!-- tier/],
+    ['twice', ok.replace('<!-- tier: light -->', '<!-- tier: light -->\n<!-- tier: light -->'), /more than one/],
+  ]) assert.match(tierMarkerProblem(text), re, why);
+});
+
+test('tiers off: no agent of a build carries a model line', () => {
   const base = emit({}, {}).dir;
-  const off = emit({}, { tiers: null }).dir;
-  for (const f of fs.readdirSync(base)) assert.equal(read(off, f), read(base, f), f);
   assert.deepEqual(fs.readdirSync(base).filter((f) => /^model: /m.test(read(base, f))), []);
 });
 
@@ -317,21 +358,47 @@ test('--reset returns an install to off', () => {
 
 // ---- 7. the doctor ---------------------------------------------------------------------------------
 
+// Earlier tests leave project installs in the sandboxed registry, and `installTargets` walks them too, so each
+// assertion below reads the notes of ONE install: the global one by its prefix, a project by its folder.
+const GLOBAL_NOTE = /\[tiers\] claude: /;
+const BEDROCK_ENV = { CLAUDE_CODE_USE_BEDROCK: '1' };
+
 test('the doctor names the alias variable an installed --tiers auto build is missing', () => {
   const dir = claudeConfigDir();
   try {
     withEnv(NO_CLOUD, () => assert.equal(build('--emit', 'claude-global', '--theme', 'neutral', '--tiers', 'auto').value, 0));
     assert.deepEqual(tierEnvNotes({}), [], 'a plain Anthropic environment is clean');
-    const notes = tierEnvNotes({ CLAUDE_CODE_USE_BEDROCK: '1' });
+    const notes = tierEnvNotes(BEDROCK_ENV).filter((n) => GLOBAL_NOTE.test(n));
     assert.equal(notes.length, 2, notes.join('\n'));
     assert.match(notes[0], /\[tiers\] claude: --tiers auto: CLAUDE_CODE_USE_BEDROCK is set but ANTHROPIC_DEFAULT_SONNET_MODEL is not/);
     assert.match(notes[1], /ANTHROPIC_DEFAULT_HAIKU_MODEL/);
-    assert.deepEqual(tierEnvNotes({ CLAUDE_CODE_USE_BEDROCK: '1', ANTHROPIC_DEFAULT_SONNET_MODEL: 's',
+    assert.deepEqual(tierEnvNotes({ ...BEDROCK_ENV, ANTHROPIC_DEFAULT_SONNET_MODEL: 's',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'h' }), []);
     // An install built with tiers off has nothing to report.
     assert.equal(withEnv(NO_CLOUD, () => build('--emit', 'claude-global', '--theme', 'neutral', '--reset')).value, 0);
-    assert.deepEqual(tierEnvNotes({ CLAUDE_CODE_USE_BEDROCK: '1' }), []);
+    assert.deepEqual(tierEnvNotes(BEDROCK_ENV).filter((n) => GLOBAL_NOTE.test(n)), []);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the doctor covers a project Claude install too, and skips a tier whose agents are all pinned', () => {
+  const d = sandbox('gst-doc-proj-');
+  withEnv(NO_CLOUD, () => assert.equal(build('--emit', 'claude', '--out', d, '--theme', 'neutral', '--tiers', 'auto').value, 0));
+  const mine = (env) => tierEnvNotes(env).filter((n) => n.includes(`(project ${d})`));
+  assert.deepEqual(mine({}), []);
+  const both = mine(BEDROCK_ENV);
+  assert.equal(both.length, 2, both.join('\n'));
+  assert.match(both[0], /standard tier's 'sonnet' alias/);
+  assert.match(both[1], /light tier's 'haiku' alias/);
+  // Pin every standard agent (the project's overrides live in `.claude/`): no alias is in play for that tier.
+  const pins = Object.fromEntries(['developer', 'tester', 'docs', 'memory-curator'].map((a) => [a, { model: 'opus' }]));
+  fs.writeFileSync(path.join(d, '.claude', 'agent-overrides.json'), JSON.stringify({ agents: pins }));
+  const light = mine(BEDROCK_ENV);
+  assert.equal(light.length, 1, light.join('\n'));
+  assert.match(light[0], /light tier/);
+  // One standard agent unpinned: the tier is back.
+  delete pins.docs;
+  fs.writeFileSync(path.join(d, '.claude', 'agent-overrides.json'), JSON.stringify({ agents: pins }));
+  assert.equal(mine(BEDROCK_ENV).length, 2);
 });
 
 // ---- 8. the settings that carry it forward ----------------------------------------------------------
@@ -387,3 +454,47 @@ test('status shows the routing, and the wizard walk reads it off an installed ma
     assert.equal(row.tiers, 'auto');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ---- 9. diff and restore render what the install is --------------------------------------------------
+// `expected` is rendered into a temp config dir. It must carry the install's tier routing (the carrier
+// line and the model lines) AND the user's own `agent-overrides.json` (the tiers map and the pins), or
+// the diff reports every one of them as drift and a restore writes the default over a chosen model.
+
+test('diff reports no drift for a --tiers auto install with a tiers map and a pin, and restore keeps them', () => {
+  const cfg = sandbox('gst-diff-');
+  fs.writeFileSync(path.join(cfg, 'agent-overrides.json'),
+    JSON.stringify({ agents: { skeptic: { model: 'opus' } }, tiers: { light: 'claude-haiku-4-5' } }));
+  withEnv(NO_CLOUD, () => assert.equal(build('--emit', 'claude-global', '--theme', 'neutral', '--config-dir', cfg,
+    '--tiers', 'auto').value, 0));
+  const agents = path.join(cfg, 'agents');
+  assert.equal(modelOf(agents, 'explorer'), 'claude-haiku-4-5', 'the fixture did not route through the map');
+  assert.equal(modelOf(agents, 'skeptic'), 'opus');
+  const drift = () => diffCollect({ target: cfg }).files.map((f) => f.rel).filter((r) => r !== 'agent-overrides.json');
+  assert.deepEqual(drift(), [], 'a map-driven or pinned model line was reported as drift');
+  // A real edit is still found, and restoring it keeps the routing: the models the map and the pin chose.
+  const explorer = path.join(agents, 'explorer.md');
+  fs.writeFileSync(explorer, `${read(explorer)}\nLOCAL EDIT\n`);
+  assert.deepEqual(drift(), ['agents/explorer.md']);
+  const st = webState('neutral', cfg);
+  st.selectView(cfg, null, 'claude-global');
+  const res = apiRestore(st, ['agents/explorer.md']);
+  assert.deepEqual(res.errors, []);
+  assert.doesNotMatch(read(explorer), /LOCAL EDIT/);
+  assert.equal(modelOf(agents, 'explorer'), 'claude-haiku-4-5', 'a restore wrote the default model over the map\'s');
+  assert.deepEqual(drift(), []);
+});
+
+test('restore keeps the carrier\'s routing line (an OpenCode install built --tiers auto)', () => {
+  const sb = makeSandbox();
+  try {
+    const cfg = emitInto(path.join(sb.path, 'cfg'), { extra: ['--tiers', 'auto'] });
+    const agent = path.join(cfg, 'AGENT.md');
+    assert.match(read(agent), /^Model tiers: auto$/m, 'the fixture did not record the routing');
+    fs.writeFileSync(agent, `${read(agent)}\nLOCAL EDIT\n`);
+    const res = apiRestore(webState('neutral', cfg), ['AGENT.md']);
+    assert.deepEqual(res.errors, []);
+    assert.doesNotMatch(read(agent), /LOCAL EDIT/);
+    assert.match(read(agent), /^Model tiers: auto$/m, 'a restore rendered expected with the routing off');
+  } finally { sb.cleanup(); }
+});
+

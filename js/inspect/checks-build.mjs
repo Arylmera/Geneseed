@@ -11,8 +11,10 @@ import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, CREDIT_RE, DESCRIPTION_LIMIT, makeCfg } from '../build/source.mjs';
 import { CLAUDE_STYLE, HOSTS, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
-import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, renderedTier, themeFiles, tiersOfDir } from '../hosts/installs.mjs';
-import { claudeTierModel, isVendoredPath, loadTierMap } from '../hosts/native.mjs';
+import {
+  EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, readMaybe, renderedTier, themeFiles, tiersOfDir,
+} from '../hosts/installs.mjs';
+import { claudeTierModel, isVendoredPath, loadAgentOverrides, loadTierMap } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
@@ -230,25 +232,39 @@ export function renderedPathNotes() {
 }
 
 /**
- * Each global Claude Code install built `--tiers auto` whose tier alias cannot resolve in this
- * process's environment (spec D11, revised): a Bedrock or Vertex provider with no
+ * Each Claude Code install, global or project, built `--tiers auto` whose tier alias cannot
+ * resolve in this process's environment (spec D11, revised): a Bedrock or Vertex provider with no
  * `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`. The build wrote the alias anyway, and Claude Code resolves it
  * to its built-in model id, which may not exist in the user's cloud project; this names the
- * variable to pin. A NOTE, not a problem: nothing is known to be broken. `env` is a parameter so
- * a test plants the provider without touching the real one.
+ * variable to pin. A tier is skipped when every agent of it carries its own `agents.<name>.model`
+ * pin, since no alias is then in play. A NOTE, not a problem: nothing is known to be broken.
+ * `env` is a parameter so a test plants the provider without touching the real one.
+ *
+ * Which installs: `installTargets()` (the cwd, the registered project roots and every host's
+ * global dir), each read at its own overrides dir: the config dir itself for a global install,
+ * `<root>/.claude` for a project one (where the emit read the map from).
  */
 export function tierEnvNotes(env = process.env) {
   const notes = [];
-  for (const { host, configDir } of HOSTS) {
-    if (host !== 'claude') continue;
-    let dir;
-    try { dir = configDir(); } catch { continue; }
-    if (readMaybe(path.join(dir, '.geneseed-emit'))?.trim() !== 'claude-global') continue;
-    if (tiersOfDir(dir, host) !== 'auto') continue;
+  let agents = null;   // the agent stems of each tier, rendered once, only when an install needs it
+  for (const [host, scope, root] of installTargets()) {
+    if (host !== 'claude' || installState(root, host, scope) !== 'active') continue;
+    if (tiersOfDir(root, host) !== 'auto') continue;
+    const dir = scope === 'global' ? root : path.join(root, '.claude');
     const map = loadTierMap(dir, () => {});
+    const pins = loadAgentOverrides(dir);
+    if (agents === null) {
+      agents = { standard: [], light: [] };
+      for (const { rel, tier = 'standard' } of renderAll(makeCfg(), 'neutral').items) {
+        const m = /^agents\/([^_/][^/]*)\.md$/.exec(rel);
+        if (m && agents[tier]) agents[tier].push(m[1]);
+      }
+    }
     for (const tier of ['standard', 'light']) {
+      if (agents[tier].every((stem) => Object.hasOwn(pins, stem) && pins[stem]?.model)) continue;
       const { warning } = claudeTierModel(tier, map, env);
-      if (warning) notes.push(`${NOTE}[tiers] ${host}: ${warning}`);
+      const where = scope === 'global' ? host : `${host} (project ${root})`;
+      if (warning) notes.push(`${NOTE}[tiers] ${where}: ${warning}`);
     }
   }
   return notes;

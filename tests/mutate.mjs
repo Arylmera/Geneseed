@@ -705,6 +705,20 @@ export const MUTATIONS = [
       + 'background with no edit re-blocks for ever, one full suite run per cycle. The `nextBlock` '
       + 'ceiling rows and the relaunch sequence require the eleventh Stop to end the turn.',
   },
+  {
+    id: 'M45',
+    name: "a tier's model outranks the user's own pin",
+    file: 'js/hosts/native.mjs',
+    find: "  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);\n"
+      + '  else if (tierModel) fm.push(`model: ${formatValue(tierModel)}`);',
+    replace: '  if (tierModel) fm.push(`model: ${formatValue(tierModel)}`);\n'
+      + '  else if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);',
+    gate: ['--test', 'tests/unit/tiers.test.mjs'],
+    why: 'THE PRECEDENCE IS THE DECISION (spec D5, B4): the user\'s `agents.<name>.model` beats the tier, '
+      + 'a stronger model included. Flipped, `--tiers auto` silently overrides a model the user chose, '
+      + 'on every light and standard seat, and every other check still passes because each emit is '
+      + 'well-formed either way. The precedence table and the map-and-pin build row require the pin.',
+  },
 ];
 
 function run(argv) {
