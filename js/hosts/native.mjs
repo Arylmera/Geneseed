@@ -408,10 +408,12 @@ const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
  * cannot name tools it has never seen, so a read-only agent in a session with such a server can
  * still write through it, until this becomes an allowlist (`tools:`).
  */
-function claudeAgentFrontmatter(stem, text, overrides) {
+function claudeAgentFrontmatter(stem, text, overrides, tierModel = null) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
   const ov = agentOverride(overrides, stem);
+  // Precedence, highest first (spec D5): the user's pin, then the tier's model, then inherit.
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
+  else if (tierModel) fm.push(`model: ${formatValue(tierModel)}`);
   if (isReadonly(text)) {
     const list = ['Write', 'Edit', 'NotebookEdit', 'Agent', 'Task'];
     if (!text.includes(WEBFETCH_MARKER)) list.push('WebFetch');
@@ -516,6 +518,90 @@ export function loadAgentOverrides(base) {
     }
   }
   return agents;
+}
+
+/**
+ * What Claude Code's own aliases are called on a cloud provider: `sonnet` is only a model there
+ * once `ANTHROPIC_DEFAULT_SONNET_MODEL` says which one (Bedrock and Vertex have no default).
+ */
+const CLAUDE_ALIAS_ENV = Object.freeze({
+  opus: 'ANTHROPIC_DEFAULT_OPUS_MODEL', sonnet: 'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  haiku: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+});
+/** The model each non-strong tier gets on Claude Code when `tiers.<tier>` names none (spec D2). */
+export const CLAUDE_TIER_DEFAULTS = Object.freeze({ standard: 'sonnet', light: 'haiku' });
+/** The tier-map keys that take a model; `strong` is the parent's model and takes none (D9). */
+const TIER_MAP_KEYS = ['standard', 'light'];
+
+/** An env switch the way Claude Code reads it: set, and not spelled off. */
+function envOn(env, name) {
+  const v = String(env[name] ?? '').trim().toLowerCase();
+  return v !== '' && v !== '0' && v !== 'false';
+}
+
+/**
+ * The model a tier gets on Claude Code, or null (inherit) — pure, so the table in
+ * `tests/unit/tiers.test.mjs` states every row. `map` is the user's `tiers` map
+ * (`loadTierMap`), `env` the environment.
+ *
+ * - `strong` never gets a line: it IS the parent's model.
+ * - A tier the map does not name gets the alias default (`CLAUDE_TIER_DEFAULTS`); a tier the map
+ *   names with an empty value is the user choosing inherit.
+ * - D11 (revised 2026-11-17): the alias is ALWAYS written. On Bedrock or Vertex without
+ *   `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`, Claude Code resolves it to its built-in model id (seen on
+ *   2.1.326, Vertex: `haiku` -> claude-haiku-4-5@20251001, and the sub-agent runs), which may not
+ *   exist in the user's cloud project. So `model` is unchanged and `warning` carries the advice to
+ *   pin it; the doctor prints it (`tierEnvNotes`), the build says nothing. Only the three aliases
+ *   are checked: any other value is a model id the user wrote and owns.
+ */
+export function claudeTierModel(tier, map = {}, env = {}) {
+  if (!TIER_MAP_KEYS.includes(tier)) return { model: null, warning: null };
+  const named = Object.hasOwn(map, tier);
+  const value = named ? map[tier] : CLAUDE_TIER_DEFAULTS[tier];
+  if (!isTruthy(value)) return { model: null, warning: null };
+  const alias = String(value).trim().toLowerCase();
+  const cloud = ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX'].find((n) => envOn(env, n));
+  const need = Object.hasOwn(CLAUDE_ALIAS_ENV, alias) ? CLAUDE_ALIAS_ENV[alias] : null;
+  const warning = cloud && need && !String(env[need] ?? '').trim()
+    ? `--tiers auto: ${cloud} is set but ${need} is not, so the ${tier} tier's '${alias}' alias `
+      + `resolves to Claude Code's built-in model id, which may not exist in your cloud project — `
+      + `pin it: set ${need}`
+    : null;
+  return { model: String(value), warning };
+}
+
+/**
+ * The user's `tiers` map from `agent-overrides.json` (spec D9): `{ "standard": "<model>",
+ * "light": "<model>" }`. `strong` takes no value and is dropped with a notice, as is any other
+ * key; a value that would break the frontmatter is dropped like an `agents.*` one
+ * (`overrideProblem`). Missing or malformed file: `{}`, every tier on its default.
+ */
+export function loadTierMap(base, report = warn) {
+  const file = path.join(base, 'agent-overrides.json');
+  let data;
+  try {
+    data = parseJson(readText(file));
+  } catch {
+    return {};
+  }
+  const tiers = isDict(data) ? data.tiers : null;
+  if (!isDict(tiers)) return {};
+  const out = {};
+  for (const [key, value] of Object.entries(tiers)) {
+    if (!TIER_MAP_KEYS.includes(key)) {
+      report(`[geneseed] WARN: ${file}: tiers.${key} is not a tier that takes a model `
+        + `(${TIER_MAP_KEYS.join(', ')}; strong is the parent's model) — skipped`);
+      continue;
+    }
+    if (value === null || value === undefined) continue;
+    const why = overrideProblem(value);
+    if (why) {
+      report(`[geneseed] WARN: ${file}: tiers.${key} ${why} — skipped`);
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 /**
@@ -690,10 +776,15 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   // choice. The caller (`emit-claude.mjs`) routes the suppressed names through
   // `writeAliasCommands(..., alsoUserOnly: true)` into `.bob/commands/*.md` instead (O2).
   bobDialect = false,
+  // `--tiers auto` on Claude Code: `{ map, env }` (`loadTierMap`, the build env), else null — no tier line.
+  tiers = null,
 } = {}) {
   const ov = overrides || {};
   if (bobDialect) warnBobIgnored(ov);
   else if (host === 'claude') warnClaudeIgnored(ov);
+  // D11: the build never withholds the alias; the doctor warns about a cloud provider (`tierEnvNotes`).
+  const tierModelOf = (tier) => (!tiers || host !== 'claude' || bobDialect ? null
+    : claudeTierModel(tier, tiers.map, tiers.env).model);
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
@@ -707,7 +798,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     written.push(dest);
   };
 
-  for (const { text, src: source, rel, licenceOf } of items) {
+  for (const { text, src: source, rel, licenceOf, tier = 'standard' } of items) {
     // A credited skill's upstream licence: copied verbatim beside its SKILL.md, held like a side
     // file until that claim holds. Routed by `licenceOf`, since `source` is the upstream's file.
     if (licenceOf) {
@@ -772,7 +863,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let userOnly = false;
     if (folder === 'agents') {
       if (bobDialect) fm = bobAgentFrontmatter(stem, text);
-      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, ov);
+      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, ov, tierModelOf(tier));
       else fm = opencodeAgentFrontmatter(stem, text, ov, theme);
       dest = path.join(agentsDir, `${stem}.md`);
       kind = 'agent';

@@ -19,6 +19,11 @@ import {
 import { cellEnv, makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { isDoctorNote } from '../../js/inspect/scan.mjs';
 
+// A saved profile of a default install holds every key BUT `tiers`: that key is written only when the
+// install routes by tier (`profileFromInstall`), because an absent `tiers` means "this profile does not
+// set it" and keeps the install's own value on apply, while a written `off` would force it.
+const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'tiers');
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** A Personal dir that does not exist: the loader then lists no Personal profile. */
@@ -253,7 +258,7 @@ test('save writes the keys in order, refuses an existing file without force, and
     const r = saveProfile('team', p, { dir: sb.path });
     assert.equal(r.ok, true);
     const text = fs.readFileSync(path.join(sb.path, 'team.json'), 'utf8');
-    assert.deepEqual(Object.keys(JSON.parse(text)), PROFILE_KEYS);
+    assert.deepEqual(Object.keys(JSON.parse(text)), SAVED_KEYS);
     assert.ok(text.endsWith('}\n'));
     assert.equal(loadProfile('team', only(sb.path)).ok, true);
     const again = saveProfile('team', { ...p, theme: 'neutral' }, { dir: sb.path });
@@ -361,7 +366,7 @@ test('profile save writes a personal profile by default, a shipped one only from
     assert.equal(save({ name: 'team', from: 'claude-global' }).rc, 1);
     assert.equal(save({ name: 'team', from: 'claude-global', force: true }).rc, 0);
     // D29: nothing personal can reach it — the keys are the build settings and nothing else.
-    assert.deepEqual(Object.keys(saved), PROFILE_KEYS);
+    assert.deepEqual(Object.keys(saved), SAVED_KEYS);
 
     // D36: a Personal save under a Shipped name is refused, --force included, and writes nothing.
     const clash = save({ name: 'starter', from: 'claude-global', force: true });

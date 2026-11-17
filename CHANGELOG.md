@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-agent model tiers on Claude Code, opt-in with `--tiers auto`.** Each agent carries a tier: *strong* (review, security, architecture, performance) runs on the session's own model, *standard* (the default) on `sonnet`, *light* (explorer, researcher, the council seats) on `haiku`. A `tiers` map in `agent-overrides.json` names other models, and a per-agent pin still wins. The setting is recorded with the install and kept by every rebuild: rebuild-all, upgrade, profile apply, the wizard, console deploy and restore. Off by default, and with it off every agent file is unchanged. OpenCode, OpenClaude and Bob still inherit for now. On Bedrock or Vertex, the doctor says to pin `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
+
 ### Changed
 
 - **Foreman workers spend fewer tokens.** A task worker runs the targeted test file while it iterates, sends the output to a file and reads only the count line and the failing test names, and waits for a background run's notice instead of polling it. Its loop bound is now countable: after the 3rd run in a row that leaves the same test red, it returns `STATUS: ERROR`. At about 150k tokens of context, or after about 20 proof runs, it commits its work in progress and returns `STATUS: RELAY` with a handoff note, and the session hands the task off to a fresh worker on the same branch. A task gets at most 2 hand-offs; then it goes to the user. An idle worker takes a new task only when it works in the same files and its context is under about 100k tokens. Text only; reaches an install on its next emit.

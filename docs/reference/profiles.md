@@ -89,6 +89,7 @@ A gate that is off in the global install runs nowhere, so the line does not name
 | `excludeSkills` | no | A list of skill names, as `geneseed build --exclude-skills` |
 | `kits` | no | A list of the kits in `src/kits/` |
 | `sharedTier` | no | `true` lets a **project** install read the machine-wide shared tier (`geneseed build --shared-tier on`). A global apply ignores it, because a global install owns the tier |
+| `tiers` | no | `"auto"` or `"off"`, as `geneseed build --tiers`: route sub-agents to cheaper models by tier ([Model tiers](../concepts/agents.md#model-tiers)). Absent means "not set by this profile": applying it keeps the install's own routing, and `off` on a new install. No shipped profile sets it. |
 | `contextWindow` | no | `"200k"` (the default) or `"1m"`, as `geneseed build --context-window`: the model context the install is built for. On Claude Code it sets the skill-listing budget ([Skills](../concepts/skills.md#the-listing-budget-on-claude-code)); other hosts record it and write nothing |
 | `gates` | no | An object that maps a gate switch to `false` to turn it off. Each key is a gate flag of `geneseed build --help` (`deletionGate: false` is `--no-deletion-gate`); a wrong key's refusal lists them all. `ownBranchPass: false` is `--strict-consent`, which adds asks |
 | `login` | no | `true` (default) lets `setup --profile` set the console to start at login and start it; `false` does neither, for a server or a CI machine. `profile apply` ignores it |

@@ -252,6 +252,21 @@
         },
         {
           "names": [
+            "--tiers"
+          ],
+          "dest": "tiers",
+          "metavar": null,
+          "help": "route sub-agents to a cheaper model by tier: auto|off (default: off). With auto, a Claude Code install writes model: sonnet for standard agents and model: haiku for light ones (read-only seats); strong agents inherit your session model. A per-agent pin in agent-overrides.json wins, and its tiers map renames the two models. Other hosts record it and write nothing yet",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--out"
           ],
           "dest": "out",

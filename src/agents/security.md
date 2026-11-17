@@ -2,6 +2,7 @@
 
 > {{DESC_SECURITY}}
 
+<!-- tier: strong -->
 ## When to dispatch
 - A change touches authentication, authorization, input handling, file/network
   I/O, secrets, cryptography, or dependencies.

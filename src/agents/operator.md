@@ -2,6 +2,7 @@
 
 > {{DESC_OPERATOR}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a voice for running it in production.
 - The motion ships to a live system: its behaviour under load, its observability, and the on-call burden all matter.

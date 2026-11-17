@@ -2,6 +2,7 @@
 
 > {{DESC_PRAGMATIST}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a judgement of whether the motion is worth its cost.
 - The user wants the real cost, effort, and complexity of a change surfaced against its payoff.

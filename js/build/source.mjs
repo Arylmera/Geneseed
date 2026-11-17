@@ -528,6 +528,31 @@ export function specLinks(src = SRC) {
  * its target (`resolveSkillNames`); the doctor keeps the namespace clean (`aliasProblems`).
  */
 export const ALIASES_RE = /^<!--[ \t]*aliases:[ \t]*(.+?)[ \t]*-->[ \t]*\r?$/m;
+
+/**
+ * `--tiers auto|off`: the sub-agent model tiers (spec `2026-11-17-subagent-model-tiers.md`).
+ * An agent source names its tier on a line of its own, `<!-- tier: strong|light -->`; no marker
+ * is `standard`, the default. `strong` runs on the parent's model, `light` on a cheaper one,
+ * and what each tier means on a host is that host's emit (Claude: `claudeTierModel`).
+ *
+ * THE LINE IS STRIPPED FROM EVERY OUTPUT, WHOLE (`splitTier`): it sits directly above
+ * `## When to dispatch`, so removing the line leaves the text a build rendered before the marker
+ * existed, byte for byte. Anchored to a whole line, so a spec that merely QUOTES the syntax in
+ * prose or a code span declares nothing.
+ */
+export const TIER_MARKER_RE = /^[ \t]*<!--[ \t]*tier:[ \t]*(strong|light)[ \t]*-->[ \t]*\r?\n/m;
+/** The tiers a marker may name; an unmarked agent is `standard`. */
+export const MARKED_TIERS = Object.freeze(['strong', 'light']);
+export const TIERS_CHOICES = Object.freeze(['auto', 'off']);
+export const DEFAULT_TIERS = 'off';
+/** The carrier marker, written only when the value is not the default (the kits line's contract). */
+export const TIERS_MARKER = 'Model tiers';
+/** `{ text, tier }`: the spec without its tier line, and the tier it named (`standard` when none). */
+export function splitTier(text) {
+  const m = TIER_MARKER_RE.exec(text);
+  return m ? { text: text.slice(0, m.index) + text.slice(m.index + m[0].length), tier: m[1] }
+    : { text, tier: 'standard' };
+}
 export function aliasesOf(text) {
   const m = ALIASES_RE.exec(text);
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
@@ -696,7 +721,7 @@ export const CONTEXT_WINDOW_MARKER = 'Context window';
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
   excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false),
-  contextWindow = DEFAULT_CONTEXT_WINDOW, pruneGates = false, force = false, ...switches
+  contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS, pruneGates = false, force = false, ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -730,6 +755,8 @@ export function makeCfg({
     sharedTier: sharedTier === true || sharedTier === 'on',
     // The context window the install is built for (`CONTEXT_WINDOWS`); anything unknown is the default.
     contextWindow: Object.hasOwn(CONTEXT_WINDOWS, contextWindow) ? contextWindow : DEFAULT_CONTEXT_WINDOW,
+    // `--tiers auto|off`: only a literal `auto` turns the tier routing on; anything else is off.
+    tiers: tiers === 'auto' ? 'auto' : DEFAULT_TIERS,
     // `--force`, for this one build: only a literal `true` forces. Never an axis of the install.
     force: force === true,
     // The gate switches (`GATE_SWITCHES`: `secretsGate`, `doneGate`, `deletionGate`), each armed

@@ -4,6 +4,7 @@
 
 {{CREDIT:superpowers:skills/requesting-code-review/code-reviewer.md}}
 
+<!-- tier: strong -->
 ## When to dispatch
 - A change is complete and about to be committed or opened as a PR.
 - The user asks for a review, second opinion, or pre-merge check.

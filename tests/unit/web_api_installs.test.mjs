@@ -215,6 +215,26 @@ test('the install command carries a picked context window, and drops a bogus one
   });
 });
 
+// `tiers` crosses it too, and an install built `--tiers auto` must survive a `--reset` rebuild whose
+// body never heard of the option: the body's own `auto`/`off` wins, anything else keeps the install's.
+test('the install command keeps the install tier routing, unless the body names one', () => {
+  withThreeInstalls(({ st, cl }) => {
+    fs.mkdirSync(cl, { recursive: true });
+    fs.writeFileSync(path.join(cl, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    fs.writeFileSync(path.join(cl, '.geneseed-emit'), 'claude-global');
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nModel tiers: auto\n');
+    try {
+      const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+      const at = (a) => a.slice(a.indexOf('--tiers'), a.indexOf('--tiers') + 2);
+      assert.deepEqual(at(argv({})), ['--tiers', 'auto'], 'a body with no tiers dropped the routing');
+      assert.deepEqual(at(argv({ tiers: 'auto' })), ['--tiers', 'auto']);
+      assert.ok(!argv({ tiers: 'off' }).includes('--tiers'), 'an explicit off was ignored');
+      assert.deepEqual(at(argv({ tiers: '../evil' })), ['--tiers', 'auto'], 'a bogus value changed the install');
+      assert.ok(!argv({ tiers: '../evil' }).includes('../evil'));
+    } finally { fs.rmSync(cl, { recursive: true, force: true }); }
+  });
+});
+
 // The theme comes out of a request body and lands in an argv, so a bogus one must never reach
 // the command line — it falls back to the state's theme instead.
 test('the install command rejects a bogus theme and falls back', () => {

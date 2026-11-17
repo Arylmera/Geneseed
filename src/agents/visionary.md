@@ -2,6 +2,7 @@
 
 > {{DESC_VISIONARY}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs the bold, transformative version argued against incrementalism.
 - The debate risks under-reaching: the user wants the ambitious upside of a change pushed, not just the safe slice.

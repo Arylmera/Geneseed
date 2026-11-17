@@ -2,6 +2,7 @@
 
 > {{DESC_STEWARD}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a defence of the long term against short-term wins.
 - The user wants the architectural and maintenance consequences of a change weighed before committing.

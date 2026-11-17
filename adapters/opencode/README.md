@@ -361,10 +361,13 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   { "agents": { "reviewer": { "model": "anthropic/claude-haiku-4-5", "temperature": 0.1, "variant": "high", "steps": 20 } } }
   ```
   Re-emit to apply. (A future TUI screen will edit this map.) Unlisted keys are omitted,
-  so the agent inherits OpenCode's defaults. The stub also carries an inert
-  `_recommended.cheap-tier` list — the read-and-summarise seats (explorer, researcher,
-  tester, and the council bench) worth routing to a cheaper model; copy the names you
-  want into `agents`, nothing applies by itself.
+  so the agent inherits OpenCode's defaults. The agent sources carry a tier
+  (`strong`, `standard` as the default, or `light` for the read-and-summarise seats: explorer,
+  researcher and the council bench); a build with `--tiers auto` maps a tier to a model
+  through a `tiers` map beside `agents` (`{ "tiers": { "standard": "<model>", "light": "<model>" } }`),
+  and an `agents` entry always wins over its tier. Today that routing is written for Claude
+  Code only; on OpenCode the tier is recorded and every agent still inherits until its
+  resolver ships.
 - **Agent colours.** Each capability agent is emitted with a `color:` set to an OpenCode
   *named theme slot*, sourced from the active harness theme's `AGENT_COLORS` map
   (`themes/_TEMPLATE.json`; the shipped default — architect=`primary`, reviewer=`warning`,

@@ -2,6 +2,7 @@
 
 > {{DESC_EXPLORER}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A question needs sweeping many files or directories, but only the conclusion
   belongs in the main context — not the file contents.
