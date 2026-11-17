@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-agent model tiers on Claude Code, opt-in with `--tiers auto`.** Each agent carries a tier: *strong* (review, security, architecture, performance) runs on the session's own model, *standard* (the default) on `sonnet`, *light* (explorer, researcher, the council seats) on `haiku`. A `tiers` map in `agent-overrides.json` names other models, and a per-agent pin still wins. The setting is recorded with the install and kept by every rebuild: rebuild-all, upgrade, profile apply, the wizard, console deploy and restore. Off by default, and with it off every agent file is unchanged. OpenCode, OpenClaude and Bob still inherit for now. On Bedrock or Vertex, the doctor says to pin `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
+
 ### Fixed
 
 - **An excluded rule is no longer cited when the source wraps the citation list.** The render drops an excluded rule's citations from the always-on file, but it missed a list that breaks onto a new line after a comma. So with `process 2` excluded, the lean *Bound the Loop* still ended `(*Surface Failures*, *Plan Before Acting*)`. Such a list is now one group, and only the kept citations stay.
