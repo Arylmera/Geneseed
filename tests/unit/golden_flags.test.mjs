@@ -22,12 +22,14 @@ const DOC = loadMatrix();
 // 14 themes x 9 emits x 2 footprints = 252, plus 11 cells on the extra axes (posture, mode,
 // trust, doctrines), 10 on the kits axis (claude and opencode with the spring-boot kit, claude with
 // `--kits none`, claude with both kits at once, opencode with the react kit; then the superpowers
-// kit: on for claude, opencode and bob, and off for opencode and bob beside claude's `none`), and 16
+// kit: on for claude, opencode and bob, and off for opencode and bob beside claude's `none`), and 14
 // deletion cells (9 lean-to-full / theme-swap, 3 spring-boot on-to-off, then the superpowers kit
-// on-to-off and off-to-on for claude and opencode).
+// on-to-off for claude and opencode). A deletion cell must REMOVE something (`golden --deletion`
+// refuses one that does not, as a second `--idempotent`), so off-to-on has no cell here: turning the
+// kit on only adds, which `superpowers_kit.test.mjs` holds.
 test('the exported matrix is the matrix', () => {
   assert.equal(DOC.cells.length, 273);
-  assert.equal(DOC.deletion_cells.length, 16);
+  assert.equal(DOC.deletion_cells.length, 14);
 });
 
 test('a cell id is theme/emit/footprint, with the optional axes appended', () => {
@@ -94,10 +96,9 @@ test('the matrix really exercises the kits axis, and an empty kit list is spelle
     'neutral/opencode/lean/kits:none', 'neutral/opencode/lean/kits:superpowers'].sort());
   const del = DOC.deletion_cells.filter((c) => c.before?.kits?.length);
   assert.equal(del.length, 5, 'the kit on-to-off deletion cells are missing');
-  // The superpowers kit both ways, on the two hosts a plugin can replace it on.
+  // The superpowers kit going off, on the two hosts a plugin can replace it on.
   assert.deepEqual(DOC.deletion_cells.filter((c) => /superpowers-kit/.test(c.label)).map((c) => c.label).sort(),
-    ['claude/superpowers-kit-off-to-on', 'claude/superpowers-kit-on-to-off',
-      'opencode/superpowers-kit-off-to-on', 'opencode/superpowers-kit-on-to-off']);
+    ['claude/superpowers-kit-on-to-off', 'opencode/superpowers-kit-on-to-off']);
   assert.ok(del.some((c) => c.edit), 'no deletion cell edits a member before the kit goes off (R6)');
 });
 
@@ -157,7 +158,7 @@ test('--quick keeps the neutral theme only: 39 cells, which is what Windows CI r
 });
 
 test('--deletion selects the deletion matrix and nothing else', () => {
-  assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 16);
+  assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 14);
 });
 
 // TWO CORPUS TESTS STOOD HERE — one asserting every anchor cell really held verbatim text in

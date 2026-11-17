@@ -1603,38 +1603,6 @@
       "label": "opencode/superpowers-kit-on-to-off",
       "sovereign": [],
       "theme": "neutral"
-    },
-    {
-      "before": {
-        "emit": "claude",
-        "footprint": "lean",
-        "kits": [],
-        "theme": "neutral"
-      },
-      "emit": "claude",
-      "footprint": "lean",
-      "kits": [
-        "superpowers"
-      ],
-      "label": "claude/superpowers-kit-off-to-on",
-      "sovereign": [],
-      "theme": "neutral"
-    },
-    {
-      "before": {
-        "emit": "opencode",
-        "footprint": "lean",
-        "kits": [],
-        "theme": "neutral"
-      },
-      "emit": "opencode",
-      "footprint": "lean",
-      "kits": [
-        "superpowers"
-      ],
-      "label": "opencode/superpowers-kit-off-to-on",
-      "sovereign": [],
-      "theme": "neutral"
     }
   ],
   "platform": "posix"

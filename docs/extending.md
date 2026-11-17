@@ -556,7 +556,7 @@ enumerates skills would miss it. `src/kits/<kit>/` holds only `rules.md`.
 6. **Golden cells**: the matrix (`tests/helpers/matrix/emit.*.json`) carries kit on for `claude` and
    `opencode`, the kit-off baseline (`kits: []`, spelled `--kits none`), and three deletion cells
    (kit on to off). One deletion cell sets `edit` (a map of sandbox path to appended text) so a member
-   is the user's own before the kit goes off, and `sovereign` excuses it: the prune keeps it (R6). A kit with `replacedBy` also gets the off-to-on deletion cell, since turning it on writes members the off state removed, and a Bob cell for each state (no plugin there).
+   is the user's own before the kit goes off, and `sovereign` excuses it: the prune keeps it (R6). A kit with `replacedBy` also gets a Bob cell for each state (no plugin there). A deletion cell must remove something, so there is no off-to-on cell: that direction is a unit test.
 
 **What a kit costs an install** — what to weigh before adding one:
 
