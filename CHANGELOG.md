@@ -15,6 +15,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - The Shipped profiles `starter` and `corporate` set the kit on; `mentor`, `minimal` and `autonomous` choose it by detection (`kitsByDetection`, a new optional profile key). The setup wizard asks the kit question after the install mode and defaults it by detection (Bob and OpenClaude default to yes).
 - `doctor` and `status` warn when the kit and the official plugin are both on, or both off. Detection reads files only: the Claude Code and OpenCode settings, then the desktop app's own plugin state, labelled as app state; each line names the file it read.
 - The `ci-fix` brick carries its CI-specific steps in its own body, so it works with the kit off.
+- **Foreman workers spend fewer tokens.** A task worker runs the targeted test file while it iterates, sends the output to a file and reads only the count line and the failing test names, and waits for a background run's notice instead of polling it. Its loop bound is now countable: after the 3rd run in a row that leaves the same test red, it returns `STATUS: ERROR`. At about 150k tokens of context, or after about 20 proof runs, it commits its work in progress and returns `STATUS: RELAY` with a handoff note, and the session hands the task off to a fresh worker on the same branch. A task gets at most 2 hand-offs; then it goes to the user. An idle worker takes a new task only when it works in the same files and its context is under about 100k tokens. Text only; reaches an install on its next emit.
 
 ### Fixed
 
