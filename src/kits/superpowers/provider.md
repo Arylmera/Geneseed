@@ -1,4 +1,4 @@
-### Workflow provider
+{{PROVIDER_HEADING}}
 
 The `superpowers` kit is off, so the official superpowers plugin is this install's provider of the brainstorm, debug, plan, code-review and review-response {{SKILLS}}.
 

@@ -35,7 +35,7 @@ import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import {
-  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, linkTargetOf, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
+  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, WORKFLOW_PROVIDER_HEADING, kitMembers, linkTargetOf, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
 import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
@@ -299,7 +299,9 @@ function rewriteOffKitLinks(cfg, theme, rel, text) {
     for (const [kit, map] of off) {
       if (!map.has(hit.name)) continue;
       const tpl = kitsOf(cfg).get(kit).replacedBy.hosts?.[theme.PLUGIN_HOST];
-      return tpl ? `${label} (\`${tpl.replace('{name}', map.get(hit.name))}\`)` : label;
+      if (tpl) return `${label} (\`${tpl.replace('{name}', map.get(hit.name))}\`)`;
+      // A host with no plugin names no skill that cannot exist: the step in plain words (`replacedBy.plain`).
+      return kitsOf(cfg).get(kit).replacedBy.plain?.[hit.name] ?? label;
     }
     return whole;
   });
@@ -705,6 +707,7 @@ export function effectiveTheme(cfg, themeName, {
   // The host whose plugin stands in for a kit that is off (`replacedBy.hosts`): '' on a host with
   // none (Bob, OpenClaude, the plain bundle). PLUGIN_PREFIX is how that host spells a plugin skill.
   theme.PLUGIN_HOST = pluginHost;
+  theme.PROVIDER_HEADING = WORKFLOW_PROVIDER_HEADING;
   theme.PLUGIN_PREFIX = pluginHost === 'claude' ? 'superpowers:' : '';
   // Neither notes path takes `lawsPrefix`: the machine one is the tier's, and the project one is
   // the project root's `notebook/` on every host. Prefixing it once sent OpenClaude's skills to

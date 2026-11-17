@@ -29,7 +29,10 @@ function dangling(items) {
       const target = m[1].split('#')[0];
       if (!target.endsWith('.md') || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('/')) continue;
       const to = path.posix.normalize(path.posix.join(path.posix.dirname(it.rel), target));
-      if (/^(skills|agents)\//.test(to) && !rels.has(to)) out.push(`${it.rel} -> ${m[1]}`);
+      // Anywhere in the tree: a token link from `laws/` renders as `skills/x.md` beside `laws/`, which
+      // names the same file from the source root.
+      const named = /(?:^|\/)((?:skills|agents)\/[a-z0-9-]+\.md)$/.exec(to);
+      if (named && !rels.has(named[1])) out.push(`${it.rel} -> ${m[1]}`);
     }
   }
   return out.sort();
@@ -53,6 +56,8 @@ test('the checker is not vacuous: a link to a dropped member or to a ghost is fo
     // A core skill that links a member with a form the rewrite does not read (an absolute-looking
     // path inside a code span is not a link, so use a real one the resolver cannot map: a ghost).
     fs.appendFileSync(path.join(src, 'skills', 'commit.md'), '\nSee [ghost](ghost-skill.md) and [plan](plan.md).\n');
+    // A token link to a member from a law is rewritten like any other: none is left dangling with the kit off.
+    fs.appendFileSync(path.join(src, 'laws', 'universal.md'), '\nSee [plan]({{DIR_SKILLS}}/plan.md).\n');
     const off = dangling(renderAll(cfgOf(src, []), 'neutral', { pluginHost: 'claude' }).items);
     assert.deepEqual(off, ['skills/commit.md -> ghost-skill.md'], 'the ghost is found, and the rewritten [plan](plan.md) is not');
     const on = dangling(renderAll(cfgOf(src, ['superpowers']), 'neutral', { pluginHost: 'claude' }).items);

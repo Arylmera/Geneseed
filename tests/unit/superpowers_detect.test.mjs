@@ -34,6 +34,7 @@ const { SUPERPOWERS_KIT_SINCE, builtByRelease, migrateSuperpowersKit, providerWa
 const { installProfile } = await import('../../js/build/generate.mjs');
 const { claudeConfigDir } = await import('../../js/hosts/hosts.mjs');
 const { emitGlobalInto } = await import('../../js/build/driver.mjs');
+const { WORKFLOW_PROVIDER_HEADING } = await import('../../js/build/source.mjs');
 
 const write = (p, text) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); };
 const json = (o) => JSON.stringify(o);
@@ -175,7 +176,7 @@ function oldInstall(home, kits, release, legacy = true) {
   } finally { process.stdout.write = w; process.stderr.write = e; }
   // A build made before the kit knew nothing of it: no Workflow provider block, no kit line.
   const carrier = path.join(cfgDir, 'CLAUDE.md');
-  if (legacy) fs.writeFileSync(carrier, fs.readFileSync(carrier, 'utf8').replace('### Workflow provider', '### Something else').replace(/^Active kits:.*$/m, () => (kits.filter((k) => k !== 'superpowers').length ? `Active kits: ${kits.filter((k) => k !== 'superpowers').join(', ')}` : '')));
+  if (legacy) fs.writeFileSync(carrier, fs.readFileSync(carrier, 'utf8').replace(WORKFLOW_PROVIDER_HEADING, '### Something else').replace(/^Active kits:.*$/m, () => (kits.filter((k) => k !== 'superpowers').length ? `Active kits: ${kits.filter((k) => k !== 'superpowers').join(', ')}` : '')));
   const marker = path.join(cfgDir, '.geneseed-version');
   if (release === null) fs.writeFileSync(marker, 'abc123def456 (built 2026-01-01)\n');
   else fs.writeFileSync(marker, fs.readFileSync(marker, 'utf8').replace(/\[release [^\]]+\]/, `[release ${release}]`));
@@ -286,6 +287,24 @@ test('an install follows a profile that chooses the kit by detection when its ki
     excludeRules: [], excludeSkills: [], kits, sharedTier: false, contextWindow: mentor.contextWindow }), gates: {} });
   assert.equal(followsProfile(install(['superpowers']), 'global', mentor), true);
   assert.equal(followsProfile(install([]), 'global', mentor), false, 'the kit is what detection says, and it says on');
+});
+
+test('followsProfile resolves a kit chosen by detection from the PROJECT root of a project install', async () => {
+  const { followsProfile } = await import('../../js/web/profiles-api.mjs');
+  const { profileFromInstall } = await import('../../js/maintain/profiles.mjs');
+  const mentor = loadProfile('mentor').profile;
+  const install = (kits) => profileFromInstall({ host: 'claude', theme: mentor.theme, footprint: mentor.footprint,
+    posture: mentor.posture, mode: mentor.mode, trust: mentor.trust, doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'],
+    excludeRules: [], excludeSkills: [], kits, sharedTier: false, contextWindow: mentor.contextWindow });
+  await withSandbox('gs-follow-proj-', (d) => {
+    const repo = path.join(d, 'repo');
+    write(path.join(repo, '.claude', 'settings.json'), json({ enabledPlugins: { 'superpowers@m': true } }));
+    // The plugin is enabled in the repo only: apply builds it kit-off, so a kit-off install follows.
+    assert.equal(followsProfile(install([]), 'project', mentor, repo), true);
+    assert.equal(followsProfile(install(['superpowers']), 'project', mentor, repo), false);
+    // Without the root the repo's settings are not read, and the answer flips: the nit this pins.
+    assert.equal(followsProfile(install([]), 'project', mentor, null), false);
+  });
 });
 
 test('the readers that bypass installProfile read the same migrated kits (diff, the console build and restore)', async () => {

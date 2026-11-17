@@ -14,6 +14,13 @@
     "upstream": "superpowers",
     "provider": "kits/superpowers/provider.md",
     "missing": "kits/superpowers/missing.md",
+    "plain": {
+      "brainstorm": "brainstorming pass",
+      "debug": "debugging pass",
+      "plan": "written plan",
+      "geneseed-code-review": "code review",
+      "review-response": "review-feedback pass"
+    },
     "hosts": {
       "claude": "superpowers:{name}",
       "opencode": "{name}"

@@ -302,6 +302,13 @@ export function resolveCredits(text, src = SRC) {
 }
 
 /**
+ * The heading of the Workflow provider block a kit that is off leaves in the carrier (`kits/superpowers/provider.md`
+ * and `missing.md` write it through `{{PROVIDER_HEADING}}`). `kitAwareOfDir` matches it: one writer, so a rename
+ * cannot turn every post-kit install into a pre-kit one.
+ */
+export const WORKFLOW_PROVIDER_HEADING = '### Workflow provider';
+
+/**
  * `src/kits/<kit>.json`, parsed, as `Map<kit, manifest>` in sorted kit order. A manifest is
  * `{ description, skills, agents, rules, rulesWordBudget, catalogue, banned? }`, the sole writer of its
  * kit's membership; the `<kit>/` folder beside it holds the kit's `rules.md` and is not read
@@ -345,7 +352,11 @@ export function loadKits(src = SRC) {
 export function linkTargetOf(rel, target) {
   const t = target.split('#')[0].replace(/\{\{DIR_SKILLS\}\}/g, 'skills').replace(/\{\{DIR_AGENTS\}\}/g, 'agents');
   if (!t || /^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith('/')) return null;
-  const hit = /^(skills|agents)\/([a-z0-9-]+)(?:\.md|\/.*)?$/.exec(path.posix.normalize(path.posix.join(path.posix.dirname(rel), t)));
+  // A target that LEADS with the folder token names the folder from the source root, whichever folder the
+  // linking file sits in (`laws/`, `doctrines/`, the template); a relative one, `../{{DIR_AGENTS}}/x.md`, is
+  // resolved from the file.
+  const anchored = /^\{\{DIR_(SKILLS|AGENTS)\}\}\//.test(target);
+  const hit = /^(skills|agents)\/([a-z0-9-]+)(?:\.md|\/.*)?$/.exec(path.posix.normalize(anchored ? t : path.posix.join(path.posix.dirname(rel), t)));
   if (!hit) return null;
   const own = rel.split('/');
   if (own[0] === hit[1] && own[1] && own[1].replace(/\.md$/, '') === hit[2]) return null;

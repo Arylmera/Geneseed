@@ -134,7 +134,9 @@ test('kit off: a core link to a member names the plugin skill in the host\'s spe
     assert.match(opencode, /debug Skill \(`systematic-debugging`\)/);
     assert.doesNotMatch(opencode, /superpowers:/);
     const bob = read(emit(d, 'bob', [], 'b'), 'skills', 'develop', 'SKILL.md');
-    assert.match(bob, /A red baseline is a debug Skill\s+task first/);
+    // No plugin on Bob: the step in plain words, never a skill that is not installed.
+    assert.match(bob, /A red baseline is a debugging pass\s+task first/);
+    assert.doesNotMatch(bob, /debug Skill/);
     assert.doesNotMatch(bob, /systematic-debugging/);
     // Kit on: the link is the link it always was, to the member's own file.
     const on = read(emit(d, 'claude', ['superpowers'], 'c-on'), 'skills', 'develop', 'SKILL.md');

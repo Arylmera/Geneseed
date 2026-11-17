@@ -36,7 +36,7 @@ import path from 'node:path';
 
 import {
   CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, GATE_SWITCHES, PACK_ORDER,
-  RETIRED_KIT_IDS, THEMES, discoverNames, linkedSkillIds, loadKits, resolveSkillNames,
+  RETIRED_KIT_IDS, THEMES, WORKFLOW_PROVIDER_HEADING, discoverNames, linkedSkillIds, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
   CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, gateCarrierText, isHostGlobalDir,
@@ -489,7 +489,7 @@ export function kitsOfDir(d, host = null, notify = null) {
 /**
  * Was this install built by a Geneseed that knows the `superpowers` kit? Read off the carrier: such
  * a build writes either `Active kits: ... superpowers` or, with the kit off, the Workflow provider
- * block (`### Workflow provider`). An older build writes neither. The migration of an install made
+ * block (`WORKFLOW_PROVIDER_HEADING`). An older build writes neither. The migration of an install made
  * before the kit (`js/maintain/kit-migration.mjs`) reads this beside the release the marker records,
  * because a build made after the kit but before its release carries the old release number.
  * `null` when there is no Geneseed carrier to read: nothing is installed there to migrate.
@@ -502,7 +502,7 @@ export function kitAwareOfDir(d, host = null) {
     // and the emit kept): there is nothing in it to migrate, so it reads like no carrier at all.
     if (!/^Active packs:/m.test(text)) return undefined;
     const line = KITS_RE.exec(text);
-    return /^### Workflow provider\r?$/m.test(text) || (line !== null && /(^|[ ,])superpowers\b/.test(line[1]));
+    return new RegExp(`^${WORKFLOW_PROVIDER_HEADING}\\r?$`, 'm').test(text) || (line !== null && /(^|[ ,])superpowers\b/.test(line[1]));
   }, null, host);
 }
 

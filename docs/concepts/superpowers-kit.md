@@ -29,8 +29,8 @@ The five skills are not written. Every core link to one is rewritten in the one 
 | Host | A link to `debug` reads |
 |---|---|
 | Claude Code | `debug Skill (superpowers:systematic-debugging)` |
-| OpenCode V1 and V2 | `debug Skill (systematic-debugging)` (the plugin registers bare names; it needs OpenCode V2 2.0.4 or later) |
-| Bob, OpenClaude, the plain bundle | `debug Skill`, with no skill name: there is no plugin to point at |
+| OpenCode V1 and V2 | `debug Skill (systematic-debugging)` (the plugin adds its skills folder to the host's skill paths, so both versions use bare names; V2 needs 2.0.4 or later) |
+| Bob, OpenClaude, the plain bundle | `debugging pass`: the step in plain words, naming no skill, because there is no plugin to point at |
 
 On Claude Code and OpenCode the instructions file also gains a **Workflow provider** block:
 
@@ -72,3 +72,8 @@ An install built by a release before the kit has no `Active kits: superpowers` l
 ## Excluding one of the five
 
 `--exclude-skills` refuses a name that core files link to, and since the scan counts relative links, `debug`, `plan`, `brainstorm`, `geneseed-code-review` and `review-response` cannot be excluded one by one: use the kit switch.
+
+## Known gaps
+
+- Detection matches a `superpowers@<marketplace>` key. A fork under another marketplace is read as the plugin, and a plugin named by a git URL, an `obra/superpowers` spelling or a managed-settings file is missed: the failure is duplicate Rites (and no WARN), never no provider.
+- `SUPERPOWERS_KIT_SINCE` is `6.0.0`: it is right only if the release that ships the kit is 6.0.0.

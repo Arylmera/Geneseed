@@ -174,6 +174,20 @@ const ROWS = [
     manifest: { replacedBy: REPLACED },
     files: { ...PROVIDERS, 'skills/zz-core.md': '# {{SKILL}}: zz-core\n\n> core.\n\nSee [fx-skill](fx-skill.md) and [again]({{DIR_SKILLS}}/fx-skill.md).\n' },
   }, []],
+  // The exemption is exactly what the rewrite resolves: a token link from laws/ or doctrines/ is rewritten too
+  // (a token that LEADS the target names the folder from the source root), so it is clean, and a bare mention
+  // there is refused as it is in skills/.
+  ['replacedBy: a token link to the member from a law is rewritten too, so it is clean', {
+    manifest: { replacedBy: REPLACED },
+    files: { ...PROVIDERS, 'laws/zz.md': 'See [fx]({{DIR_SKILLS}}/fx-skill.md).\n' },
+  }, []],
+  ['a core law naming a replacedBy member in prose, with no link', {
+    manifest: { replacedBy: REPLACED },
+    files: { ...PROVIDERS, 'laws/zz.md': 'Run the fx-skill {{SKILL}} first.\n' },
+  }, ['[authoring] src/laws/zz.md:1 names a superpowers-kit skill without a link, so the kit-off rewrite cannot see it']],
+  ['replacedBy with no plain wording for a member', {
+    manifest: { replacedBy: { ...REPLACED, plain: {} } }, files: PROVIDERS,
+  }, ["[authoring] src/kits/fx.json: replacedBy.plain has no wording for member 'fx-skill'"]],
   ['replacedBy with no plugin skill for a member', {
     manifest: { replacedBy: { ...REPLACED, skills: {} } }, files: PROVIDERS,
   }, ["[authoring] src/kits/fx.json: replacedBy.skills has no plugin skill for member 'fx-skill'"]],

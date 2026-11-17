@@ -5,9 +5,9 @@ effect: mutate
 skill: debug
 outcomes: pass, fail
 ---
-Load the debug skill for the general procedure; where this install has no debug skill (the
-superpowers kit is off), load the superpowers plugin's systematic-debugging skill instead. The
-CI-specific steps are here, so they hold either way. Work against the failing check the card names:
+The steps below stand alone. If a debug skill is installed, or the superpowers plugin's
+systematic-debugging skill, load it for the general procedure; if neither is, carry on without.
+Work against the failing check the card names:
 
 1. Read its actual log, not a guess from the check's title, before changing anything. Find the
    first failing job and step, and the command that produced the error.
