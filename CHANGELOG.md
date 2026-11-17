@@ -8,12 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.5.1] — 2026-11-17
+
 ### Added
 
 - **Four more Shipped install profiles.** `mentor` (a learner: mentor posture, prudent trust, every gate armed, the ownership gate included), `corporate` (a locked-down work PC: prudent trust, `--strict-consent`, no login item), `autonomous` (a fluent user who delegates: expert posture, foreman mode, aggressive trust, 1m context, the deletion and secrets gates armed) and `minimal` (a small model or a tight token budget: assistant posture, the `craft` and `rigor` packs only, eight niche skills left out). [Install profiles](docs/reference/profiles.md) gives the reason for each choice.
 
 ### Changed
 
+- **The Constitution page's doctrine switches apply on their own.** There is no Apply button to click: once the switches have been still for a moment, the install rebuilds once with the whole selection, so a burst of clicks or a pack switch is still one rebuild. A plain rule rebuilds without a dialog; a change that also removes a gate or a hook, or offers to re-arm one, still asks, and a no puts the switches back. The switches lock while their rebuild runs. A rebuild the server refuses keeps the change on screen with Retry and Revert, and is never retried on its own.
 - `geneseed export` writes the harness release as the version of every entity, skills and agents included; it no longer reads the never-bumped per-entity versions of `registry.json`.
 - `geneseed export` writes the constitution as a side package: a skill or an agent that cites a law no longer lists the `laws` entity in its `requires`, so a library can take the skills and agents without the laws. The `laws` entity itself is still exported (the profile's `laws: false` still leaves it out).
 
