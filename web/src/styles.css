@@ -632,6 +632,8 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   border-radius: 50%; background: var(--text-2); transition: transform var(--dur-3), background var(--dur-3); }
 .sw-toggle.on { background: var(--accent-soft); border-color: var(--accent-line); }
 .sw-toggle.on::after { transform: translateX(16px); background: var(--accent); }
+/* Locked while its install rebuilds (the doctrine switches apply on their own). */
+.sw-toggle:disabled { opacity: .45; cursor: default; }
 
 /* ============================ CONSOLE DRAWER ========================= */
 .console { position: fixed; left: var(--rail-w); right: 0; bottom: 0; z-index: var(--z-console);

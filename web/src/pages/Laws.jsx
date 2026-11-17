@@ -570,7 +570,10 @@ function LawsOf({
   const changes = packs.flatMap((p) =>
     p.rules.filter(isChanged).map((r) => ({ ...r, plus: isOn(r.addr) })),
   )
-  const showBar = canApply && packs.length > 0 && sel.dirty
+  // The switches apply on their own; the bar is for the one case they cannot: a rebuild that
+  // failed (or that the server refused), whose changes are still staged and need a Retry or a
+  // Revert.
+  const showBar = canApply && packs.length > 0 && sel.dirty && sel.failed
   // Review lifts whatever hides a staged row: the Dictates tab and the text filter.
   const review = () => {
     setView('changed')
@@ -898,6 +901,8 @@ function LawsOf({
                                   role="switch"
                                   aria-checked={isOn(r.addr)}
                                   aria-label={`${r.name} rule text`}
+                                  disabled={sel.running}
+                                  title={sel.running ? 'Rebuilding…' : undefined}
                                   onClick={() => toggleRule(r.addr)}
                                 />,
                                 hookCell(r),
@@ -940,12 +945,12 @@ function LawsOf({
           />
         </aside>
       </div>
-      {/* Apply is the page's one primary action, and the bar exists only while something is
-          staged: a disabled filled button on a clean page is a call to do nothing. */}
+      {/* The switches rebuild on their own. The bar exists only when that rebuild failed: Retry
+          is then the page's one primary action. */}
       {showBar && (
         <div className="law-bar" role="region" aria-label="Unapplied changes">
           <span className="law-bar-n">
-            {changes.length} unapplied change{changes.length === 1 ? '' : 's'}
+            Rebuild failed · {changes.length} unapplied change{changes.length === 1 ? '' : 's'}
           </span>
           <span className="law-bar-list">
             {changes.map((r) => (
@@ -967,8 +972,14 @@ function LawsOf({
           >
             Revert
           </button>
-          <button type="button" className="btn" onClick={sel.applyPacks}>
-            Apply ({sel.pickedRules.length}/{allRules.length} rules)
+          <button
+            type="button"
+            className="btn"
+            onClick={sel.applyPacks}
+            disabled={sel.busy}
+            title={sel.busy ? 'A job is running' : undefined}
+          >
+            Retry ({sel.pickedRules.length}/{allRules.length} rules)
           </button>
         </div>
       )}
