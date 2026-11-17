@@ -202,3 +202,18 @@ test('turning the kit off removes the five Rites and turning it on writes them b
     assert.deepEqual(skillsOf(cfg), CLAUDE_ON, 'kit on over kit off');
   });
 });
+
+test('an install whose Excluded skills line names a skill that is now linked has that exclusion dropped, with a notice', async () => {
+  // F1 made `commit`, `debug` and the like protected; replaying an older install through the flag would
+  // refuse the name and fail the whole rebuild, and re-admitting a skill is the safe direction.
+  const { excludedSkillsOfDir } = await import('../../js/hosts/installs.mjs');
+  await withSandbox('gs-sp-replay-', (d) => {
+    fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: adhd, commit, debug\n');
+    const heard = [];
+    assert.deepEqual(excludedSkillsOfDir(d, null, (n) => heard.push(n)), ['adhd']);
+    assert.deepEqual(heard, [
+      "'commit' is linked to by another skill and cannot be excluded — exclusion dropped",
+      "'debug' is linked to by another skill and cannot be excluded — exclusion dropped"]);
+    assert.deepEqual(excludedSkillsOfDir(d), ['adhd'], 'silent without a notifier');
+  });
+});
