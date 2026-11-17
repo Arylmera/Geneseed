@@ -40,7 +40,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
-  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, sharedTierOfDir,
+  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, sharedTierOfDir, tiersOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
@@ -130,11 +130,19 @@ const posixRel = (rel) => rel.split('\\').join('/');
  * is its name, which the texts still spell (`locatedAt`).
  */
 function renderExpected(host, axes) {
+  const { overridesText = null, ...renderAxes } = axes;
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-diff-'));
   try {
     const expected = path.join(tmp, 'expected');
+    // The deployed `agent-overrides.json`, seeded BEFORE the emit: the emit reads the user's per-agent
+    // pins and `tiers` map out of the config dir it writes, so a render without it states every
+    // map- or pin-driven `model:` line as drift, and a restore would write the default over it.
+    if (overridesText !== null) {
+      mkdirSync(expected, { recursive: true });
+      writeText(path.join(expected, 'agent-overrides.json'), overridesText);
+    }
     withStdoutSwallowed(() => emitGlobalInto(host, {
-      ...axes, out: path.join(tmp, 'bundle'), cfgDir: expected,
+      ...renderAxes, out: path.join(tmp, 'bundle'), cfgDir: expected,
     }));
     const texts = new Map();
     for (const p of rglobFiles(expected)) texts.set(relPosix(expected, p), readText(p));
@@ -270,6 +278,11 @@ export function diffCollect({
     sharedTier: sharedTierOfDir(dir, host),
     // The context window, or a `1m` install reads its `Context window: 1m` line as drift.
     contextWindow: contextWindowOfDir(dir, host),
+    // The tier routing, or an install built `--tiers auto` reads its `Model tiers: auto` line and every tiered agent as drift.
+    tiers: tiersOfDir(dir, host),
+    // The user's own overrides file (pins and the tiers map): a render input like every axis above, so it is
+    // part of the memo key, and `null` (no file) leaves the emit to seed its stub as before.
+    overridesText: readMaybe(path.join(dir, 'agent-overrides.json')),
     // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
     ...gatesOfDir(dir, host),
     // The tier root it rendered, or an install left relative reads every file as behind source.

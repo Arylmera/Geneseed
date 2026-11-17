@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-agent model tiers on Claude Code, opt-in with `--tiers auto`.** Each agent carries a tier: *strong* (review, security, architecture, performance) runs on the session's own model, *standard* (the default) on `sonnet`, *light* (explorer, researcher, the council seats) on `haiku`. A `tiers` map in `agent-overrides.json` names other models, and a per-agent pin still wins. The setting is recorded with the install and kept by every rebuild: rebuild-all, upgrade, profile apply, the wizard, console deploy and restore. Off by default, and with it off every agent file is unchanged. OpenCode, OpenClaude and Bob still inherit for now. On Bedrock or Vertex, the doctor says to pin `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
+
 ### Changed
 
 - **BREAKING (6.0.0): five Rites are now the `superpowers` kit.** `brainstorm`, `debug`, `plan`, `geneseed-code-review` and `review-response` are Geneseed's vendored, modified copies of obra/superpowers (Jesse Vincent, MIT). They are off unless a build names the kit (`--kits superpowers`). With the kit off, core links to them point at the official plugin's skills (`superpowers:systematic-debugging` on Claude Code, the bare name on OpenCode), and the instructions file gains a Workflow provider block. `parallel-agents`, `pipeline` and the `reviewer` agent stay core. See [the superpowers kit](docs/concepts/superpowers-kit.md).

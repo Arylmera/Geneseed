@@ -24,7 +24,7 @@ import { factCount } from '../hosts/memory-files.mjs';
 import { autostartState } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installedDefaults, installState, installTargets, leftoversOf, modeOfDir,
-  trustOfDir, sharedTierOfDir, contextWindowOfDir, strandedGatesOf,
+  trustOfDir, sharedTierOfDir, contextWindowOfDir, tiersOfDir, strandedGatesOf,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -247,6 +247,8 @@ export function apiInstalls(state) {
       // The context window the install is built for (`--context-window`); it writes settings on
       // Claude Code only. A row not installed yet offers the machine's, as a new install takes it.
       contextWindow: installState(root, host, scope) === 'absent' ? machineWindow() : contextWindowOfDir(root, host),
+      // The tier routing the install was built with (`--tiers`); off for a row not installed yet.
+      tiers: installState(root, host, scope) === 'absent' ? 'off' : tiersOfDir(root, host),
       // Files here that are the user's where Geneseed ships one, and retired leftovers: what a
       // forced rebuild would replace or remove (`leftoversOf`). Read off the emit's own record.
       leftovers: leftoversOf(root, host, scope),

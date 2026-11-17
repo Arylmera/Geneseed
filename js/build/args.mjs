@@ -11,7 +11,7 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
-  CONFIG, CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, discoverNames, GATE_SWITCHES, PACK_ORDER, SRC, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits,
+  CONFIG, CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, discoverNames, GATE_SWITCHES, PACK_ORDER, SRC, TIERS_CHOICES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits,
   resolveSkillNames, retiredRuleAddresses, reusedRuleAddresses, ruleCanon, skillAliases,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
@@ -103,6 +103,7 @@ export const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
   '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules', '--exclude-skills': 'excludeSkills',
   '--kits': 'kits', '--shared-tier': 'sharedTier', '--context-window': 'contextWindow',
+  '--tiers': 'tiers',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
 };
@@ -168,6 +169,7 @@ export function choicesFor() {
     '--trust': Object.keys(PRESETS),
     '--shared-tier': ['on', 'off'],
     '--context-window': Object.keys(CONTEXT_WINDOWS),
+    '--tiers': [...TIERS_CHOICES],
   };
 }
 
@@ -377,7 +379,7 @@ export function parseArgs(argv, defaults) {
     excludeRules: defaults.excludeRules,
     excludeSkills: defaults.excludeSkills ?? [],
     kits: defaults.kits ?? [],
-    sharedTier: 'off', contextWindow: DEFAULT_CONTEXT_WINDOW,
+    sharedTier: 'off', contextWindow: DEFAULT_CONTEXT_WINDOW, tiers: DEFAULT_TIERS,
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false, pruneGates: false, force: false, reset: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),

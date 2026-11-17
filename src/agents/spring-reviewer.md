@@ -6,6 +6,7 @@
 
 Spring-specific review only. Generic correctness, naming and structure belong to [reviewer](reviewer.md); defer to it and do not repeat its checks.
 
+<!-- tier: strong -->
 ## When to dispatch
 - A change touches Spring Boot code (controllers, services, repositories, configuration, tests) and needs a framework-aware pass.
 

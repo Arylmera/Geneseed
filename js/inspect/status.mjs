@@ -512,6 +512,7 @@ export function statusLines(d, color = false, boxed = true) {
       ...(p.sharedTier ? ['shared tier: on'] : []),
       // Elided at the default, like the shared tier, so a default row prints what it did.
       ...(p.contextWindow && p.contextWindow !== DEFAULT_CONTEXT_WINDOW ? [`context window: ${p.contextWindow}`] : []),
+      ...(p.tiers && p.tiers !== 'off' ? [`model tiers: ${p.tiers}`] : []),
       // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
         .map((g) => `${g.marker.toLowerCase()}: off${g.law ? ` (Law ${g.law} text still binds)` : ''}`)]

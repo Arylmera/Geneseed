@@ -392,6 +392,10 @@ global emit and leaves the install intact*) proves a refused emit leaves the pri
    a blank line, then a `>` blockquote holding `{{DESC_<NAME>}}` — title, blockquote, nothing
    between. `doctor` checks both the presence of the purpose line and that the blockquote is the
    *first* block (`authoringProblems`, via `firstBlockquote` and `descBlockProblem`).
+   **Agents only:** decide the model tier. No marker is `standard`; a read-only, read-and-summarise
+   seat adds `<!-- tier: light -->`, and a judgement seat that must run on the session model adds
+   `<!-- tier: strong -->`, on a line of its own directly above `## When to dispatch` (the build
+   strips it; `--tiers auto` reads it). A seat that writes code is never `light`.
 2. One row in the hand-authored table in `src/AGENT.md.tmpl` (the `## 3.` table for agents, the `## 4.` one for skills).
    Gated both ways: a row with no file, and a file with no row.
 3. `DESC_<NAME>` in **all fourteen** themes. Theme parity catches a missing one; nothing catches

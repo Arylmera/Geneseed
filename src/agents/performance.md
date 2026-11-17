@@ -2,6 +2,7 @@
 
 > {{DESC_PERFORMANCE}}
 
+<!-- tier: strong -->
 ## When to dispatch
 - The user reports something slow, heavy or timing out — a latency, throughput,
   memory or startup complaint, or a regression against an earlier version.

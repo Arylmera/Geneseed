@@ -83,23 +83,13 @@ const AGENT_OVERRIDES_STUB = {
     + 'steps (max tool-iterations — a runaway-loop cap). e.g. '
     + '"reviewer": {"model": "anthropic/claude-haiku-4-5", "temperature": 0.1, '
     + '"variant": "high", "steps": 20}. '
+    + 'Tiers (build with --tiers auto): "tiers": {"standard": "<model>", "light": "<model>"} '
+    + 'names the model each tier runs on; a tier you leave out gets its host default (Claude Code: '
+    + 'sonnet and haiku; other hosts inherit), an empty value means inherit, strong is always the session model. A '
+    + 'per-agent entry in "agents" wins over its tier. '
     + 'Host-specific; git-ignored. A future TUI screen edits this — rebuild to apply.'
   ),
   agents: {},
-  // Inert: `loadAgentOverrides` reads `agents` only. This is the starting point the README
-  // used to describe in prose — the seats whose work is read-and-summarise, where a smaller
-  // model loses little and a council convenes 3–6 of them at once.
-  _recommended: {
-    _comment: (
-      'Cheap-tier seats: copy the ones you want into "agents" with your host\'s cheap '
-      + 'model id (OpenCode: "anthropic/claude-haiku-4-5"; Claude Code: "haiku"). '
-      + 'Read-and-summarise work — a council convenes several at once, so this is where '
-      + 'the savings compound. Nothing applies until you copy it.'
-    ),
-    'cheap-tier': ['explorer', 'researcher', 'tester', 'advocate', 'skeptic', 'pragmatist',
-      'steward', 'visionary', 'user-advocate', 'framer', 'empiricist', 'operator',
-      'historian'],
-  },
 };
 
 /**

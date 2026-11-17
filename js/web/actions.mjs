@@ -27,14 +27,14 @@
  */
 import { spawn } from 'node:child_process';
 import {
-  copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync,
+  copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../build/driver.mjs';
 import {
-  CONTEXT_WINDOWS, ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
+  CONTEXT_WINDOWS, ROOT, TIERS_CHOICES, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
 } from '../build/source.mjs';
 import { diffCollect, drifted, renderMemo, withStdoutSwallowed } from '../inspect/diff.mjs';
 import { SESSION_FILES } from '../hosts/hooks-context.mjs';
@@ -44,7 +44,7 @@ import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import { HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import {
-  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, sharedTierOfDir, contextWindowOfDir, renderedTier,
+  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, sharedTierOfDir, contextWindowOfDir, tiersOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installedDefaults, installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -151,6 +151,15 @@ function bodyKits(body) {
 function bodySharedTier(body, root, host) {
   const said = bget(body, 'sharedTier');
   return typeof said === 'boolean' ? said : sharedTierOfDir(root, host);
+}
+
+/**
+ * A request body's `tiers` (`--tiers`): `auto` or `off` only; anything else keeps the install's own
+ * answer, so a deploy or an apply that never heard of the option cannot turn the routing off.
+ */
+function bodyTiers(body, root, host) {
+  const said = bget(body, 'tiers');
+  return typeof said === 'string' && TIERS_CHOICES.includes(said) ? said : tiersOfDir(root, host);
 }
 
 /**
@@ -654,6 +663,13 @@ export function apiRestore(state, files) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-restore-'));
   try {
     const expected = resolvePath(path.join(tmp, 'expected'));
+    // The user's own overrides (pins and the tiers map), seeded before the emit that reads them
+    // (`diff.mjs` `renderExpected`): or a restore writes the default model over a chosen one.
+    try {
+      const own = readFileSync(path.join(target, 'agent-overrides.json'));
+      mkdirSync(expected, { recursive: true });
+      writeFileSync(path.join(expected, 'agent-overrides.json'), own);
+    } catch { /* none: the emit seeds its stub */ }
     withStdoutSwallowed(() => emitGlobalInto(globalEmitHostFor(state.emit), {
       theme: state.theme,
       out: path.join(tmp, 'bundle'),
@@ -679,6 +695,8 @@ export function apiRestore(state, files) {
       kits: migratedKitsOfDir(target),
       sharedTier: sharedTierOfDir(target),
       contextWindow: contextWindowOfDir(target),
+      // The tier routing, or a restored AGENT.md drops its `Model tiers: auto` line and the agents their model lines.
+      tiers: tiersOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));
@@ -793,7 +811,8 @@ export function apiInstallCmd(state, body) {
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
-    kits ?? migratedKitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope));
+    kits ?? migratedKitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope),
+    bodyTiers(body, root, host));
   // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
   // and `setupBuildArgs` elides an axis at its default, so returning one to it (a mode back to
   // direct, a gate re-armed) would otherwise trip the preserve guard (js/build/profile.mjs).
@@ -917,7 +936,8 @@ export function apiDeployCmd(state, body) {
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, migratedKitsOfDir(root, host),
-    bodySharedTier(body, root, host), bodyContextWindow(body, root, host, 'project'));
+    bodySharedTier(body, root, host), bodyContextWindow(body, root, host, 'project'),
+    bodyTiers(body, root, host));
   // `--reset`, as in `apiInstallCmd`: the form's answers plus the folder's own are a whole selection.
   argv.push('--reset');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };

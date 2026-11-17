@@ -93,6 +93,8 @@ const VALUED_FLAGS = [
   ['--shared-tier', 'sharedTier', 'on'],
   // The model context the install is built for: `200k`/`1m`, bound as typed.
   ['--context-window', 'contextWindow', '1m'],
+  // The sub-agent tier routing: `auto`/`off`, bound as typed (the emit compares the string).
+  ['--tiers', 'tiers', 'auto'],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],

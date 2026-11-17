@@ -141,9 +141,9 @@ test('profiles: starter and corporate set the kit on; mentor, minimal and autono
       assert.deepEqual(profileKits(p, 'claude', null, absent), ['superpowers'], `${name}, plugin not seen`);
       assert.deepEqual(profileKits(p, 'bob', null, seen), ['superpowers'], `${name} on Bob: no plugin store`);
       // The build argv carries the resolved kit, the one `--kits` flag.
-      const argv = profileBuildArgs(p, 'claude', null, absent);
+      const argv = profileBuildArgs(p, 'claude', null, null, absent);
       assert.equal(argv[argv.indexOf('--kits') + 1], 'superpowers', name);
-      assert.equal(profileBuildArgs(p, 'claude', null, seen).includes('--kits'), false, 'the plugin is seen: no kit flag');
+      assert.equal(profileBuildArgs(p, 'claude', null, null, seen).includes('--kits'), false, 'the plugin is seen: no kit flag');
     }
   });
 });

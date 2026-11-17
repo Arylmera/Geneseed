@@ -2,6 +2,7 @@
 
 > {{DESC_USER_ADVOCATE}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a voice for whoever consumes the outcome.
 - The motion touches a user-facing surface: UX, an API's ergonomics, docs, error messages, or a downstream developer's workflow.

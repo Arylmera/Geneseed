@@ -38,6 +38,14 @@ An agent is picked by **what the work needs**, not by **where the file lives**. 
 
 In [foreman mode](foreman-mode.md) the session hands each task that would block it to one background `developer` worker. A pipeline crew — explorer, developer and tester, plus whatever specialists the task needs — runs only when you ask for one.
 
+### Model tiers
+
+Each agent source names a tier on a line of its own, `<!-- tier: strong|light -->`; an unmarked agent is `standard`. `strong` is the judgement seats (`reviewer`, `security`, `architect`, `performance`, and the kit seats `react-reviewer`, `spring-reviewer`, `spring-security`), `light` is the read-only seats (`explorer`, `researcher` and the ten council debaters), and the rest are `standard`. The line never reaches an install.
+
+By default nothing changes: every agent runs on your session model. A build with `--tiers auto` (recorded in the install, kept by `rebuild-all`) makes a **Claude Code** install write `model: sonnet` for `standard` agents and `model: haiku` for `light` ones; `strong` agents write no line and inherit. OpenClaude and Bob inherit, and OpenCode records the choice and still inherits (its resolver is not built yet).
+
+Two settings of yours steer it, both in `agent-overrides.json`. A `tiers` map renames the models (`{ "tiers": { "standard": "opus", "light": "claude-haiku-4-5" } }`; an empty value means inherit), and an `agents.<name>.model` pin beats its tier, a stronger model included. The build always writes the alias. On Bedrock or Vertex, Claude Code maps an alias through `ANTHROPIC_DEFAULT_SONNET_MODEL` or `ANTHROPIC_DEFAULT_HAIKU_MODEL`; without it, it uses its built-in model id, which may not exist in your cloud project. With `CLAUDE_CODE_USE_BEDROCK` or `CLAUDE_CODE_USE_VERTEX` set and the variable missing, `geneseed doctor` tells you to pin it.
+
 ### Agents learn too
 
 When a subagent finishes, the hook copies each `spec-feedback:` line its report ends with into a notes file, with no model call. The line picks its scope with one question: is it true in any repo, or only here? A flaw of the spec is true in any repo: `[agent]` goes into the machine notes, `agent-notes/<name>.md` under `~/.config/geneseed/notes/` (a `[general]` line into `agent-notes/_general.md` there, which every agent reads). A fact true only in this repo is tagged `[agent:project]` and goes into `notebook/agent-notes/<name>.md` at the project root, one folder for every host (in a linked worktree, the main checkout's); a `[general:project]` line goes into `notebook/agent-notes/_general.md`, which every agent reads in that repo. The agent reads the machine notes and then the project notes first at its next dispatch; where they disagree, the project notes win. So a flaw it reported is in front of it until the user folds the fix into the source. See [Hooks](hooks.md). (Not on Bob, which has no subagent-finished event: there the caller copies the line into the machine or the project file.)

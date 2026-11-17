@@ -2,6 +2,7 @@
 
 > {{DESC_SKEPTIC}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a devil's advocate to attack the motion.
 - The user wants a change, plan, or claim stress-tested for how it fails before committing.

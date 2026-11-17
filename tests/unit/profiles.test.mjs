@@ -19,6 +19,13 @@ import {
 import { cellEnv, makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { isDoctorNote } from '../../js/inspect/scan.mjs';
 
+// A saved profile of a default install holds every key BUT `tiers`: that key is written only when the
+// install routes by tier (`profileFromInstall`), because an absent `tiers` means "this profile does not
+// set it" and keeps the install's own value on apply, while a written `off` would force it. Nor
+// `kitsByDetection`, which only a hand-written profile holds: an install's read-back has the kits it has,
+// never a kit "by detection".
+const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'tiers' && k !== 'kitsByDetection');
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** A Personal dir that does not exist: the loader then lists no Personal profile. */
@@ -26,12 +33,6 @@ const NO_PERSONAL = path.join(ROOT, 'tests', 'fixtures', 'no-such-personal-profi
 const SHIPPED_ONLY = { personalDir: NO_PERSONAL };
 /** Only the fixture `dir` as Shipped, no Personal. */
 const only = (dir) => ({ shippedDir: dir, personalDir: NO_PERSONAL });
-
-/**
- * The keys a profile saved from an install carries: all of them but `kitsByDetection`, which only a
- * hand-written profile holds (an install's read-back has the kits it has, never a kit "by detection").
- */
-const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'kitsByDetection');
 
 const STARTER = {
   description: 'For a first install: neutral voice, every guardrail except the ownership gate.',

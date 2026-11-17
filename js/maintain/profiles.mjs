@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from 'node:path';
 
 import {
-  CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
+  CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, TIERS_CHOICES, discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
 } from '../build/source.mjs';
 import { installProfile, setupBuildArgs } from '../build/profile.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -67,9 +67,12 @@ export const BASE_PROFILE = 'starter';
  * spec D37 (which supersedes D18 on that point): a profile has no scope, so a project-only field is
  * accepted, used by a project apply, and ignored by a global one, whose install owns the tier.
  * `contextWindow` (`--context-window`) is optional: absent is the default, `200k`.
+ * `tiers` (`--tiers`) is optional and means "the profile sets it" only when present: absent keeps the
+ * install's own recorded value (`profileBuildArgs`' `current`), `off` on a fresh install. No shipped
+ * profile turns it on.
  */
 export const PROFILE_KEYS = ['description', 'hosts', 'theme', 'footprint', 'posture', 'mode', 'trust',
-  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'kitsByDetection', 'sharedTier', 'contextWindow', 'gates', 'login'];
+  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'kitsByDetection', 'sharedTier', 'contextWindow', 'tiers', 'gates', 'login'];
 
 /** A profile name: a file stem, never a path. */
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -140,6 +143,7 @@ export function profileProblems(p) {
   choice('mode', discoverNames('modes', 'direct'));
   choice('trust', Object.keys(PRESETS));
   choice('contextWindow', Object.keys(CONTEXT_WINDOWS));
+  choice('tiers', [...TIERS_CHOICES]);
   const packs = discoverNames('doctrines', PACK_ORDER[0]);
   if (p.doctrines !== undefined && p.doctrines !== 'all') {
     if (!stringList(p.doctrines)) errs.push(`'doctrines' must be 'all' or a list of: ${list(packs)}`);
@@ -254,7 +258,7 @@ export function profileKits(p, host, project = null, detectRoots = {}) {
  * here; posture and mode elide only at the value the driver would take anyway. `--reset` last,
  * as the wizard does: a profile is a whole selection and wins over the install it lands on (D14).
  */
-export function profileBuildArgs(p, host, project = null, detectRoots = {}) {
+export function profileBuildArgs(p, host, project = null, current = null, detectRoots = {}) {
   // A stated selection, never null: `'all'` resolves to the packs, a list is the list.
   const doctrines = PACK_ORDER.filter((d) => profileDoctrines(p).includes(d));
   // PROJECT SCOPE (spec D32, D37): `--emit <host> --out <dir> --root <dir>`, and only here the
@@ -262,7 +266,10 @@ export function profileBuildArgs(p, host, project = null, detectRoots = {}) {
   const argv = setupBuildArgs(p.theme, project ? host : `${host}-global`, project, project, p.footprint,
     p.posture, p.mode, doctrines, PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [],
     p.gates ?? {}, profileKits(p, host, project, detectRoots), project ? p.sharedTier === true : false,
-    p.contextWindow ?? DEFAULT_CONTEXT_WINDOW);
+    p.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+    // The profile's own value, else the install's recorded one (`current`), else off: a profile
+    // without the key never turns a routed install back off by being applied over it.
+    p.tiers ?? current ?? DEFAULT_TIERS);
   if (!p.excludeSkills?.length) argv.push('--exclude-skills', 'none');
   argv.push('--reset');
   return argv;
@@ -294,6 +301,8 @@ export function profileFromInstall(info, description = '') {
     kits: [...(info.kits ?? [])].sort(),
     sharedTier: info.sharedTier === true,
     contextWindow: info.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+    // Written only when on, so a saved profile of a default install is what it always was.
+    ...(info.tiers && info.tiers !== DEFAULT_TIERS ? { tiers: info.tiers } : {}),
     gates,
     login: true,
   };
@@ -327,6 +336,11 @@ export function profileDiff(p, base) {
     if (key === 'sharedTier') {
       const t = (prof) => (prof.sharedTier === true ? 'on' : 'off');
       if (t(p) !== t(base)) out.push({ key, base: t(base), now: t(p) });
+      continue;
+    }
+    if (key === 'tiers') {
+      const w = (prof) => prof.tiers ?? DEFAULT_TIERS;
+      if (w(p) !== w(base)) out.push({ key, base: w(base), now: w(p) });
       continue;
     }
     if (key === 'contextWindow') {
