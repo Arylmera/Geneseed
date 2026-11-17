@@ -2842,6 +2842,11 @@ test('an excluded rule\'s citations leave the carrier, and only those', () => {
     // In a list of citations only the excluded one goes, from either end.
     ['remains (*Kept Rule*, *Off Rule*).', 'remains (*Kept Rule*).'],
     ['remains (*Off Rule*, *Kept Rule*).', 'remains (*Kept Rule*).'],
+    // A list the source wrapped after a comma is still one group: the lean text of Bound the
+    // Loop renders `(*Surface Failures*,\n*Plan Before Acting*)`. The kept items rejoin on one line.
+    ['remains (*Kept Rule*,\n*Off Rule*).', 'remains (*Kept Rule*).'],
+    ['remains (*Off Rule*,\n  *Kept Rule*).', 'remains (*Kept Rule*).'],
+    ['remains (*Off Rule*,\r\n*Off Rule*).', 'remains.'],
     // A rule name may hold a comma; it is still one citation.
     ['rendered (*Edit the Source, Not the Surface*).', 'rendered.'],
     // Untouched: a kept rule, a prose mention, a mixed group, a group with a non-rule italic.

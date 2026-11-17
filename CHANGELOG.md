@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An excluded rule is no longer cited when the source wraps the citation list.** The render drops an excluded rule's citations from the always-on file, but it missed a list that breaks onto a new line after a comma. So with `process 2` excluded, the lean *Bound the Loop* still ended `(*Surface Failures*, *Plan Before Acting*)`. Such a list is now one group, and only the kept citations stay.
+
 ## [5.6.0] — 2026-11-17
 
 ### Changed

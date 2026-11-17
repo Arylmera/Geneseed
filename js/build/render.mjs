@@ -565,9 +565,12 @@ function dropExcludedRules(text, pack, excluded) {
 /**
  * A parenthetical made of rule citations only — `(*A*)`, `(*A*, *B*)` — with the blanks before
  * it: spaces, and at most one line break, so a citation wrapped onto its own line leaves no
- * orphaned punctuation at the start of the next.
+ * orphaned punctuation at the start of the next. Between items, any blanks, line breaks
+ * included: a source wraps a long list after a comma (Bound the Loop's lean half), and a
+ * separator narrower than the doctor's `citationGroupProblems` (`[,\s]`) left that group whole,
+ * still citing the excluded rule. A name itself never wraps: it renders from a spaceless token.
  */
-const CITE_GROUP_RE = /([ \t]*(?:\r?\n[ \t]*)?)\((\*[^*()\n]+\*(?:,[ \t]*\*[^*()\n]+\*)*)\)/g;
+const CITE_GROUP_RE = /([ \t]*(?:\r?\n[ \t]*)?)\((\*[^*()\n]+\*(?:,\s*\*[^*()\n]+\*)*)\)/g;
 
 /**
  * Remove the citations of excluded rules from rendered carrier text (owner decision D3,
