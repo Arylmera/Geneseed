@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Foreman workers spend fewer tokens.** A task worker runs the targeted test file while it iterates, sends the output to a file and reads only the count line and the failing test names, and waits for a background run's notice instead of polling it. Its loop bound is now countable: after the 3rd run in a row that leaves the same test red, it returns `STATUS: ERROR`. At about 150k tokens of context, or after about 20 proof runs, it commits its work in progress and returns `STATUS: RELAY` with a handoff note, and the session hands the task off to a fresh worker on the same branch. A task gets at most 2 hand-offs; then it goes to the user. An idle worker takes a new task only when it works in the same files and its context is under about 100k tokens. Text only; reaches an install on its next emit.
+
 ### Fixed
 
 - **An excluded rule is no longer cited when the source wraps the citation list.** The render drops an excluded rule's citations from the always-on file, but it missed a list that breaks onto a new line after a comma. So with `process 2` excluded, the lean *Bound the Loop* still ended `(*Surface Failures*, *Plan Before Acting*)`. Such a list is now one group, and only the kept citations stay.

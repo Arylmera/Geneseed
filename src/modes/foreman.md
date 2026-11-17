@@ -23,8 +23,9 @@ task that would block it to one background task worker, and keeps answering the 
   proof commands, and the rule that it commits only in its own worktree, never pushes, and
   never merges outside its own branch; without a worktree, it never commits. It also covers
   the **Brief checklist** in the parallel-agents {{SKILL}}: read it before you write the brief. The worker explores, implements and tests in its own context, loading {{SKILLS}}
-  as it needs them; after two repair rounds on its own red tests it returns red with its
-  findings ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
+  as it needs them. It returns `STATUS: ERROR` when stuck and `STATUS: RELAY` when long.
+  The task-worker section of the developer spec sets both bounds
+  ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
   ({{DOCTRINE:one-writer-per-file}}).
 - **A worker may lead, inside its worktree.** It may dispatch read-only helpers (explorer,
   researcher) at any time, and writing sub-workers, each in its own worktree branched from
@@ -45,22 +46,27 @@ task that would block it to one background task worker, and keeps answering the 
   goes back to the same worker.
 - **Keep a ledger; route follow-ups to the same worker.** Keep
   `{{DIR_NOTEBOOK}}/foreman-ledger.md`, one line per live task:
-  `T3 · <task> · agent <id> · worktree <path> · <state>` (running, green, red, verifying,
-  merged, dropped). Update it on every dispatch and return; re-read it after a compaction.
+  `T3 · <task> · agent <id> · worktree <path> · <state>` (running, green, red, relay,
+  verifying, merged, dropped). Update it on every dispatch and return; re-read it after a compaction.
   A correction, follow-up or verifier finding on a task goes to that task's worker, which
   resumes with its full context: by `SendMessage` on Claude Code (on OpenClaude only in its
   agent-teams mode); on OpenCode by the `subagent` tool with that worker's `sessionID` (V1:
   `task` with `task_id`); the same call without `sessionID` (V1: `task_id`) starts a fresh
   worker. Bob has no resume. Start a new worker only when the old one cannot be resumed —
   the host has no resume, or its context is spent — and hand it a note: the ask, the diff
-  so far, the findings, what was tried. A new task gets a new worker by default. It may go
-  to an idle worker whose own task is settled (merged or dropped) when it works in the
-  same files or context and that worker's context is still light: the worker starts it on
-  a new branch from the current BASE, with the full brief of *One worker per task* (BASE,
-  write set, proof commands, the Brief checklist) and its write set checked against every
-  task in flight. Light or heavy is a judgement call, not a number: write the reason (same
-  files, context used) in the task's new ledger line. A worker never holds two live tasks;
-  one whose context is heavy, or whose last task touched other code, retires.
+  so far, the findings, what was tried. On `STATUS: RELAY` (ledger `relay`), hand the task
+  off to a fresh worker on the same worktree and branch, with the handoff note. A hand-off
+  is no failure and no retry of yours. On `STATUS: ERROR` (ledger `red`) from the first
+  worker, hand off once with the findings. A task gets at most 2 hand-offs, counted in the
+  ledger line (`relay 2 of <id>`). When it needs a 3rd, or a worker that took a hand-off
+  returns `STATUS: ERROR`, take the task to the user. A new task gets a new
+  worker by default. It may go to an idle worker whose own task is settled (merged or
+  dropped) when it works in the same files and that worker's context is still under about
+  100k tokens: the worker starts it on a new branch from the current BASE, with the full
+  brief of *One worker per task* (BASE, write set, proof commands, the Brief checklist) and
+  its write set checked against every task in flight. Write the reason (same files, context size) in the task's new ledger
+  line. Otherwise start a new worker. A worker never holds two live tasks; one past that
+  size, or whose last task touched other code, retires.
 - **Merge on proof you re-ran.** A worker hands back its branch, its local commits and any
   uncommitted work, with raw test + lint output. The parent re-runs those commands itself —
   a worker's log is the worker's account, not the state — merges the branch into its own,

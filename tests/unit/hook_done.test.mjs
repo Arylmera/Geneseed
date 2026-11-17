@@ -154,6 +154,7 @@ test('runsUnpiped: the segment rule, written out', () => {
   const rows = [
     ['npm test', 'npm test', true],
     ['npm test 2>&1', 'npm test', true],
+    ['npm test > out.log 2>&1', 'npm test', true],        // a redirect keeps the exit code: quiet proofs count
     ['npm test | tail', 'npm test', false],
     ['npm test |tail', 'npm test', false],
     ['npm test && echo ok | cat', 'npm test', true],      // the pipe is in the NEXT segment
