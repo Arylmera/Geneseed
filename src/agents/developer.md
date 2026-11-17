@@ -61,8 +61,14 @@
 ### Task worker (Foreman)
 
 Dispatched as Foreman's task worker, there is no tester seat: explore, implement and test
-in your own context, and after two repair rounds on your own red tests return red with the
-findings ({{DOCTRINE:bound-the-loop}}). As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
+in your own context. While you iterate, run the targeted test file, not the full suite; send
+its output to a file and read only the count line and the failing test names. Wait for a
+background run's completion notice; never poll it with a monitor or a sleep loop. Count
+your proof runs (one run of a check command); the bounds are starting values
+({{DOCTRINE:bound-the-loop}}). When the same test is still red after 3 proof runs, return
+`red` with the findings. At about 150k tokens of context, or after about 20 proof runs,
+relay: commit your work in progress and return `relay` with a handoff note (the red tests,
+what you tried, the next step). A relay is no failure. As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
 at start and on each change, as the mode says. Return the branch, its commit list, any
 uncommitted work, and the raw test + lint output — the parent re-runs it before any merge.
 That output is a full run to completion, with the runner's own count line, never a
