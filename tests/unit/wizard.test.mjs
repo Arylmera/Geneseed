@@ -649,11 +649,12 @@ test('the summary job produces rows and not an empty list', () => {
   // spec A3), `[]` here since this install has no kit. No `gates`: they are read off the one install being re-run, never
   // this machine-wide walk. All are present for the same reason: the wizard must not fall
   // through this walk to `cwd/Harness`. `contextWindow` has two states too: no
-  // `Context window:` line is the default, `200k`, which this install was built at.
+  // `Context window:` line is the default, `200k`, which this install was built at. `tiers` likewise: no
+  // `Model tiers:` line is `off`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [], excludeSkills: [], kits: [],
-    sharedTier: false, contextWindow: '200k',
+    sharedTier: false, contextWindow: '200k', tiers: 'off',
   });
 });
 
