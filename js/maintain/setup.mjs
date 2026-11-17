@@ -52,7 +52,7 @@ import { autostartInstall, autostartState, transientRoot } from '../hosts/shim.m
 import { loadProfile, profileBuildArgs, profileHosts } from './profiles.mjs';
 import { checkProjectFolder, globalLayering, layeringText } from './profile-scope.mjs';
 import { playLine } from '../ui/anim.mjs';
-import { DEFAULT_CONTEXT_WINDOW, discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
@@ -60,7 +60,7 @@ import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../inspec
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults, installState,
-  contextWindowOfDir, readJsonMaybe, sharedTierOfDir, themeFiles,
+  contextWindowOfDir, readJsonMaybe, sharedTierOfDir, themeFiles, tiersOfDir,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { inNpxCache, which } from '../lib/paths.mjs';
@@ -312,6 +312,22 @@ export function targetContextWindow(emit, out, machine = DEFAULT_CONTEXT_WINDOW)
   }
 }
 
+/**
+ * The tier routing of the one install a setup answer re-runs, read off it: PRESERVED, NOT ASKED (the
+ * web picker owns the question), as `targetContextWindow` does. No install, or unreadable: off.
+ */
+export function targetTiers(emit, out) {
+  const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? [];
+  try {
+    if (!host) return DEFAULT_TIERS;
+    const dir = scope === 'global'
+      ? HOSTS.find((h) => h.host === host).configDir() : resolveOut(out || '.');
+    return installState(dir, host, scope) === 'absent' ? DEFAULT_TIERS : tiersOfDir(dir, host);
+  } catch {
+    return DEFAULT_TIERS;
+  }
+}
+
 export function collectSetupLines(kitMap = null) {
   printOut('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
   const inst = installedDefaults();
@@ -359,9 +375,10 @@ export function collectSetupLines(kitMap = null) {
   const gates = targetGates(emit, out);
   const gated = Object.values(gates).some((on) => on === false);
   const contextWindow = targetContextWindow(emit, out, inst.contextWindow);
+  const tiers = targetTiers(emit, out);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills, gates, kits, sharedTier, contextWindow).join(' ')} --reset\n`);
+      excludeRules, undefined, excludeSkills, gates, kits, sharedTier, contextWindow, tiers).join(' ')} --reset\n`);
   if (!confirm('Proceed?', true)) return null;
   // The key only when there is something to carry, so a selection that excludes no skill and
   // switches off no gate is the same object it was before either existed.
@@ -369,6 +386,7 @@ export function collectSetupLines(kitMap = null) {
     theme, posture, mode, doctrines, excludeRules, ...(excludeSkills ? { excludeSkills } : {}),
     ...(gated ? { gates } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
     ...(contextWindow !== DEFAULT_CONTEXT_WINDOW ? { contextWindow } : {}),
+    ...(tiers !== DEFAULT_TIERS ? { tiers } : {}),
     emit, out, root, footprint,
   };
 }
@@ -564,7 +582,7 @@ export function setupLines() {
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
     doctrines = null, excludeRules = null, excludeSkills = null, gates = {}, kits = null,
-    sharedTier = false, contextWindow = DEFAULT_CONTEXT_WINDOW,
+    sharedTier = false, contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, which may carry hand edits (or
@@ -584,7 +602,7 @@ export function setupLines() {
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
     doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits, sharedTier,
-    contextWindow);
+    contextWindow, tiers);
   // `--reset`: the wizard's answers are a WHOLE selection, and `setupBuildArgs` elides an axis at
   // its default, so answering one back to it (mode direct, posture peer) over an install would
   // otherwise trip the preserve guard (js/build/profile.mjs). The plan line above says the same.
@@ -819,7 +837,10 @@ function foundHosts(rows) {
 export function profileBuilds(p, targets, { project = null, build, exportDrift, changes, configDir }) {
   const results = [];
   for (const t of targets) {
-    const argv = profileBuildArgs(p, t.host, project);
+    // The install's own tier routing rides along unless the profile names one (`profileBuildArgs`).
+    let current = null;
+    try { current = tiersOfDir(project ? resolveOut(project) : configDir(t.host), t.host); } catch { /* unreadable: the default */ }
+    const argv = profileBuildArgs(p, t.host, project, current);
     const moved = changes(argv);
     let saved = null;
     if (!project) {

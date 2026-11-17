@@ -872,7 +872,7 @@ export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
     excludeRules: null, excludeSkills: null, kits: null, sharedTier: false,
-    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    contextWindow: DEFAULT_CONTEXT_WINDOW, tiers: DEFAULT_TIERS,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -925,6 +925,7 @@ export function installedDefaults() {
     // Two states too: the default and no line read the same, so the first install that says
     // otherwise speaks.
     if (found.contextWindow === DEFAULT_CONTEXT_WINDOW) found.contextWindow = contextWindowOfDir(base);
+    if (found.tiers === DEFAULT_TIERS) found.tiers = tiersOfDir(base);
   }
   return found;
 }

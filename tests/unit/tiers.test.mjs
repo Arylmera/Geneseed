@@ -31,6 +31,12 @@ import { claudeConfigDir } from '../../js/hosts/hosts.mjs';
 import { tiersOfDir } from '../../js/hosts/installs.mjs';
 import { claudeTierModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { tierEnvNotes } from '../../js/inspect/checks-build.mjs';
+import { statusData } from '../../js/inspect/status.mjs';
+import { installedDefaults } from '../../js/hosts/installs.mjs';
+import {
+  loadProfile, profileBuildArgs, profileDiff, profileFromInstall, profileProblems,
+} from '../../js/maintain/profiles.mjs';
+import { targetTiers } from '../../js/maintain/setup.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // FIRST: every emit writes the hook shim and the registry into the environment's home.
@@ -315,5 +321,59 @@ test('the doctor names the alias variable an installed --tiers auto build is mis
     // An install built with tiers off has nothing to report.
     assert.equal(withEnv(NO_CLOUD, () => build('--emit', 'claude-global', '--theme', 'neutral', '--reset')).value, 0);
     assert.deepEqual(tierEnvNotes({ CLAUDE_CODE_USE_BEDROCK: '1' }), []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- 8. the settings that carry it forward ----------------------------------------------------------
+// A `--reset` rebuild is a WHOLE selection, and `setupBuildArgs` elides `off`, so a path that never
+// heard of the option would put an `auto` install back to off. Each path below reads the install's own
+// value, and only a caller who names one changes it.
+
+const STARTER = () => loadProfile('starter').profile;
+const tiersFlag = (argv) => (argv.includes('--tiers') ? argv[argv.indexOf('--tiers') + 1] : null);
+
+test('profileBuildArgs: the profile key wins, else the install value, else off; --reset stays last', () => {
+  const p = STARTER();
+  assert.equal(p.tiers, undefined, 'a shipped profile must not turn the routing on');
+  for (const [profileTiers, current, want] of [
+    [undefined, 'auto', 'auto'],   // a profile that says nothing keeps the install's routing
+    [undefined, 'off', null],
+    [undefined, null, null],       // no install yet: off
+    ['off', 'auto', null],         // a profile that names off turns it off
+    ['auto', 'off', 'auto'],       // and one that names auto turns it on
+    ['auto', null, 'auto'],
+  ]) {
+    const argv = profileBuildArgs({ ...p, ...(profileTiers ? { tiers: profileTiers } : {}) }, 'claude', null, current);
+    assert.equal(tiersFlag(argv), want, `${profileTiers} over ${current}`);
+    assert.equal(argv.at(-1), '--reset');
+  }
+});
+
+test('a profile validates its tiers key, saves it only when on, and diffs it', () => {
+  assert.deepEqual(profileProblems({ ...STARTER(), tiers: 'auto' }), []);
+  assert.deepEqual(profileProblems({ ...STARTER(), tiers: 'on' }), ["'tiers': invalid value 'on' (valid: 'auto', 'off')"]);
+  const info = { ...installProfile('claude', 'project', sandbox('gst-prof-')), tiers: 'auto' };
+  assert.equal(profileFromInstall(info).tiers, 'auto');
+  assert.ok(!('tiers' in profileFromInstall({ ...info, tiers: 'off' })));
+  assert.deepEqual(profileDiff({ ...STARTER(), tiers: 'auto' }, STARTER()).find((d) => d.key === 'tiers'),
+    { key: 'tiers', base: 'off', now: 'auto' });
+});
+
+test('the wizard keeps the target install\'s routing and asks nothing', () => {
+  const d = sandbox('gst-wiz-');
+  assert.equal(targetTiers('claude', d), 'off', 'no install: off');
+  withEnv(NO_CLOUD, () => build('--emit', 'claude', '--out', d, '--theme', 'neutral', '--tiers', 'auto'));
+  assert.equal(targetTiers('claude', d), 'auto');
+  assert.equal(targetTiers('files', d), 'off');
+});
+
+test('status shows the routing, and the wizard walk reads it off an installed machine', () => {
+  const dir = claudeConfigDir();
+  try {
+    assert.equal(installedDefaults().tiers, 'off');
+    withEnv(NO_CLOUD, () => assert.equal(build('--emit', 'claude-global', '--theme', 'neutral', '--tiers', 'auto').value, 0));
+    assert.equal(installedDefaults().tiers, 'auto');
+    const row = statusData().installs.find((p) => p.host === 'claude' && p.scope === 'global');
+    assert.equal(row.tiers, 'auto');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
