@@ -252,3 +252,49 @@ test('the provider WARN: kit on with the plugin seen, kit off with none, and sil
     assert.equal(warn('bob', [], seen), 'WARN: no workflow provider — the superpowers kit is off and bob has no superpowers plugin');
   });
 });
+
+test('a PROJECT install reads the plugin from its own repo root: the migration and the WARN, never the folder above', async () => {
+  // `root` of a project row is the repo itself (`--out root --root root`), so its `.claude/settings.json`
+  // is `<root>/.claude/settings.json`. The plugin enabled one level UP must change nothing.
+  await withSandbox('gs-proj-', (d) => {
+    const repo = path.join(d, 'repo');
+    const none = roots(path.join(d, 'none'));
+    const run = (kits, host = 'claude') => migrateSuperpowersKit({
+      host, scope: 'project', root: repo, kits, knownKits: ['superpowers'], aware: false, detectRoots: none });
+    fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.claude', '.geneseed-version'), 'abc (built 2026-01-01) [release 5.0.0]\n');
+    assert.deepEqual(run([]), ['superpowers'], 'a project install built before the kit, plugin not seen');
+    write(path.join(d, '.claude', 'settings.json'), json({ enabledPlugins: { 'superpowers@m': true } }));
+    assert.deepEqual(run([]), ['superpowers'], 'the plugin enabled ABOVE the repo was read');
+    write(path.join(repo, '.claude', 'settings.json'), json({ enabledPlugins: { 'superpowers@m': true } }));
+    assert.deepEqual(run([]), [], 'the plugin enabled in the repo was not read');
+    const warn = (kits) => providerWarning({ host: 'claude', scope: 'project', root: repo, kits, detectRoots: none });
+    assert.match(warn(['superpowers']), /^WARN: the superpowers kit is on and the official plugin is also loaded \(seen in .*repo.\.claude.settings\.json\)/);
+    assert.equal(warn([]), null);
+    fs.rmSync(path.join(repo, '.claude', 'settings.json'));
+    assert.match(warn([]), /^WARN: no workflow provider/);
+  });
+});
+
+test('an install follows a profile that chooses the kit by detection when its kits are what detection gives', async () => {
+  // The sandbox home holds no plugin, so `mentor` (kitsByDetection) resolves to the kit on for Claude Code.
+  const { followsProfile } = await import('../../js/web/profiles-api.mjs');
+  const { profileFromInstall } = await import('../../js/maintain/profiles.mjs');
+  const mentor = loadProfile('mentor').profile;
+  const install = (kits) => ({ ...profileFromInstall({ host: 'claude', theme: mentor.theme, footprint: mentor.footprint,
+    posture: mentor.posture, mode: mentor.mode, trust: mentor.trust, doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'],
+    excludeRules: [], excludeSkills: [], kits, sharedTier: false, contextWindow: mentor.contextWindow }), gates: {} });
+  assert.equal(followsProfile(install(['superpowers']), 'global', mentor), true);
+  assert.equal(followsProfile(install([]), 'global', mentor), false, 'the kit is what detection says, and it says on');
+});
+
+test('the readers that bypass installProfile read the same migrated kits (diff, the console build and restore)', async () => {
+  const { migratedKitsOfDir } = await import('../../js/maintain/kit-migration.mjs');
+  await withSandbox('gs-mig-readers-', (d) => {
+    const cfg = oldInstall(d, [], '5.4.0');
+    assert.deepEqual(migratedKitsOfDir(cfg, 'claude'), ['superpowers']);
+    assert.deepEqual(migratedKitsOfDir(cfg, 'claude'), installProfile('claude', 'global', cfg).kits, 'two readers, two answers');
+    const fresh = oldInstall(d, [], '5.4.0', false);
+    assert.deepEqual(migratedKitsOfDir(fresh, 'claude'), [], 'a build that knows the kit is left as it is');
+  });
+});

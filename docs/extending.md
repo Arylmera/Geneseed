@@ -565,7 +565,9 @@ enumerates skills would miss it. `src/kits/<kit>/` holds only `rules.md`.
   `rulesWordBudget`, not the core carrier ceiling, which stays measured on core alone.
 - **The skill listing:** one description per kit skill, every session, while the kit is on.
 - **An install without the kit: nothing.** Its members are not written, and a default build
-  stays byte-identical, with no `Active kits:` line.
+  has no `Active kits:` line. The one exception is a kit with `replacedBy`: with it off, the Kits
+  block carries its Workflow provider block (the `superpowers` kit's, today), so a default build is
+  no longer byte-identical to one made before that kit.
 
 **Retiring a kit** puts its id in `RETIRED_KIT_IDS` (`js/build/source.mjs`), with the reason
 beside it. An install whose `Active kits:` line names it drops it wherever that line is read back

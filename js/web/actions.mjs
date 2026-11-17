@@ -44,7 +44,7 @@ import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import { HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import {
-  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, contextWindowOfDir, renderedTier,
+  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, sharedTierOfDir, contextWindowOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installedDefaults, installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -58,6 +58,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 import { normcase, which, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { memoryDelete } from '../maintain/memory.mjs';
+import { migratedKitsOfDir } from '../maintain/kit-migration.mjs';
 import { autostartInstall, autostartRemove } from '../hosts/shim.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { checkProjectFolder } from '../maintain/profile-scope.mjs';
@@ -675,7 +676,7 @@ export function apiRestore(state, files) {
       excludeRules: excludedRulesOfDir(target),
       excludeSkills: excludedSkillsOfDir(target),
       // The kits: a restored AGENT.md keeps its Kits block and `Active kits:` line.
-      kits: kitsOfDir(target),
+      kits: migratedKitsOfDir(target),
       sharedTier: sharedTierOfDir(target),
       contextWindow: contextWindowOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
@@ -792,7 +793,7 @@ export function apiInstallCmd(state, body) {
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
-    kits ?? kitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope));
+    kits ?? migratedKitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope));
   // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
   // and `setupBuildArgs` elides an axis at its default, so returning one to it (a mode back to
   // direct, a gate re-armed) would otherwise trip the preserve guard (js/build/profile.mjs).
@@ -915,7 +916,7 @@ export function apiDeployCmd(state, body) {
   const gates = bodyGates(body, root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host),
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, migratedKitsOfDir(root, host),
     bodySharedTier(body, root, host), bodyContextWindow(body, root, host, 'project'));
   // `--reset`, as in `apiInstallCmd`: the form's answers plus the folder's own are a whole selection.
   argv.push('--reset');

@@ -21,7 +21,9 @@
 import path from 'node:path';
 import { readText } from '../lib/fs.mjs';
 import { versionIsNewer } from '../build/version.mjs';
-import { HOSTS, VERSION_MARKER } from '../hosts/hosts.mjs';
+import { HOSTS, VERSION_MARKER, isGlobalInstall } from '../hosts/hosts.mjs';
+import { kitAwareOfDir, kitsOfDir } from '../hosts/installs.mjs';
+import { loadKits } from '../build/source.mjs';
 import { describeDetection, detectSuperpowers } from './plugin-detect.mjs';
 
 /** The first release where the five Rites are a kit. A build older than this carried them as core. */
@@ -55,7 +57,7 @@ export function migrateSuperpowersKit({ host, scope, root, kits, notify = null, 
   // `versionIsNewer(a, b)` is a > b; null (unparseable) reads as old, never as current.
   const old = built === null || versionIsNewer(SUPERPOWERS_KIT_SINCE, built) === true;
   if (!old) return kits;
-  const d = detectSuperpowers(host, { projectDir: scope === 'project' ? path.dirname(root) : null, ...detectRoots });
+  const d = detectSuperpowers(host, { projectDir: scope === 'project' ? root : null, ...detectRoots });
   const was = built === null ? 'an install with no release marker' : `built by ${built}`;
   if (d.seen) {
     notify?.(`superpowers kit: off — ${was}, before the kit existed; the official plugin is ${describeDetection(d)}`);
@@ -75,7 +77,7 @@ export function migrateSuperpowersKit({ host, scope, root, kits, notify = null, 
  * @param {{ host: string, scope: string, root: string, kits: string[], detectRoots?: Parameters<typeof detectSuperpowers>[1] }} a
  */
 export function providerWarning({ host, scope, root, kits, detectRoots = {} }) {
-  const d = detectSuperpowers(host, { projectDir: scope === 'project' ? path.dirname(root) : null, ...detectRoots });
+  const d = detectSuperpowers(host, { projectDir: scope === 'project' ? root : null, ...detectRoots });
   const on = kits.includes('superpowers');
   if (on && d.seen) {
     return 'WARN: the superpowers kit is on and the official plugin is also loaded (' + describeDetection(d)
@@ -87,4 +89,21 @@ export function providerWarning({ host, scope, root, kits, detectRoots = {} }) {
       : `WARN: no workflow provider — the superpowers kit is off and ${host} has no superpowers plugin`;
   }
   return null;
+}
+
+/**
+ * `kitsOfDir` plus the migration of an install built before the kit: the set a rebuild of `dir`
+ * would build with. `installProfile` is the read-back `rebuild-all`, `update`, `migrate` and
+ * `status` share; the readers that render or rebuild one install without it (`diff`, the console's
+ * restore and build forms) call this instead, so a pre-kit install reads the same set everywhere,
+ * or its five Rites would read as drift in one place and be rebuilt away in another.
+ * The scope is read off the folder: a host's global config dir is global, anything else a project.
+ */
+export function migratedKitsOfDir(dir, host = null, notify = null) {
+  let scope = 'project';
+  try { if (isGlobalInstall(host, dir)) scope = 'global'; } catch { /* cannot tell: a project */ }
+  return migrateSuperpowersKit({
+    host: host ?? '', scope, root: dir, kits: kitsOfDir(dir, host, notify), notify,
+    knownKits: [...loadKits().keys()], aware: kitAwareOfDir(dir, host),
+  });
 }

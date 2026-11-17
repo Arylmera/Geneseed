@@ -18,7 +18,7 @@ import { HOSTS, expanduser } from '../hosts/hosts.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
 import {
   BASE_PROFILE, isGitClone, listProfiles, loadProfile, profileBuildArgs, profileDiff, profileDirs,
-  profileFromInstall, profileHosts,
+  profileFromInstall, profileHosts, profileKits,
 } from '../maintain/profiles.mjs';
 import { checkProjectFolder, globalLayering, markerCollision } from '../maintain/profile-scope.mjs';
 import { hostTools, profileChanges } from '../maintain/setup.mjs';
@@ -52,7 +52,11 @@ function activeTargets() {
  */
 export function followsProfile(installP, scope, p) {
   const skip = new Set(['hosts', 'login', ...(scope === 'global' ? ['sharedTier'] : [])]);
-  return profileDiff(installP, p).every((d) => skip.has(d.key));
+  // A kit chosen by detection is the kit an apply would have built for the install's own host: an
+  // install has the kits it has, never a kit "by detection", so compare the resolved list.
+  const resolved = p.kitsByDetection?.length
+    ? { ...p, kits: profileKits(p, installP.hosts?.[0] ?? '', null), kitsByDetection: [] } : p;
+  return profileDiff(installP, resolved).every((d) => skip.has(d.key));
 }
 
 /** The hosts row of the tab: `{ host, label, present }` in HOSTS order. */

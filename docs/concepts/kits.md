@@ -6,7 +6,7 @@ kind: "concept"
 section: "Configuration"
 description: "Opt-in bundles of skills, agents and rules for one stack, off unless you name them."
 ---
-A **kit** is an opt-in bundle of skills, agents and rules for one stack. Kits are off by default and switched on per install, project or global, on every host. An install without a kit pays nothing for it. Inside an install that has it on, a kit's skills and agents are ordinary: the model picks them as it picks any other.
+A **kit** is an opt-in bundle of skills, agents and rules for one stack. Kits are off by default and switched on per install, project or global, on every host. An install without a kit pays nothing for it, with one exception: with the [superpowers kit](superpowers-kit.md) off, the instructions file carries a short Workflow provider block that says where those five Rites come from. Inside an install that has it on, a kit's skills and agents are ordinary: the model picks them as it picks any other.
 
 > **You already know this:** an optional dependency group, like `pip install pkg[postgres]`. The core install stays small, and you opt into the extra parts for your stack.
 

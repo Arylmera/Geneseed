@@ -40,7 +40,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
-  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, kitsOfDir, sharedTierOfDir,
+  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, sharedTierOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
@@ -53,6 +53,7 @@ import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { projectNotesDir } from '../hosts/spec-feedback.mjs';
 import { relPosix } from '../lib/text.mjs';
+import { migratedKitsOfDir } from '../maintain/kit-migration.mjs';
 
 /**
  * This process's start, in epoch seconds.
@@ -264,7 +265,7 @@ export function diffCollect({
     // The excluded skills, or every skill the install left out reads as deleted.
     excludeSkills: excludedSkillsOfDir(dir, host),
     // The kits on, or every kit file reads as added and the Kits block as drift.
-    kits: kitsOfDir(dir, host),
+    kits: migratedKitsOfDir(dir, host),
     // The shared-tier marker, or an install built `--shared-tier on` reads its `Shared tier: on` line as drift.
     sharedTier: sharedTierOfDir(dir, host),
     // The context window, or a `1m` install reads its `Context window: 1m` line as drift.

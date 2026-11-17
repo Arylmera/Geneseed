@@ -600,7 +600,7 @@ test('the deletion gate switch reaches the install command only as a boolean, el
     assert.ok(!argv({}).includes('--no-deletion-gate'), 'an armed install lost its gate on a plain rebuild');
     // A disarmed install: its carrier says so, and a body that says nothing keeps it off.
     fs.mkdirSync(cl, { recursive: true });
-    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\nActive packs: craft\nDeletion gate: off\n<!-- END GENESEED -->\n');
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\n### Workflow provider\n\nActive packs: craft\nDeletion gate: off\n<!-- END GENESEED -->\n');
     assert.deepEqual(argv({}).slice(-2), ['--no-deletion-gate', '--reset'], 'a plain rebuild re-armed a disarmed install');
     assert.deepEqual(argv({ deletionGate: 'true' }).slice(-2), ['--no-deletion-gate', '--reset'], 'a string re-armed it');
     assert.ok(!argv({ deletionGate: true }).includes('--no-deletion-gate'), 'true did not re-arm');
