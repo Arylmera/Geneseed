@@ -23,8 +23,9 @@ task that would block it to one background task worker, and keeps answering the 
   proof commands, and the rule that it commits only in its own worktree, never pushes, and
   never merges outside its own branch; without a worktree, it never commits. It also covers
   the **Brief checklist** in the parallel-agents {{SKILL}}: read it before you write the brief. The worker explores, implements and tests in its own context, loading {{SKILLS}}
-  as it needs them; it returns `red` when stuck and `relay` when long, at the bounds of the
-  developer spec's task-worker section ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
+  as it needs them. It returns `STATUS: ERROR` when stuck and `STATUS: RELAY` when long.
+  The task-worker section of the developer spec sets both bounds
+  ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
   ({{DOCTRINE:one-writer-per-file}}).
 - **A worker may lead, inside its worktree.** It may dispatch read-only helpers (explorer,
   researcher) at any time, and writing sub-workers, each in its own worktree branched from
@@ -53,10 +54,12 @@ task that would block it to one background task worker, and keeps answering the 
   `task` with `task_id`); the same call without `sessionID` (V1: `task_id`) starts a fresh
   worker. Bob has no resume. Start a new worker only when the old one cannot be resumed —
   the host has no resume, or its context is spent — and hand it a note: the ask, the diff
-  so far, the findings, what was tried. On `relay`, start a fresh worker on the same
-  worktree and branch with the worker's handoff note; its ledger line names the one it
-  relays (`relay of <id>`). A relay is no failure and no retry of yours. On `red`, relay it
-  once to a fresh worker with the findings, or take it to the user. A new task gets a new
+  so far, the findings, what was tried. On `STATUS: RELAY` (ledger `relay`), hand the task
+  off to a fresh worker on the same worktree and branch, with the handoff note. A hand-off
+  is no failure and no retry of yours. On `STATUS: ERROR` (ledger `red`) from the first
+  worker, hand off once with the findings. A task gets at most 2 hand-offs, counted in the
+  ledger line (`relay 2 of <id>`). When it needs a 3rd, or a worker that took a hand-off
+  returns `STATUS: ERROR`, take the task to the user. A new task gets a new
   worker by default. It may go to an idle worker whose own task is settled (merged or
   dropped) when it works in the same files and that worker's context is still under about
   100k tokens: the worker starts it on a new branch from the current BASE, with the full

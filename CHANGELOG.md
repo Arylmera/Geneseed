@@ -10,7 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 
-- **Foreman workers spend fewer tokens.** A task worker runs the targeted test file while it iterates, sends the output to a file and reads only the count line and the failing test names, and waits for a background run's notice instead of polling it. Its loop bound is now countable: the same test still red after 3 proof runs returns `red`. At about 150k tokens of context, or after about 20 proof runs, it commits its work in progress and returns `relay` with a handoff note, and the session starts a fresh worker on the same branch. An idle worker takes a new task only when it works in the same files and its context is under about 100k tokens. Text only; reaches an install on its next emit.
+- **Foreman workers spend fewer tokens.** A task worker runs the targeted test file while it iterates, sends the output to a file and reads only the count line and the failing test names, and waits for a background run's notice instead of polling it. Its loop bound is now countable: after the 3rd run in a row that leaves the same test red, it returns `STATUS: ERROR`. At about 150k tokens of context, or after about 20 proof runs, it commits its work in progress and returns `STATUS: RELAY` with a handoff note, and the session hands the task off to a fresh worker on the same branch. A task gets at most 2 hand-offs; then it goes to the user. An idle worker takes a new task only when it works in the same files and its context is under about 100k tokens. Text only; reaches an install on its next emit.
 
 ### Fixed
 
