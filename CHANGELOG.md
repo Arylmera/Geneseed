@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.6.0] — 2026-11-17
+
+### Changed
+
+- **Catching your own branch up with its base no longer asks.** Off the main branch, the commit gate now accepts a plain `git fetch` in the same command as your commits, merges and pushes, so `git fetch origin && git merge origin/main && git commit … && git push origin <branch>` goes through in one piece. A fetch into a local branch (`origin main:main`) or one with an option that runs a program (`--upload-pack=`) still asks. A Foreman worker's local merge in its own worktree may fetch first too.
+- **Commits stop asking because of how the message is written.** Claude Code tends to commit with `-m "$(cat <<'EOF' … EOF)"`, and the gate cannot see inside a `$(`, so every such commit asked, even on your own branch. The commit skill now says to pass a body as `git commit -F - <<'EOF'` with the delimiter quoted, a form the gate already reads. The docs say why the other form asks.
+
 ## [5.5.1] — 2026-11-17
 
 ### Added
