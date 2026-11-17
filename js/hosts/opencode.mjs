@@ -27,7 +27,7 @@ import { writeText, readText, copyFile } from '../lib/fs.mjs';
 import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { sourceReleaseVersion } from '../build/version.mjs';
-import { aliasesOf } from '../build/source.mjs';
+import { aliasesOf, kitMembers, loadKits } from '../build/source.mjs';
 import { lstripNewlines } from './settings.mjs';
 import {
   firstBlockquote, isUserInvokedOnly, skillDescription, stripSkillBodyLinks, pointSideFiles,
@@ -342,6 +342,12 @@ function writeCommandFile(dest, desc, body) {
   writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
 }
 
+/** Every skill of a kit this build left OFF: not in `items`, and no error. */
+function offKitSkills(cfg) {
+  const kits = loadKits(cfg.src);
+  return kitMembers(new Map([...kits].filter(([k]) => !(cfg.kits ?? []).includes(k)))).skills;
+}
+
 /** `_build_emit._write_command_layer` — the opt-in /slash commands. */
 export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => true,
   skillDirOf = siblingSkillDir(commandDir)) {
@@ -352,6 +358,8 @@ export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => tru
     // A command runs a skill; `--exclude-skills` took that skill out, so the command goes too.
     if ((cfg.excludeSkills ?? []).includes(skill)) continue;
     const text = byName.get(skill);
+    // A skill of a kit that is off is not in `items`: its command goes with it, as for an exclusion.
+    if (text === undefined && offKitSkills(cfg).has(skill)) continue;
     if (text === undefined) {
       throw new Error(`COMMAND_SET: /${name} runs skill '${skill}', which src/skills/ does not have`);
     }

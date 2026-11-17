@@ -55,15 +55,15 @@ test('an unknown key stays literal', () => {
   }
 });
 
-/** A copy of `src/` with the daydream token on debug's spec AND its side file, and on an agent. */
+/** A copy of `src/` with the daydream token on rule's spec AND its side file, and on an agent. */
 function plantedSrc(d) {
   const src = path.join(d, 'src');
   fs.cpSync(SRC, src, { recursive: true });
   const token = '\n{{CREDIT:daydream:skills/daydream/SKILL.md}}\n';
-  for (const f of ['skills/debug.md', 'skills/debug/ci.md', 'agents/reviewer.md']) {
+  for (const f of ['skills/rule.md', 'skills/rule/approve.md', 'agents/reviewer.md']) {
     fs.appendFileSync(path.join(src, f), token);
   }
-  fs.appendFileSync(path.join(src, 'skills/plan.md'),
+  fs.appendFileSync(path.join(src, 'skills/adhd.md'),
     '\n{{CREDIT:react-view-transitions:skills/react-view-transitions/SKILL.md}}\n');
   return src;
 }
@@ -74,11 +74,11 @@ test('renderAll adds one licence copy per credited skill whose entry has a licen
     const { items } = renderAll({ ...makeCfg(), src }, 'neutral');
     // Only the planted keys: the shipped skills' own credits are property 6's.
     assert.deepEqual(items.filter((i) => /LICENSE-(daydream|react-view-transitions)\./.test(i.rel))
-      .map((i) => i.rel), ['skills/debug/LICENSE-daydream.txt']);
-    const lic = items.find((i) => i.rel === 'skills/debug/LICENSE-daydream.txt');
+      .map((i) => i.rel), ['skills/rule/LICENSE-daydream.txt']);
+    const lic = items.find((i) => i.rel === 'skills/rule/LICENSE-daydream.txt');
     assert.equal(lic.text, null, 'a licence is copied, not rendered');
     assert.equal(lic.src, path.join(src, 'skills', 'daydream', 'LICENSE'));
-    assert.ok(items.find((i) => i.rel === 'skills/debug.md').text.includes(DAYDREAM_LINE));
+    assert.ok(items.find((i) => i.rel === 'skills/rule.md').text.includes(DAYDREAM_LINE));
   });
 });
 
@@ -96,8 +96,8 @@ test('a Claude emit writes the licence copy byte for byte and owns it', async ()
         hookOpts: hookRunnerEntry(),
       }));
     } finally { process.stdout.write = o; }
-    assert.ok(owned.includes('skills/debug/LICENSE-daydream.txt'), 'the licence copy is not owned');
-    assert.ok(fs.readFileSync(path.join(cfgDir, 'skills', 'debug', 'LICENSE-daydream.txt'))
+    assert.ok(owned.includes('skills/rule/LICENSE-daydream.txt'), 'the licence copy is not owned');
+    assert.ok(fs.readFileSync(path.join(cfgDir, 'skills', 'rule', 'LICENSE-daydream.txt'))
       .equals(fs.readFileSync(path.join(src, 'skills', 'daydream', 'LICENSE'))));
     assert.deepEqual(fs.readdirSync(path.join(cfgDir, 'agents')).filter((f) => /LICENSE/.test(f)), []);
   });
@@ -210,28 +210,26 @@ const VENDOR_LINES = {
     + 'by Cathryn Lavery — MIT, modified.*',
 };
 
-/** Property 6: the files the retro-credit list gives a token, by key. */
+/**
+ * Property 6: the files the retro-credit list gives a token, by key, in a default build. The five
+ * superpowers-kit skills carry credits too (`SP`, and `MP` for debug and plan) and ship only with the kit on:
+ * `superpowers_kit.test.mjs` holds their credit lines and licence copies.
+ */
 const MP = 'mattpocock-skills';
 const SP = 'superpowers';
 const RETRO_CREDITED = {
   'agents/reviewer.md': [SP],
   'skills/adhd.md': ['i-have-adhd'],
-  'skills/brainstorm.md': [SP, MP],
-  'skills/brainstorm/builder-check.md': [SP],
   'skills/codebase-design.md': [MP],
-  'skills/debug.md': [SP, MP],
   'skills/develop.md': [MP],
-  'skills/geneseed-code-review.md': [MP, SP],
   'skills/git-history.md': ['mattpocock-skills-frozen'],
   'skills/handoff.md': [MP],
   'skills/learn-mode.md': ['vibe-wise'],
   'skills/ownership.md': ['vibe-wise'],
   'skills/parallel-agents.md': [SP, MP],
   'skills/pipeline.md': [SP],
-  'skills/plan.md': [SP, MP],
   'skills/prototype.md': [MP],
   'skills/research.md': [MP],
-  'skills/review-response.md': [SP],
   'skills/rule.md': ['mattpocock-skills-2509'],
   'skills/ship.md': ['mattpocock-skills-2509'],
   'skills/skill-forge.md': [MP],

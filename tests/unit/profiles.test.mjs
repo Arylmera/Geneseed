@@ -27,6 +27,12 @@ const SHIPPED_ONLY = { personalDir: NO_PERSONAL };
 /** Only the fixture `dir` as Shipped, no Personal. */
 const only = (dir) => ({ shippedDir: dir, personalDir: NO_PERSONAL });
 
+/**
+ * The keys a profile saved from an install carries: all of them but `kitsByDetection`, which only a
+ * hand-written profile holds (an install's read-back has the kits it has, never a kit "by detection").
+ */
+const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'kitsByDetection');
+
 const STARTER = {
   description: 'For a first install: neutral voice, every guardrail except the ownership gate.',
   hosts: ['opencode', 'bob', 'claude', 'openclaude'],
@@ -46,7 +52,9 @@ function fixtureDir(files) {
 test('the shipped starter profile holds the values the spec decided (D4, D5, D27)', () => {
   const r = loadProfile('starter', SHIPPED_ONLY);
   assert.equal(r.ok, true, r.error);
-  assert.deepEqual(r.profile, STARTER);
+  // STARTER above is the fixture the other tests build from, kit-less; the shipped one adds the superpowers
+  // kit (a new user has no workflow provider yet, and the kit is Geneseed's own copy of one).
+  assert.deepEqual(r.profile, { ...STARTER, kits: ['superpowers'] });
   assert.equal(r.source, 'shipped');
   assert.equal(BASE_PROFILE, 'starter');
 });
@@ -253,7 +261,7 @@ test('save writes the keys in order, refuses an existing file without force, and
     const r = saveProfile('team', p, { dir: sb.path });
     assert.equal(r.ok, true);
     const text = fs.readFileSync(path.join(sb.path, 'team.json'), 'utf8');
-    assert.deepEqual(Object.keys(JSON.parse(text)), PROFILE_KEYS);
+    assert.deepEqual(Object.keys(JSON.parse(text)), SAVED_KEYS);
     assert.ok(text.endsWith('}\n'));
     assert.equal(loadProfile('team', only(sb.path)).ok, true);
     const again = saveProfile('team', { ...p, theme: 'neutral' }, { dir: sb.path });
@@ -361,7 +369,7 @@ test('profile save writes a personal profile by default, a shipped one only from
     assert.equal(save({ name: 'team', from: 'claude-global' }).rc, 1);
     assert.equal(save({ name: 'team', from: 'claude-global', force: true }).rc, 0);
     // D29: nothing personal can reach it — the keys are the build settings and nothing else.
-    assert.deepEqual(Object.keys(saved), PROFILE_KEYS);
+    assert.deepEqual(Object.keys(saved), SAVED_KEYS);
 
     // D36: a Personal save under a Shipped name is refused, --force included, and writes nothing.
     const clash = save({ name: 'starter', from: 'claude-global', force: true });

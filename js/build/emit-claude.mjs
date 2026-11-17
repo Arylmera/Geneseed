@@ -64,7 +64,7 @@ export function emitClaudeRender(cfg, job) {
   const lawsPrefix = relCfg === '.' ? '' : `${relCfg}/`;
   // A re-render of a deployed install sends that install's root, null included.
   const { sharedRoot = scope === 'global' ? sharedRootFor(cfgDir, host) : null } = job;
-  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog, sharedRoot });
+  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog, sharedRoot, pluginHost: host === 'claude' ? 'claude' : '' });
   assertSourceComplete(cfg, `claude-${scope}`);
   mkdirSync(cfgDir, { recursive: true });
 

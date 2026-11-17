@@ -85,18 +85,18 @@ test('a replayed install drops a retired name and says so only when asked', asyn
   });
 });
 
-// The live alias `deps-audit` -> `dependencies`, read back from a carrier and typed on the flag.
+// The live alias `bruno-test-writer` -> `bruno`, read back from a carrier and typed on the flag.
 // Stable for as long as the merge stands: removing the alias would strand every install that
-// excluded `deps-audit`, and `dependencies` is not linked by path, so the exclusion is honoured
+// excluded `bruno-test-writer`, and `bruno` is not linked by path, so the exclusion is honoured
 // (mapped to the merged skill) rather than dropped.
-const DEPS_NOTICE = "'deps-audit' is now part of 'dependencies' — excluding 'dependencies'";
+const BRUNO_NOTICE = "'bruno-test-writer' is now part of 'bruno' — excluding 'bruno'";
 
 test('a replayed install that excluded one half of a merged skill excludes the whole skill', async () => {
   await withSandbox('gsalias-', (d) => {
-    fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: deps-audit\n');
+    fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: bruno-test-writer\n');
     const heard = [];
-    assert.deepEqual(excludedSkillsOfDir(d, null, (n) => heard.push(n)), ['dependencies']);
-    assert.deepEqual(heard, [DEPS_NOTICE]);
+    assert.deepEqual(excludedSkillsOfDir(d, null, (n) => heard.push(n)), ['bruno']);
+    assert.deepEqual(heard, [BRUNO_NOTICE]);
   });
 });
 
@@ -105,11 +105,11 @@ test('a replayed install that excluded one half of a merged skill excludes the w
 test('upgrade replays an old excluded name with the same notice rebuild-all prints', async () => {
   await withSandbox('gsalias-', async (d) => {
     fs.writeFileSync(path.join(d, '.geneseed-emit'), 'opencode-global\n');
-    fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: deps-audit\n');
+    fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: bruno-test-writer\n');
     const heard = [];
     const axes = await installAxes(d, generate, (n) => heard.push(n));
-    assert.deepEqual(heard, [DEPS_NOTICE]);
-    assert.equal(axes[axes.indexOf('--exclude-skills') + 1], 'dependencies');
+    assert.deepEqual(heard, [BRUNO_NOTICE]);
+    assert.equal(axes[axes.indexOf('--exclude-skills') + 1], 'bruno');
   });
 });
 
@@ -129,12 +129,12 @@ test('--exclude-skills maps an alias to its target and says so on stderr', () =>
   const e = process.stderr.write;
   process.stderr.write = (s) => { said.push(String(s)); return true; };
   let args;
-  try { args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'deps-audit']); }
+  try { args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'bruno-test-writer']); }
   finally { process.stderr.write = e; }
-  assert.deepEqual(args.excludeSkills, ['dependencies']);
+  assert.deepEqual(args.excludeSkills, ['bruno']);
   // The CLI's line writer ends lines with the platform EOL; normalise it before comparing.
   assert.deepEqual(said.map((s) => s.replace(/\r\n/g, '\n')),
-    [`[geneseed] --exclude-skills: ${DEPS_NOTICE}\n`]);
+    [`[geneseed] --exclude-skills: ${BRUNO_NOTICE}\n`]);
 });
 
 const SKILL = '# Skill: bruno\n\n> Write Bruno collections and tests.\n'

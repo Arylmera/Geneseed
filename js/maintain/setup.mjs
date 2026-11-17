@@ -50,6 +50,7 @@ import { preserveRefusal } from '../build/profile.mjs';
 import { cmdLink } from '../hosts/link.mjs';
 import { autostartInstall, autostartState, transientRoot } from '../hosts/shim.mjs';
 import { loadProfile, profileBuildArgs, profileHosts } from './profiles.mjs';
+import { superpowersKitDefault } from './plugin-detect.mjs';
 import { checkProjectFolder, globalLayering, layeringText } from './profile-scope.mjs';
 import { playLine } from '../ui/anim.mjs';
 import { DEFAULT_CONTEXT_WINDOW, discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
@@ -233,14 +234,25 @@ function askDoctrines(deployed = null) {
  * stdin it always did (and has no kit to carry: `kitsOfDir` drops an unshipped one).
  * Returns the kit list, or null for none (`setupBuildArgs` omits `--kits`).
  */
-export function askKits(deployed = null, kits = null) {
+export function askKits(deployed = null, kits = null, host = null, detectRoots = {}) {
   try { kits ??= loadKits(); } catch (e) {
     process.stderr.write(`warning: kit question skipped — ${e.message}\n`);
     return null;
   }
   const on = (deployed ?? []).filter((k) => kits.has(k));
-  const picked = [...kits].filter(([k, m]) => askChoice(`Kit ${k} — ${m.description ?? k}`,
-    [['yes', `install the ${k} kit`], ['no', `leave ${k} out`]], on.includes(k) ? 'yes' : 'no') === 'yes');
+  // A kit a plugin can stand in for defaults by what this machine holds, not by what was deployed:
+  // plugin seen, `no`; not seen (or a host with no plugin, Bob), `yes`. The question names what it saw.
+  const picked = [...kits].filter(([k, m]) => {
+    let seen = '';
+    let def = on.includes(k) ? 'yes' : 'no';
+    if (m.replacedBy) {
+      const d = superpowersKitDefault(host ?? '', detectRoots);
+      seen = ` [the official ${m.replacedBy.upstream} plugin: ${d.line}]`;
+      def = d.on ? 'yes' : 'no';
+    }
+    return askChoice(`Kit ${k} — ${m.description ?? k}${seen}`,
+      [['yes', `install the ${k} kit`], ['no', `leave ${k} out`]], def) === 'yes';
+  });
   return picked.length ? picked.map(([k]) => k) : null;
 }
 
@@ -319,9 +331,10 @@ export function collectSetupLines(kitMap = null) {
   const posture = askChoice('Posture', postureOptions(), inst.posture || defaultPosture());
   const mode = askChoice('Mode', modeOptions(), inst.mode || defaultMode());
   const doctrines = askDoctrines(inst.doctrines);
-  // Kits on stay on (spec A3); `kitsOfDir` already dropped a retired one.
-  const kits = askKits(inst.kits, kitMap);
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
+  // Kits on stay on (spec A3); `kitsOfDir` already dropped a retired one. Asked after the install
+  // mode: a kit a plugin can replace defaults by what that host's plugin store holds.
+  const kits = askKits(inst.kits, kitMap, (EMIT_HOST_SCOPE.get(emit) ?? [])[0] ?? null);
   const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS,
     inst.footprint || 'lean');
   let out = null;

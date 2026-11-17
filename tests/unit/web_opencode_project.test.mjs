@@ -67,7 +67,7 @@ const view = () => {
 test('the fixture is the layout the bug is about', () => {
   assert.ok(fs.existsSync(path.join(repo, '.opencode', '.geneseed-manifest.json')));
   assert.ok(!fs.existsSync(path.join(repo, '.geneseed-manifest.json')));
-  assert.ok(fs.existsSync(path.join(repo, '.opencode', 'skills', 'brainstorm', 'SKILL.md')));
+  assert.ok(fs.existsSync(path.join(repo, '.opencode', 'skills', 'develop', 'SKILL.md')));
   assert.ok(fs.existsSync(path.join(repo, '.opencode', 'agents', 'architect.md')));
   assert.ok(!fs.existsSync(path.join(repo, '.opencode', 'skills', EXCLUDED)));
 });
@@ -84,7 +84,7 @@ test('its inventory is the deployed skills, without the excluded one', () => {
   assert.ok(tuiInventory(st.theme).skills.some((s) => s.name === EXCLUDED));
   const skills = inventoryFor(st).skills;
   const names = skills.map((s) => s.name);
-  assert.ok(names.includes('brainstorm'), names.join(','));
+  assert.ok(names.includes('develop'), names.join(','));
   assert.ok(!names.includes(EXCLUDED), `${EXCLUDED} is listed but was not deployed`);
   // Read off the install, not rendered: every entry's file is in the OpenCode layer.
   const layer = path.join(fs.realpathSync.native(repo), '.opencode');
@@ -126,7 +126,7 @@ test('the never-fired list reads the OpenCode layer, not the root bundle', () =>
   const { never } = usageSummary({ now: Date.parse('2026-10-31T12:00:00Z'),
     targets: [['opencode', 'project', repo]] });
   const has = (kind, name) => never.some((e) => e.kind === kind && e.name === name);
-  assert.ok(has('skill', 'brainstorm'), JSON.stringify(never.slice(0, 5)));
+  assert.ok(has('skill', 'develop'), JSON.stringify(never.slice(0, 5)));
   assert.ok(has('agent', 'architect'));
   assert.ok(!has('skill', EXCLUDED), `${EXCLUDED} was never deployed`);
   // The root bundle's `agents/` carries `_template.md`; the layer OpenCode loads does not.

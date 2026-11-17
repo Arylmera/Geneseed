@@ -33,12 +33,12 @@ const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'
 if (r.status !== 0) throw new Error(`emit (${r.status}): ${(r.stderr || r.stdout).slice(-1200)}`);
 const gcfg = path.join(home, '.config', 'opencode');
 
-// `debug` becomes the user's own linked copy, with an edit in it; `commit` gets a plain edit.
-const linkedDir = path.join(gcfg, 'skills', 'debug');
+// `develop` becomes the user's own linked copy, with an edit in it; `commit` gets a plain edit.
+const linkedDir = path.join(gcfg, 'skills', 'develop');
 const editedFile = path.join(gcfg, 'skills', 'commit', 'SKILL.md');
-assert.ok(fs.existsSync(path.join(linkedDir, 'SKILL.md')), 'the emit wrote skills/debug/');
+assert.ok(fs.existsSync(path.join(linkedDir, 'SKILL.md')), 'the emit wrote skills/develop/');
 assert.ok(fs.existsSync(editedFile), 'the emit wrote skills/commit/SKILL.md');
-const outside = path.join(home, 'my-skills', 'debug');
+const outside = path.join(home, 'my-skills', 'develop');
 fs.cpSync(linkedDir, outside, { recursive: true });
 fs.appendFileSync(path.join(outside, 'SKILL.md'), '\nmy own line\n');
 fs.rmSync(linkedDir, { recursive: true, force: true });
@@ -52,14 +52,14 @@ test('a link alone exports no improvements file', () => {
   const out = path.join(home, 'improvements.md');
   const [written, files] = exportImprovements(gcfg, null, out);
   assert.equal(written, null);
-  assert.deepEqual(statuses(files), ['linked skills/debug/SKILL.md']);
+  assert.deepEqual(statuses(files), ['linked skills/develop/SKILL.md']);
   assert.equal(fs.existsSync(out), false);
   fs.appendFileSync(editedFile, '\na hand edit\n');
 });
 
 test('a skill dir linked to an outside copy is linked, a plain hand edit is still edited', () => {
   const { files } = diffCollect({ target: gcfg });
-  assert.deepEqual(statuses(files), ['edited skills/commit/SKILL.md', 'linked skills/debug/SKILL.md']);
+  assert.deepEqual(statuses(files), ['edited skills/commit/SKILL.md', 'linked skills/develop/SKILL.md']);
 });
 
 test('the improvements report carries the hand edit and not the link', () => {
@@ -95,7 +95,7 @@ test('the emit recorded hashes, so the cases below exercise the hashed path', ()
 });
 
 test('an unmodified-since-emit file behind the source is stale, an edit stays edited', () => {
-  const rel = 'skills/plan/SKILL.md';
+  const rel = 'skills/prose/SKILL.md';
   const p = path.join(gcfg, rel);
   assert.ok(fs.existsSync(p), `the emit wrote ${rel}`);
   // What an older source rendered: the deployed bytes differ, and the manifest hash matches them.
@@ -113,10 +113,10 @@ test('an unmodified-since-emit file behind the source is stale, an edit stays ed
   const { files } = diffCollect({ target: gcfg });
   assert.deepEqual(statuses(files), [
     'edited skills/commit/SKILL.md',
-    'linked skills/debug/SKILL.md',
+    'linked skills/develop/SKILL.md',
     'missing skills/refactor/SKILL.md',
     'stale .geneseed-version',
-    'stale skills/plan/SKILL.md',
+    'stale skills/prose/SKILL.md',
     'stale skills/release/SKILL.md',
   ]);
   // The stale record keeps its hunk, so the console can show what a rebuild changes.
@@ -128,7 +128,7 @@ test('the improvements report and the fleet leave stale files out of the drift',
   const { target, theme, files } = diffCollect({ target: gcfg });
   const md = improvementsMd(target, theme, files, 'now');
   assert.match(md, /- 1 edited · 0 added in deployed · 1 missing from deployed/);
-  assert.doesNotMatch(md, /skills\/plan|skills\/release|\.geneseed-version/);
+  assert.doesNotMatch(md, /skills\/prose|skills\/release|\.geneseed-version/);
   const st = webState();
   st.stampDoctor([]);
   assert.deepEqual(apiFleet(st).installs.map((i) => i.drift),
@@ -142,8 +142,8 @@ test('diff prints stale files apart and keeps them out of the edited summary', (
   try { assert.equal(cmdDiff({ target: gcfg }), 0); } finally { process.stdout.write = real; }
   assert.match(out, /\[diff\] 1 edited, 0 added-in-deployed, 1 missing-from-deployed\r?\n/);
   assert.match(out, /\[diff\] 3 file\(s\) behind source — rebuild to update them\r?\n/);
-  assert.match(out, / {2}· skills\/plan\/SKILL\.md {3}\(behind source — a rebuild updates it\)\r?\n/);
-  assert.doesNotMatch(out, /~ skills\/plan/);
+  assert.match(out, / {2}· skills\/prose\/SKILL\.md {3}\(behind source — a rebuild updates it\)\r?\n/);
+  assert.doesNotMatch(out, /~ skills\/prose/);
 });
 
 test('an install only behind its source exports no improvements file', () => {
@@ -159,10 +159,10 @@ test('an install only behind its source exports no improvements file', () => {
   assert.equal(written, null);
   assert.equal(fs.existsSync(out), false);
   assert.deepEqual(statuses(files), [
-    'linked skills/debug/SKILL.md',
+    'linked skills/develop/SKILL.md',
     'stale .geneseed-version',
     'stale skills/commit/SKILL.md',
-    'stale skills/plan/SKILL.md',
+    'stale skills/prose/SKILL.md',
     'stale skills/refactor/SKILL.md',
     'stale skills/release/SKILL.md',
   ]);
@@ -176,8 +176,8 @@ test('a manifest without hashes keeps the old reading, but the build stamp is st
   writeManifest(doc);
   assert.deepEqual(statuses(diffCollect({ target: gcfg }).files), [
     'edited skills/commit/SKILL.md',
-    'edited skills/plan/SKILL.md',
-    'linked skills/debug/SKILL.md',
+    'edited skills/prose/SKILL.md',
+    'linked skills/develop/SKILL.md',
     'missing skills/refactor/SKILL.md',
     'missing skills/release/SKILL.md',
     'stale .geneseed-version',

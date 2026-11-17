@@ -8,9 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (6.0.0): five Rites are now the `superpowers` kit.** `brainstorm`, `debug`, `plan`, `geneseed-code-review` and `review-response` are Geneseed's vendored, modified copies of obra/superpowers (Jesse Vincent, MIT). They are off unless a build names the kit (`--kits superpowers`). With the kit off, core links to them point at the official plugin's skills (`superpowers:systematic-debugging` on Claude Code, the bare name on OpenCode), and the instructions file gains a Workflow provider block. `parallel-agents`, `pipeline` and the `reviewer` agent stay core. See [the superpowers kit](docs/concepts/superpowers-kit.md).
+- **Existing installs keep the five Rites.** `rebuild-all`, `update` and `migrate` turn the kit on for an install built before it existed, unless the plugin is seen, and print one line per install saying which.
+- The Shipped profiles `starter` and `corporate` set the kit on; `mentor`, `minimal` and `autonomous` choose it by detection (`kitsByDetection`, a new optional profile key). The setup wizard asks the kit question after the install mode and defaults it by detection (Bob and OpenClaude default to yes).
+- `doctor` and `status` warn when the kit and the official plugin are both on, or both off. Detection reads settings files only, and each line names the file it read.
+- The `ci-fix` brick carries its CI-specific steps in its own body, so it works with the kit off.
+
 ### Fixed
 
 - **An excluded rule is no longer cited when the source wraps the citation list.** The render drops an excluded rule's citations from the always-on file, but it missed a list that breaks onto a new line after a comma. So with `process 2` excluded, the lean *Bound the Loop* still ended `(*Surface Failures*, *Plan Before Acting*)`. Such a list is now one group, and only the kept citations stay.
+- **`--exclude-skills` now counts relative links.** It protected only `{{DIR_SKILLS}}/<name>` links, so it accepted a skill another skill linked to by a relative path and shipped a dead link. `prototype` was one: the `minimal` profile excluded it and `wayfinder` linked it. The profile no longer excludes it, and an install whose `Excluded skills:` line names a now-linked skill has the exclusion dropped, with a notice, at its next rebuild.
 
 ## [5.6.0] — 2026-11-17
 

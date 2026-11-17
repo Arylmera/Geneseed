@@ -290,7 +290,7 @@ for (const host of ['claude', 'opencode']) {
 
       emit(host, repo, home);
       // Then the user edits a file the emit wrote.
-      const edited = `${layer}/skills/plan/SKILL.md`;
+      const edited = `${layer}/skills/develop/SKILL.md`;
       fs.appendFileSync(path.join(repo, edited), '- my extra step\n');
       emit(host, repo, home);
       assert.equal(read(shipped), 'my own commit skill\n');

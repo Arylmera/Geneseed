@@ -325,7 +325,7 @@ const EXPECTED = {
 // 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
 // as an agent, so it would register a phantom `_template` agent.
 // Aliases (an old skill name kept answering `/name`, one per name in a skill's
-// `<!-- aliases: … -->` marker — 14: the 12 old names the 2026-10 sharpen kept answering, plus
+// `<!-- aliases: … -->` marker — 13 with the superpowers kit off (`ci-fix`, debug's, is the 14th and ships with the kit): the 12 old names the 2026-10 sharpen kept answering, plus
 // `slides` and `presentation`, two synonym entry names for deck; brainstorm's `grill-me` was
 // retired to `RETIRED_ALIASES`, so no emit writes it) are
 // extra `skills/<alias>/SKILL.md` folders on Claude and OpenClaude, and command files on
@@ -339,8 +339,8 @@ const EXPECTED = {
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;
-const N_SKILLS = 51;
-const N_ALIASES = 14;
+const N_SKILLS = 46;
+const N_ALIASES = 13;
 const N_USER_ONLY = 3;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`

@@ -1272,32 +1272,32 @@ const ownedOf = (cfg) => JSON.parse(read(cfg, '.geneseed-manifest.json')).owned;
 
 test('M6: claude-global moves an unowned old render aside, writes the alias, and a second emit does nothing', () => withHome((home) => {
   const cfg = path.join(home, '.claude');
-  seedSkill(cfg, 'ci-fix', oldRender('ci-fix'));
+  seedSkill(cfg, 'repo-map', oldRender('repo-map'));
   const r = emit(home);
   const lines = pruneLines(r.stdout);
   assert.equal(lines.length, 1, r.stdout);
-  assert.match(lines[0], /^\[geneseed\] claude: pruned retired skill skills\/ci-fix \(moved to .*archived-skills.ci-fix.\d{8}-\d{6}\)$/);
-  assert.deepEqual(archivedSkills(cfg), ['ci-fix']);
-  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-skills', 'ci-fix'));
-  assert.equal(read(cfg, 'archived-skills', 'ci-fix', stamp, 'SKILL.md'), oldRender('ci-fix'));
+  assert.match(lines[0], /^\[geneseed\] claude: pruned retired skill skills\/repo-map \(moved to .*archived-skills.repo-map.\d{8}-\d{6}\)$/);
+  assert.deepEqual(archivedSkills(cfg), ['repo-map']);
+  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-skills', 'repo-map'));
+  assert.equal(read(cfg, 'archived-skills', 'repo-map', stamp, 'SKILL.md'), oldRender('repo-map'));
   // The folder freed, the alias claim held in the same emit: the next one has nothing to add.
-  assert.match(read(cfg, 'skills', 'ci-fix', 'SKILL.md'), /^description: "Alias of debug\."/m);
-  assert.ok(ownedOf(cfg).includes('skills/ci-fix/SKILL.md'));
+  assert.match(read(cfg, 'skills', 'repo-map', 'SKILL.md'), /^description: "Alias of document-project\."/m);
+  assert.ok(ownedOf(cfg).includes('skills/repo-map/SKILL.md'));
   const r2 = emit(home);
   assert.deepEqual(pruneLines(r2.stdout), [], r2.stdout);
-  assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'ci-fix')), [stamp]);
+  assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'repo-map')), [stamp]);
 }));
 
 // The authoring-comment seed is `tickets`, a name that is still retired. It was `herdr` until the
 // terminal-tools kit revived that name; a revived name has its own two cases below.
 test('M6: bob-global prunes a CRLF render and one with a leading authoring comment, and recreates neither', () => withHome((home) => {
   const cfg = path.join(home, '.bob');
-  seedSkill(cfg, 'ci-fix', oldRender('ci-fix', { crlf: true }));
+  seedSkill(cfg, 'repo-map', oldRender('repo-map', { crlf: true }));
   seedSkill(cfg, 'tickets', oldRender('tickets', { comment: true, extra: 'compatibility: opencode\n' }));
   const r = emit(home, 'bob-global');
   assert.equal(pruneLines(r.stdout).length, 2, r.stdout);
-  assert.deepEqual(archivedSkills(cfg), ['ci-fix', 'tickets']);
-  assert.ok(!exists(cfg, 'skills', 'ci-fix'), 'Bob writes aliases as commands, never as a skill folder');
+  assert.deepEqual(archivedSkills(cfg), ['repo-map', 'tickets']);
+  assert.ok(!exists(cfg, 'skills', 'repo-map'), 'Bob writes aliases as commands, never as a skill folder');
   assert.ok(!exists(cfg, 'skills', 'tickets'));
 }));
 
@@ -1433,12 +1433,12 @@ test('M6: the fingerprint refuses a hand-written skill with a quoted description
 
 test('M6: an unreadable folder is kept and reported, never a throw', () => {
   const cfg = makeSandbox('m6rd-').path;
-  seedSkill(cfg, 'ci-fix', oldRender('ci-fix'));
+  seedSkill(cfg, 'repo-map', oldRender('repo-map'));
   const readdir = () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); };
   const { prune, keep, unreadable } = retiredSkillFolders(cfg, [], { readdir });
   assert.deepEqual(prune, []);
-  assert.deepEqual(keep, [path.join(cfg, 'skills', 'ci-fix')]);
-  assert.deepEqual(unreadable, [`${path.join(cfg, 'skills', 'ci-fix')} (EACCES: permission denied)`]);
+  assert.deepEqual(keep, [path.join(cfg, 'skills', 'repo-map')]);
+  assert.deepEqual(unreadable, [`${path.join(cfg, 'skills', 'repo-map')} (EACCES: permission denied)`]);
 });
 
 test('M6: a fingerprinted folder that is itself a link stays, and so does its target', () => withHome((home) => {
@@ -1458,16 +1458,16 @@ test('M6: a fingerprinted folder that is itself a link stays, and so does its ta
 test('M6: a live name and a manifest-owned folder are never candidates, rendered or not', () => {
   const cfg = makeSandbox('m6-').path;
   seedSkill(cfg, 'quiz', oldRender('quiz'));
-  seedSkill(cfg, 'ci-fix', oldRender('ci-fix'));
+  seedSkill(cfg, 'repo-map', oldRender('repo-map'));
   const rel = (ps) => ps.map((p) => path.relative(cfg, p).replaceAll(path.sep, '/'));
   const split = (owned, opts) => {
     const { prune, keep } = retiredSkillFolders(cfg, owned, opts);
     return { prune: rel(prune), keep: rel(keep) };
   };
-  assert.deepEqual(split([]), { prune: ['skills/ci-fix', 'skills/quiz'], keep: [] });
+  assert.deepEqual(split([]), { prune: ['skills/repo-map', 'skills/quiz'], keep: [] });
   // Were `quiz` live again, its folder would be the live skill's, whatever it holds.
-  assert.deepEqual(split([], { live: ['debug', 'quiz', 'teach'] }), { prune: ['skills/ci-fix'], keep: [] });
-  assert.deepEqual(split(['skills/ci-fix/SKILL.md']), { prune: ['skills/quiz'], keep: [] });
+  assert.deepEqual(split([], { live: ['debug', 'quiz', 'teach'] }), { prune: ['skills/repo-map'], keep: [] });
+  assert.deepEqual(split(['skills/repo-map/SKILL.md']), { prune: ['skills/quiz'], keep: [] });
 });
 
 test('M6: an alias folder the manifest owns is left to the emit, never archived', () => withHome((home) => {

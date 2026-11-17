@@ -293,7 +293,7 @@ test('starter renders into every global emit, and a re-run is idempotent', { tim
     // Move the Claude install off the profile, then run again: the theme comes back, named.
     const moved = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'),
       '--theme', 'pirate', '--emit', 'claude-global', '--footprint', 'lean', '--doctrines',
-      'craft,rigor,ops,process,comms', '--exclude-rules', 'none', '--no-ownership-gate'],
+      'craft,rigor,ops,process,comms', '--exclude-rules', 'none', '--no-ownership-gate', '--kits', 'superpowers'],
     { cwd: sb.path, env, encoding: 'utf8', windowsHide: true });
     assert.equal(moved.status, 0, moved.stderr);
     const third = probe();

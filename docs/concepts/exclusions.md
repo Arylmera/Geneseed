@@ -80,7 +80,7 @@ geneseed build --emit claude-global --exclude-skills "bruno,react-view-transitio
 
 The skill's files are not written, its catalogue row goes, and an OpenCode `/command` that runs it goes too. The install records the list (`Excluded skills: …` under its skill section), and every rebuild and upgrade keeps it. `--exclude-skills none` puts them all back.
 
-A few skills cannot be excluded, because the harness itself links to them by path — `council`, `rule`, `skill-forge`, `workflow` and a handful more. The flag names them when it refuses one. Skills you installed yourself are not Geneseed's to exclude: remove those from the host's skills folder directly.
+A few skills cannot be excluded, because the harness itself links to them, by path or by a relative link from another skill — `council`, `rule`, `skill-forge`, `workflow`, `prototype` and a handful more, the five [superpowers kit](superpowers-kit.md) skills among them. (Until the relative links were scanned, `--exclude-skills prototype` was accepted and left a dead link in `wayfinder`; an install that did so has the exclusion dropped, with a notice, at its next rebuild.) The flag names them when it refuses one. Skills you installed yourself are not Geneseed's to exclude: remove those from the host's skills folder directly.
 
 ### Law IV deletion gate — on or off
 

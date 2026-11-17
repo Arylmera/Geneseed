@@ -156,8 +156,8 @@ test('an axis change re-renders: the theme, a gate switch, an excluded skill', (
   diffCollect({ target: d, memo, sourceFp: 'fp-a' });
   assert.equal(memo.renders, 3);
 
-  fs.appendFileSync(agent, '\nExcluded skills: commit\n');
-  assert.deepEqual(excludedSkillsOfDir(d), ['commit']);
+  fs.appendFileSync(agent, '\nExcluded skills: adhd\n');
+  assert.deepEqual(excludedSkillsOfDir(d), ['adhd']);
   diffCollect({ target: d, memo, sourceFp: 'fp-a' });
   assert.equal(memo.renders, 4);
 });

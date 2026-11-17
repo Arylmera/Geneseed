@@ -63,6 +63,24 @@ The fifth kit is `terminal-tools`, for terminal programs the agent drives throug
 
 Its rules gate each tool on its environment, read live state before acting, close only what the agent opened, never stop the user's server or service, and leave every login and credential to the user. `herdr` is adapted from the official skill of [herdrdev/herdr](https://github.com/herdrdev/herdr) by herdrdev (Apache-2.0), condensed into house format; its skill folder ships `LICENSE-herdr.txt`. `opencode-cli` is first-party and targets OpenCode V2 only, verified against the V2 source at v2.3.0: the V1 commands top-level `export` and `import`, `attach`, `agent create` and `mcp debug` are not in its command table.
 
+The sixth kit is `superpowers`: Geneseed's own, modified copies of five [obra/superpowers](https://github.com/obra/superpowers) skills (Jesse Vincent, MIT): `brainstorm`, `debug`, `plan`, `geneseed-code-review` and `review-response`. Unlike the others it is a stand-in: the official superpowers plugin offers the same skills, so an install has the kit or the plugin, never both. It is the one kit that core files link to, which the next section explains, and [its own page](superpowers-kit.md) covers what the plugin replaces, detection and the profiles.
+
+### A kit that a plugin can replace
+
+A kit manifest may carry `replacedBy`. It is the only home of the member to plugin-skill mapping and of how each host spells a plugin skill:
+
+```json
+"replacedBy": {
+  "upstream": "superpowers",
+  "provider": "kits/superpowers/provider.md",
+  "missing": "kits/superpowers/missing.md",
+  "hosts": { "claude": "superpowers:{name}", "opencode": "{name}" },
+  "skills": { "debug": "systematic-debugging" }
+}
+```
+
+The one rule that normally holds, that a core file may not link to a kit member, has this exception. With such a kit **off**, the render rewrites every core link to a member in its single `renderAll` pass: the link text stays and the target becomes the plugin's skill, in the host's spelling, or plain text on a host with no plugin (Bob, OpenClaude, the plain bundle). It also leaves a **Workflow provider** block in the instructions file. With the kit on, nothing changes. `doctor` checks that every member has a mapping, that `upstream` is a key of `src/upstreams.json`, that the two block files exist inside the word budget, and that no core spec names a member in prose without a link, because only links can be rewritten.
+
 ### Switching kits on and off
 
 ```bash
@@ -77,7 +95,7 @@ geneseed build --emit claude-global --kits none
 
 A build does exactly what its flags say, so a plain `build` without `--kits` would turn off a kit the install has on. Over an existing install it refuses instead: it names the change (`kits: <k> -> none`) and prints the command that keeps the kit. With `--reset` it goes ahead and first warns: `this install has kit <k>; this build turns it off — pass --kits <k> to keep it`.
 
-The setup wizard asks one yes/no question per kit, each defaulting to whether the install has that kit on. It asks them only when at least one kit exists.
+The setup wizard asks one yes/no question per kit, after the install mode, each defaulting to whether the install has that kit on. It asks them only when at least one kit exists. For a kit a plugin can replace it defaults by detection instead, and the question says what it saw.
 
 ### What an install records
 

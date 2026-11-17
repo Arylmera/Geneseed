@@ -321,7 +321,7 @@ test('GET /api/kits lists the shipped kits and each present install with its own
   withKitInstalls(({ oc, proj }) => {
     const res = apiKits(neutral());
     assert.equal(res.error, undefined);
-    assert.deepEqual(res.kits.map((k) => k.name), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'terminal-tools']);
+    assert.deepEqual(res.kits.map((k) => k.name), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools']);
     const spring = res.kits.find((k) => k.name === 'spring-boot');
     assert.equal(spring.skills.length, 3);
     assert.equal(spring.agents.length, 6);
@@ -431,13 +431,13 @@ test('catalog skill/agent rows and items name their kit, or null outside every k
     agents: [...inv.agents, member('spring-reviewer'), member('docker-expert')] } };
   const skills = apiCatalog(st, 'skills').items;
   assert.equal(skills.find((r) => r.name === 'spring-boot').kit, 'spring-boot');
-  assert.equal(skills.find((r) => r.name === 'plan').kit, null);
+  assert.equal(skills.find((r) => r.name === 'develop').kit, null);
   const agents = apiCatalog(st, 'agents').items;
   assert.equal(agents.find((r) => r.name === 'spring-reviewer').kit, 'spring-boot');
   assert.equal(agents.find((r) => r.name === 'reviewer').kit, null);
   assert.equal(apiItem(st, 'skill', 'spring-testing').kit, 'spring-boot');
   assert.equal(apiItem(st, 'agent', 'docker-expert').kit, 'spring-boot');
-  assert.equal(apiItem(st, 'skill', 'plan').kit, null);
+  assert.equal(apiItem(st, 'skill', 'develop').kit, null);
 });
 
 test('a kits body REPLACES the install kits: [] and "none" drop them, a name sets them', () => {

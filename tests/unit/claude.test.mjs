@@ -198,14 +198,15 @@ test("Bob's AGENTS.md carries no dead link, keeps the Agents rows and drops the 
 
 test('a skill is byte-identical across the Claude and OpenCode global emits', () => {
   // The hosts differ in their WIRING, never in the content they carry. A renderer that grew a
-  // host-conditional inside the skill body would be invisible to either host's own tests.
+  // host-conditional inside the skill body would be invisible to either host's own tests. `commit` links no
+  // superpowers-kit skill: with the kit off, a link to one is the one deliberate host difference (the plugin's spelling).
   withDir((d) => {
     const claudeCfg = path.join(d, 'dotclaude');
     const openCfg = path.join(d, 'dotopencode');
     globalEmit('claude', path.join(d, 'b-claude'), claudeCfg);
     globalEmit('opencode', path.join(d, 'b-opencode'), openCfg);
-    const a = path.join(claudeCfg, 'skills', 'develop', 'SKILL.md');
-    const b = path.join(openCfg, 'skills', 'develop', 'SKILL.md');
+    const a = path.join(claudeCfg, 'skills', 'commit', 'SKILL.md');
+    const b = path.join(openCfg, 'skills', 'commit', 'SKILL.md');
     assert.ok(fs.existsSync(a) && fs.existsSync(b), 'one of the two hosts never wrote the skill');
     assert.equal(fs.readFileSync(a, 'utf8'), fs.readFileSync(b, 'utf8'));
   });
@@ -1274,19 +1275,19 @@ test('migrate tells the owner when an excluded skill was merged', () => {
     process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
     process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
     try {
-      cliGlobalEmit('opencode-global', ['--exclude-skills', 'dependencies']);
+      cliGlobalEmit('opencode-global', ['--exclude-skills', 'bruno']);
       const carrier = path.join(opencodeConfigDir(), 'AGENT.md');
       const text = fs.readFileSync(carrier, 'utf8');
-      assert.ok(text.includes('Excluded skills: dependencies'), 'the emit wrote no marker');
+      assert.ok(text.includes('Excluded skills: bruno'), 'the emit wrote no marker');
       // An install made before the merge: its marker still names the old skill.
-      fs.writeFileSync(carrier, text.replace('Excluded skills: dependencies', 'Excluded skills: deps-audit'));
+      fs.writeFileSync(carrier, text.replace('Excluded skills: bruno', 'Excluded skills: bruno-test-writer'));
 
       const [rc, out, err] = capturedOut(() => cmdMigrate({}, { root: path.join(d, 'node_modules', 'geneseed') }));
 
       assert.equal(rc, 0, `migrate failed:
 ${out}
 ${err}`);
-      const notice = "'deps-audit' is now part of 'dependencies' — excluding 'dependencies'";
+      const notice = "'bruno-test-writer' is now part of 'bruno' — excluding 'bruno'";
       assert.ok(err.includes(notice), `migrate replayed the old name silently:
 ${err}`);
       assert.ok(!out.includes(notice), 'the notice went to stdout');

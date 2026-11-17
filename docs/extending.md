@@ -515,6 +515,7 @@ it with `--kits` ([Kits](concepts/kits.md)). Nothing in the mechanism is specifi
 }
 ```
 
+- `replacedBy` (optional, for a kit that a plugin can stand in for): `{ upstream, provider, missing, hosts, skills }`. `skills` maps each member to the plugin's skill and is complete (one per member, none extra); `hosts` spells a plugin skill per host with `{name}`; `upstream` is a key of `src/upstreams.json`; `provider` and `missing` are the two Workflow provider blocks the render leaves with the kit off (a host with a plugin, a host without), each inside `rulesWordBudget`. `kitProblems` checks all of it. It is the one case where a core file may link to a member: the render rewrites those links when the kit is off (`rewriteOffKitLinks`, `js/build/render.mjs`, in the one `renderAll` pass, never in an emitter). A new core mention of a member must therefore be a link, because `kitProblems` refuses a bare one (`<member> {{SKILL}}`).
 - `banned` (optional): strings no member file may contain, in the skill and agent specs, a skill's side files (flat, `skills/<m>/*.md`) and the kit's `rules.md`; `doctor` refuses each hit, naming file and line. A line carrying `<!-- banned: ok -->` is exempt (a rule that names the construct in order to forbid it).
 
 `loadKits` (`js/build/source.mjs`) reads every `src/kits/*.json`; `src/kits/` itself never ships
@@ -546,16 +547,16 @@ enumerates skills would miss it. `src/kits/<kit>/` holds only `rules.md`.
    `doctor` holds it to the manifest's `rulesWordBudget` (300 when unset).
 4. **Membership and links.** `doctor` (`kitProblems`) refuses a member listed in two kits, a
    core skill listed in a kit, a member with no file or no registry row, a core file that links
-   to a kit member (it would dangle in an install without the kit), and a kit file that links to
+   to a kit member (it would dangle in an install without the kit; a kit with `replacedBy` is the exception, above), and a kit file that links to
    another kit's member. Links run kit → core only. A kit's links to its own members do not
    protect them from `--exclude-skills`; its link to a core skill still protects that skill.
-5. **The setup wizard.** It asks one yes/no per kit, and only when at least one kit exists. Each
+5. **The setup wizard.** It asks one yes/no per kit, after the install mode, and only when at least one kit exists. A kit with `replacedBy` defaults by detection (`superpowersKitDefault`, `js/maintain/plugin-detect.mjs`) and the question names what was read. Each
    shipped kit therefore adds one answer line to the stdin strings in `tests/unit/wizard.test.mjs`,
    and the `wizard-no-kit` job holds that the questions are skipped on a tree with no kit.
 6. **Golden cells**: the matrix (`tests/helpers/matrix/emit.*.json`) carries kit on for `claude` and
    `opencode`, the kit-off baseline (`kits: []`, spelled `--kits none`), and three deletion cells
    (kit on to off). One deletion cell sets `edit` (a map of sandbox path to appended text) so a member
-   is the user's own before the kit goes off, and `sovereign` excuses it: the prune keeps it (R6).
+   is the user's own before the kit goes off, and `sovereign` excuses it: the prune keeps it (R6). A kit with `replacedBy` also gets the off-to-on deletion cell, since turning it on writes members the off state removed, and a Bob cell for each state (no plugin there).
 
 **What a kit costs an install** — what to weigh before adding one:
 

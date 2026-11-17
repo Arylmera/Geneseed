@@ -1454,12 +1454,13 @@ test('the primary agent and the command layer are opt-in', () => {
       GENESEED_COMMANDS: process.env.GENESEED_COMMANDS };
     delete process.env.GENESEED_PRIMARY;
     delete process.env.GENESEED_COMMANDS;
-    const items = itemsOf();
+    // The superpowers kit ON: `/code-review` runs one of its skills, and a kit that is off writes no command.
+    const items = renderAll({ ...cfg(), kits: ['superpowers'] }, 'neutral').items;
     // The source the driver hands in. Transcribed rather than exported, and self-checking:
     // if it moved, `writePrimaryAgent` returns null and the opt-in assertion below fails.
     const primarySrc = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
     assert.ok(isFile(primarySrc), 'the orchestrator source moved — this fixture is stale');
-    const c = { ...cfg(), primaryAgentSrc: primarySrc };
+    const c = { ...cfg(), kits: ['superpowers'], primaryAgentSrc: primarySrc };
     try {
       assert.equal(writePrimaryAgent(c, path.join(d, 'agents'), {}), null, 'primary was on by default');
       assert.deepEqual(writeCommandLayer(c, items, path.join(d, 'command')), []);

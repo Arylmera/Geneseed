@@ -88,6 +88,7 @@ A gate that is off in the global install runs nowhere, so the line does not name
 | `excludeRules` | no | A list of rule ids, such as `craft.4` (the console's Constitution page lists them) |
 | `excludeSkills` | no | A list of skill names, as `geneseed build --exclude-skills` |
 | `kits` | no | A list of the kits in `src/kits/` |
+| `kitsByDetection` | no | A list of kits that a plugin can stand in for (today `superpowers`), decided when the profile is applied: on when the plugin is **not** seen on that host, off when it is. The rule is the wizard's. A kit may not appear here and in `kits`. [The superpowers kit](../concepts/superpowers-kit.md) says what is read and where |
 | `sharedTier` | no | `true` lets a **project** install read the machine-wide shared tier (`geneseed build --shared-tier on`). A global apply ignores it, because a global install owns the tier |
 | `contextWindow` | no | `"200k"` (the default) or `"1m"`, as `geneseed build --context-window`: the model context the install is built for. On Claude Code it sets the skill-listing budget ([Skills](../concepts/skills.md#the-listing-budget-on-claude-code)); other hosts record it and write nothing |
 | `gates` | no | An object that maps a gate switch to `false` to turn it off. Each key is a gate flag of `geneseed build --help` (`deletionGate: false` is `--no-deletion-gate`); a wrong key's refusal lists them all. `ownBranchPass: false` is `--strict-consent`, which adds asks |
@@ -107,14 +108,14 @@ A gate that is off in the global install runs nowhere, so the line does not name
   "mode": "direct",
   "trust": "balanced",
   "doctrines": "all",
-  "kits": [],
+  "kits": ["superpowers"],
   "contextWindow": "200k",
   "gates": { "ownershipGate": false },
   "login": true
 }
 ```
 
-`peer` and not `expert`, because `expert` does not explain the basics a new user needs; not `mentor`, because it checks understanding with questions. Every gate stays armed except the ownership gate, whose first-write stop is heavy for a new user. `200k`, because most machines run a 200k-token model, a locked-down work PC included; `guillaume-claude-global` sets `1m` for a 1M-token model.
+`peer` and not `expert`, because `expert` does not explain the basics a new user needs; not `mentor`, because it checks understanding with questions. Every gate stays armed except the ownership gate, whose first-write stop is heavy for a new user. The `superpowers` kit is on: a new user has no workflow provider yet, and the kit is Geneseed's own copy of one ([the superpowers kit](../concepts/superpowers-kit.md)). `200k`, because most machines run a 200k-token model, a locked-down work PC included; `guillaume-claude-global` sets `1m` for a 1M-token model.
 
 ## `mentor`
 
@@ -129,6 +130,7 @@ A gate that is off in the global install runs nowhere, so the line does not name
   "trust": "prudent",
   "doctrines": "all",
   "kits": [],
+  "kitsByDetection": ["superpowers"],
   "contextWindow": "200k",
   "login": true
 }
@@ -148,7 +150,7 @@ A gate that is off in the global install runs nowhere, so the line does not name
   "mode": "direct",
   "trust": "prudent",
   "doctrines": "all",
-  "kits": [],
+  "kits": ["superpowers"],
   "contextWindow": "200k",
   "gates": { "ownershipGate": false, "ownBranchPass": false },
   "login": false
@@ -170,6 +172,7 @@ A gate that is off in the global install runs nowhere, so the line does not name
   "trust": "aggressive",
   "doctrines": "all",
   "kits": [],
+  "kitsByDetection": ["superpowers"],
   "contextWindow": "1m",
   "gates": { "ownershipGate": false },
   "login": true
@@ -190,15 +193,16 @@ A gate that is off in the global install runs nowhere, so the line does not name
   "mode": "direct",
   "trust": "balanced",
   "doctrines": ["craft", "rigor"],
-  "excludeSkills": ["brick-forge", "bruno", "daydream", "factory", "factory-forge", "forge-mcp", "prototype", "react-view-transitions"],
+  "excludeSkills": ["brick-forge", "bruno", "daydream", "factory", "factory-forge", "forge-mcp", "react-view-transitions"],
   "kits": [],
+  "kitsByDetection": ["superpowers"],
   "contextWindow": "200k",
   "gates": { "ownershipGate": false },
   "login": true
 }
 ```
 
-Each choice makes the always-on context smaller. `assistant` does what you ask and stops, so a small model gets a narrow task and few chances to drift. `craft` and `rigor` are the packs about how code is written and proven; the other packs stay in `doctrines/` for reference. The excluded skills serve rare tasks. A skill that the harness links to cannot be excluded, so `council`, `deck`, `pipeline` and `workflow` stay. Every gate except the ownership gate stays armed, because a gate costs no context. To measure the gain on your machine, build `starter` and `minimal` into two empty folders with `geneseed profile apply <name> --project <dir> --hosts claude`, then compare the size of each `CLAUDE.md` and the number of skills.
+Each choice makes the always-on context smaller. `assistant` does what you ask and stops, so a small model gets a narrow task and few chances to drift. `craft` and `rigor` are the packs about how code is written and proven; the other packs stay in `doctrines/` for reference. The excluded skills serve rare tasks, and the `superpowers` kit is chosen by detection. A skill that the harness links to cannot be excluded, so `council`, `deck`, `pipeline` and `workflow` stay. Every gate except the ownership gate stays armed, because a gate costs no context. To measure the gain on your machine, build `starter` and `minimal` into two empty folders with `geneseed profile apply <name> --project <dir> --hosts claude`, then compare the size of each `CLAUDE.md` and the number of skills.
 
 ## Save your own
 

@@ -7,8 +7,9 @@
   "mode": "direct",
   "trust": "balanced",
   "doctrines": ["craft", "rigor"],
-  "excludeSkills": ["brick-forge", "bruno", "daydream", "factory", "factory-forge", "forge-mcp", "prototype", "react-view-transitions"],
+  "excludeSkills": ["brick-forge", "bruno", "daydream", "factory", "factory-forge", "forge-mcp", "react-view-transitions"],
   "kits": [],
+  "kitsByDetection": ["superpowers"],
   "contextWindow": "200k",
   "gates": { "ownershipGate": false },
   "login": true

@@ -1361,7 +1361,7 @@ test('geneseed build --kits fx --exclude-skills fx-skill is accepted; a core lin
       const agentMd = fs.readFileSync(path.join(out, 'AGENT.md'), 'utf8');
       assert.match(agentMd, /^Active kits: fx\r?$/m);
       assert.match(agentMd, /^Excluded skills: fx-skill\r?$/m);
-      assert.ok(fs.existsSync(path.join(out, 'skills', 'debug.md')), 'the bundle lays skills out elsewhere');
+      assert.ok(fs.existsSync(path.join(out, 'skills', 'commit.md')), 'the bundle lays skills out elsewhere');
       assert.ok(!fs.existsSync(path.join(out, 'skills', 'fx-skill.md')), 'the excluded kit skill shipped');
       assert.ok(fs.existsSync(path.join(out, 'agents', 'fx-agent.md')), 'the kit agent did not ship');
       const refused = build(path.join(sb.path, 'refused'), 'council');

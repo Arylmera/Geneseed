@@ -633,7 +633,7 @@
     {
       "name": "doctor",
       "help": "validate the build (the installed theme; --all sweeps every theme, slowly)",
-      "description": "validate the build: unresolved tokens, dead links, non-hermetic escapes, theme-key parity, and that a committed bundle matches src. Defaults to the INSTALLED theme (--theme NAME for one, --all to sweep every theme). --all renders every theme through every emit, so it takes minutes rather than seconds; it prints one progress line per theme on stderr.",
+      "description": "validate the build: unresolved tokens, dead links, non-hermetic escapes, theme-key parity, and that a committed bundle matches src. Defaults to the INSTALLED theme (--theme NAME for one, --all to sweep every theme). --all renders every theme through every emit, so it takes minutes rather than seconds; it prints one progress line per theme on stderr. It also prints a [note] WARN per install when the superpowers kit and the official superpowers plugin are both on, or both off (read from settings files, never from a process).",
       "positionals": [],
       "options": [
         {
@@ -1949,7 +1949,7 @@
     {
       "name": "status",
       "help": "print the install dashboard (theme, installs, memory, version, gates)",
-      "description": "print the install dashboard: theme, every install with its settings, components, memory, version, and the state of the tool-boundary gates. --json prints the same payload for a script. Off a terminal the rows are plain, with no box.",
+      "description": "print the install dashboard: theme, every install with its settings, components, memory, version, and the state of the tool-boundary gates. --json prints the same payload for a script. Off a terminal the rows are plain, with no box. An install with the superpowers kit and the plugin both on, or both off, gets a WARN row.",
       "positionals": [],
       "options": [
         {

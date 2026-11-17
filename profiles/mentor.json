@@ -8,6 +8,7 @@
   "trust": "prudent",
   "doctrines": "all",
   "kits": [],
+  "kitsByDetection": ["superpowers"],
   "contextWindow": "200k",
   "login": true
 }

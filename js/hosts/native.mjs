@@ -303,6 +303,15 @@ export function stripSkillBodyLinks(body) {
 }
 
 /**
+ * An agent's link to a SKILL (`../skills/debug.md`) resolves in the flat bundle and nowhere
+ * natively, where a skill is `skills/<name>/SKILL.md`. The link text stays; a skill body is
+ * de-linked the same way (`stripSkillBodyLinks`). Links to other agents stay: agents are flat.
+ */
+export function stripAgentSkillLinks(body) {
+  return body.replace(/\[([^\]]+)\]\(\.\.\/skills\/[^)\s]*\.md(?:#[^)\s]*)?\)/g, '$1');
+}
+
+/**
  * A first-party skill's SIDE FILES (`src/skills/<stem>/<file>`, beside the flat spec) are
  * linked from the spec as `[…](<stem>/<file>)` — the path that resolves in `src/` and in the
  * flat bundle, where doctor's dead-link scan proves it. A native skill sits one level deeper
@@ -775,6 +784,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, ov);
       else fm = opencodeAgentFrontmatter(stem, text, ov, theme);
       dest = path.join(agentsDir, `${stem}.md`);
+      body = stripAgentSkillLinks(body);
       kind = 'agent';
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.

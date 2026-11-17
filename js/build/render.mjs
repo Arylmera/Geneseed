@@ -35,7 +35,7 @@ import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import {
-  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
+  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, linkTargetOf, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
 import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
@@ -251,8 +251,58 @@ function activeKits(cfg) {
  * carrier re-rendered with prefixed DIR_* tokens (`prefixedAgentText`) must rebuild it too.
  */
 export function kitsBody(cfg, theme, lawsPrefix = '') {
-  return activeKits(cfg).map(([, m]) => `\n${renderFile(cfg, path.join(cfg.src, m.rules), theme,
+  const on = activeKits(cfg).map(([, m]) => `\n${renderFile(cfg, path.join(cfg.src, m.rules), theme,
     'full', lawsPrefix).trim()}\n`).join('');
+  // A kit that is OFF but has a plugin to stand in for it leaves a Workflow provider block: the
+  // plugin's rank and routing on a host that has it, the missing-provider line on one that has not.
+  const off = [...replacements(cfg).keys()].map((k) => {
+    const r = kitsOf(cfg).get(k).replacedBy;
+    const file = theme.PLUGIN_HOST ? r.provider : r.missing;
+    return typeof file === 'string' ? `\n${renderFile(cfg, path.join(cfg.src, file), theme, 'full', lawsPrefix).trim()}\n` : '';
+  }).join('');
+  return on + off;
+}
+
+/**
+ * The kits that are off and have `replacedBy`, and what each leaves behind:
+ * `Map<kit, Map<skill, plugin skill>>`. Read once per cfg, like the kits themselves.
+ */
+const REPLACEMENTS = new WeakMap();
+function replacements(cfg) {
+  let out = REPLACEMENTS.get(cfg);
+  if (!out) {
+    out = new Map();
+    for (const [k, m] of kitsOf(cfg)) {
+      if ((cfg.kits ?? []).includes(k) || !m.replacedBy) continue;
+      out.set(k, new Map(Object.entries(m.replacedBy.skills)));
+    }
+    REPLACEMENTS.set(cfg, out);
+  }
+  return out;
+}
+
+/** Markdown links, label and target. */
+const MD_LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+
+/**
+ * The one place a link to a skill of a kit that is OFF is rewritten (spec 3): the label stays, the
+ * target becomes the plugin's skill in the host's spelling (`replacedBy.hosts`), or nothing on a
+ * host with no plugin. Run on source text before tokens, so `[debug {{SKILL}}](debug.md)` and
+ * `({{DIR_SKILLS}}/debug.md)` meet one resolver (`linkTargetOf`). No emitter filters again.
+ */
+function rewriteOffKitLinks(cfg, theme, rel, text) {
+  const off = replacements(cfg);
+  if (!off.size) return text;
+  return text.replace(MD_LINK_RE, (whole, label, target) => {
+    const hit = linkTargetOf(rel, target);
+    if (hit?.kind !== 'skills') return whole;
+    for (const [kit, map] of off) {
+      if (!map.has(hit.name)) continue;
+      const tpl = kitsOf(cfg).get(kit).replacedBy.hosts?.[theme.PLUGIN_HOST];
+      return tpl ? `${label} (\`${tpl.replace('{name}', map.get(hit.name))}\`)` : label;
+    }
+    return whole;
+  });
 }
 
 /**
@@ -426,6 +476,9 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
                            visiting = new Set(), nativeCatalog = false) {
   const here = path.resolve(filePath);
   let text = readSource(cfg, here);
+  if (replacements(cfg).size && normcase(here).startsWith(normcase(path.resolve(cfg.src)) + path.sep)) {
+    text = rewriteOffKitLinks(cfg, theme, path.relative(cfg.src, here).split(path.sep).join('/'), text);
+  }
 
   text = text.replace(INCLUDE_RE, (_whole, rel) => {
     const target = path.resolve(cfg.src, rel);
@@ -646,9 +699,13 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
  * parity harnesses, which drive this module directly.
  */
 export function effectiveTheme(cfg, themeName, {
-  footprint = 'full', lawsPrefix = '', sharedRoot = null,
+  footprint = 'full', lawsPrefix = '', sharedRoot = null, pluginHost = '',
 } = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
+  // The host whose plugin stands in for a kit that is off (`replacedBy.hosts`): '' on a host with
+  // none (Bob, OpenClaude, the plain bundle). PLUGIN_PREFIX is how that host spells a plugin skill.
+  theme.PLUGIN_HOST = pluginHost;
+  theme.PLUGIN_PREFIX = pluginHost === 'claude' ? 'superpowers:' : '';
   // Neither notes path takes `lawsPrefix`: the machine one is the tier's, and the project one is
   // the project root's `notebook/` on every host. Prefixing it once sent OpenClaude's skills to
   // `notebook/` while its hook wrote `.openclaude/notebook/` (T10).
@@ -769,12 +826,12 @@ export function destRel(rel) {
  * @param {any} cfg
  * @param {string} themeName
  * `sharedRoot` is the tier's root on a global emit (`sharedRootFor`): see `pathTokens`.
- * @param {{ footprint?: string, lawsPrefix?: string, sharedRoot?: string | null, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
+ * @param {{ footprint?: string, lawsPrefix?: string, sharedRoot?: string | null, pluginHost?: string, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
  */
 export function renderAll(cfg, themeName, {
-  footprint = 'full', lawsPrefix = '', nativeCatalog = false, sharedRoot = null,
+  footprint = 'full', lawsPrefix = '', nativeCatalog = false, sharedRoot = null, pluginHost = '',
 } = {}) {
-  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix, sharedRoot });
+  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix, sharedRoot, pluginHost });
   const items = [];
   const skipped = new Set(cfg.excludeSkills ?? []);
   // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.
