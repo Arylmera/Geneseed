@@ -42,7 +42,7 @@ import { printErr, printOut } from '../lib/fs.mjs';
 import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
-  checkBuild, colorThemeProblems, renderedPathNotes, renderedProblems, themeParityProblems,
+  checkBuild, colorThemeProblems, renderedPathNotes, renderedProblems, themeParityProblems, tierEnvNotes,
 } from './checks-build.mjs';
 import {
   bobBlockProblems, hostMatrixProblems, localNoteProblems, moduleMapProblems, scorecardProblems,
@@ -269,6 +269,7 @@ export function doctorCollect({
   problems = problems.concat(ran('openclaude_dual', 'OpenClaude dual harness',
     openclaudeDualHarnessNotes()));
   problems = problems.concat(ran('shared_paths', 'Rendered shared paths', renderedPathNotes()));
+  problems = problems.concat(ran('tier_env', 'Model tier aliases', tierEnvNotes()));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
   problems = problems.concat(ran('host_claims', 'Host claims',

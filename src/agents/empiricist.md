@@ -2,6 +2,7 @@
 
 > {{DESC_EMPIRICIST}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs every claim, for and against, held to evidence.
 - The debate is running on assertion and intuition; the user wants it anchored to data, tests, or precedent.

@@ -2,6 +2,7 @@
 
 > {{DESC_RESEARCHER}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A question needs verified answers from *outside* the repository. The open web, a
   vendor's docs, an upgrade guide, a specification: the main context gets the verified

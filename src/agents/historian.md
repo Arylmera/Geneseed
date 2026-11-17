@@ -2,6 +2,7 @@
 
 > {{DESC_HISTORIAN}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs precedent and institutional memory.
 - The motion resembles something tried before; the user wants the track record before repeating it.

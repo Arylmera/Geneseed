@@ -56,6 +56,7 @@ const ALLOWED_COMMENT_RES = [
   // js/web/docs.mjs HARNESS_OPEN_RE: `harness:` then one or more of its four ids, comma-separated.
   new RegExp(`^harness:\\s*(?:${HARNESS_IDS})(?:\\s*,\\s*(?:${HARNESS_IDS}))*$`),
   /^bash:\s*allow$/,                         // js/hosts/native.mjs BASH_MARKER
+  /^tier:\s*(strong|light)$/,                // js/build/source.mjs TIER_MARKER_RE
   /^banned: ok$/,                            // checks-counts.mjs kitProblems: a kit line that names a banned string
 ];
 

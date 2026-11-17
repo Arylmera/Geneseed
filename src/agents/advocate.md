@@ -2,6 +2,7 @@
 
 > {{DESC_ADVOCATE}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs the strongest case for the motion.
 - The user wants the upside of a change, plan, or decision pressed hard rather than hedged.

@@ -2,6 +2,7 @@
 
 > {{DESC_ARCHITECT}}
 
+<!-- tier: strong -->
 ## When to dispatch
 - A task is large, ambiguous, or touches multiple subsystems.
 - There are competing approaches and the trade-off needs to be made explicit.

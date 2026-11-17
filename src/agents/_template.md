@@ -38,6 +38,10 @@
   edit, webfetch, and bash. If it must run read-only commands (tests, linters,
   scanners), add the marker `<!-- bash: allow -->` in this section to gate bash to
   "ask" instead of denying it outright.
+- Model tier: an unmarked agent is `standard`. For `light` (read-only, read-and-summarise
+  seats) or `strong` (judgement seats that must run on the session model), put the marker
+  `<!-- tier: light -->` on a line of its own directly above `## When to dispatch`; the build
+  strips it from every output. A seat that writes code is never `light`.
 - Caution: the build detects the phrase "Read-only" anywhere in the file — a
   write-capable {{AGENT}}'s spec must not contain it, or its emit is locked down.
 

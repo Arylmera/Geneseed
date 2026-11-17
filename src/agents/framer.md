@@ -2,6 +2,7 @@
 
 > {{DESC_FRAMER}}
 
+<!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a test of the framing — is this the right problem.
 - The motion may be a solution in search of a problem, or the real need sits upstream of what's proposed.

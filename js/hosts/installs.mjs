@@ -35,8 +35,8 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import {
-  CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, GATE_SWITCHES, PACK_ORDER,
-  RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
+  CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER,
+  RETIRED_KIT_IDS, TIERS_CHOICES, TIERS_MARKER, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
   CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, gateCarrierText, isHostGlobalDir,
@@ -510,6 +510,25 @@ export function contextWindowOfDir(d, host = null) {
     if (!m) return undefined;
     return Object.hasOwn(CONTEXT_WINDOWS, m[1]) ? m[1] : DEFAULT_CONTEXT_WINDOW;
   }, DEFAULT_CONTEXT_WINDOW, host);
+}
+
+const TIERS_RE = new RegExp(`^${TIERS_MARKER}:[ \\t]*(\\S+?)[ \\t]*\\r?$`, 'm');
+
+/**
+ * The sub-agent tier routing a DEPLOYED install was built with (`--tiers`), read back so
+ * `rebuild-all`, `upgrade`, `diff` and the guard re-render it. A missing line is the default
+ * (`off`): the marker is only ever written off it, so an install older than the option is a
+ * default install. A value this checkout does not know reads as the default too, so a
+ * hand-edited line can never reach `--tiers` and refuse a rebuild.
+ */
+export function tiersOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    const m = TIERS_RE.exec(text);
+    if (!m) return undefined;
+    return TIERS_CHOICES.includes(m[1]) ? m[1] : DEFAULT_TIERS;
+  }, DEFAULT_TIERS, host);
 }
 
 /**

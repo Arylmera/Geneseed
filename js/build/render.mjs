@@ -37,7 +37,7 @@ import { normcase, comparePaths } from '../lib/paths.mjs';
 import {
   CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
-import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW } from './source.mjs';
+import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, TIERS_MARKER, splitTier } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
 import { PROJECT_NOTES_DIR } from '../hosts/spec-feedback.mjs';
 import { PORTABLE_MACHINE_DIR } from '../lib/machine-dir.mjs';
@@ -712,6 +712,8 @@ export function effectiveTheme(cfg, themeName, {
   // `--context-window`, under the same contract (`contextWindowOfDir` reads it): a line only off the default.
   theme.CONTEXT_WINDOW_LINE = cfg.contextWindow && cfg.contextWindow !== DEFAULT_CONTEXT_WINDOW
     ? `\n${CONTEXT_WINDOW_MARKER}: ${cfg.contextWindow}\n` : '';
+  // `--tiers`, under the same contract (`tiersOfDir` reads it): a line only off the default.
+  theme.TIERS_LINE = cfg.tiers && cfg.tiers !== DEFAULT_TIERS ? `\n${TIERS_MARKER}: ${cfg.tiers}\n` : '';
   // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
   // written only when its gate is OFF, so a default build stays byte-identical and a missing
   // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so
@@ -801,7 +803,13 @@ export function renderAll(cfg, themeName, {
     // bundle; here, once, so no writer applies it twice.
     if (text !== null && sp[0] === 'skills' && sp.length === 3 && sp[2] === 'SKILL.md'
         && VENDORED_SKILL_DIRS.has(sp[1])) text = vendoredWithCatalogueLine(text, sp[1], cfg.src);
-    items.push({ rel: outRel, text, src: file });
+    // An agent's tier line is read here and stripped, so no host's output carries it
+    // (`splitTier`); the emit reads the tier off the item.
+    let tier;
+    if (text !== null && sp[0] === 'agents' && sp.length === 2 && sp[1].endsWith('.md')) {
+      ({ text, tier } = splitTier(text));
+    }
+    items.push(tier === undefined ? { rel: outRel, text, src: file } : { rel: outRel, text, src: file, tier });
     // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The
     // token is gone from `text`, so the raw source is scanned; an unknown key or a null
     // licenseFile yields no copy. A vendored folder's VENDOR.md carries a credit too, but the

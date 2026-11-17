@@ -11,8 +11,8 @@ import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, CREDIT_RE, DESCRIPTION_LIMIT, makeCfg } from '../build/source.mjs';
 import { CLAUDE_STYLE, HOSTS, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
-import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, renderedTier, themeFiles } from '../hosts/installs.mjs';
-import { isVendoredPath } from '../hosts/native.mjs';
+import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, renderedTier, themeFiles, tiersOfDir } from '../hosts/installs.mjs';
+import { claudeTierModel, isVendoredPath, loadTierMap } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
@@ -224,6 +224,31 @@ export function renderedPathNotes() {
     if (rendered === null ? isDir(sharedPaths().memory) : normcase(rendered) !== normcase(root)) {
       notes.push(`${NOTE}[shared-tier] ${host}: the carrier renders ${rendered ?? 'relative paths'}, `
         + `the run-time tier is ${root} — run geneseed rebuild-all`);
+    }
+  }
+  return notes;
+}
+
+/**
+ * Each global Claude Code install built `--tiers auto` whose tier alias cannot resolve in this
+ * process's environment (spec D11): a Bedrock or Vertex provider with no
+ * `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`. The build wrote no `model:` line for that tier then, so its
+ * agents inherit; this names the variable, and a rebuild after setting it writes the line. A
+ * NOTE, not a problem: nothing is broken, a tier just routes nowhere. `env` is a parameter so a
+ * test plants the provider without touching the real one.
+ */
+export function tierEnvNotes(env = process.env) {
+  const notes = [];
+  for (const { host, configDir } of HOSTS) {
+    if (host !== 'claude') continue;
+    let dir;
+    try { dir = configDir(); } catch { continue; }
+    if (readMaybe(path.join(dir, '.geneseed-emit'))?.trim() !== 'claude-global') continue;
+    if (tiersOfDir(dir, host) !== 'auto') continue;
+    const map = loadTierMap(dir, () => {});
+    for (const tier of ['standard', 'light']) {
+      const { warning } = claudeTierModel(tier, map, env);
+      if (warning) notes.push(`${NOTE}[tiers] ${host}: ${warning.replace(/^\[geneseed\] WARN: /, '')}`);
     }
   }
   return notes;
