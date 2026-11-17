@@ -541,16 +541,18 @@ function envOn(env, name) {
 
 /**
  * The model a tier gets on Claude Code, or null (inherit) — pure, so the table in
- * `tests/unit/tier_models.test.mjs` states every row. `map` is the user's `tiers` map
- * (`loadTierMap`), `env` the build-time environment.
+ * `tests/unit/tiers.test.mjs` states every row. `map` is the user's `tiers` map
+ * (`loadTierMap`), `env` the environment.
  *
  * - `strong` never gets a line: it IS the parent's model.
  * - A tier the map does not name gets the alias default (`CLAUDE_TIER_DEFAULTS`); a tier the map
  *   names with an empty value is the user choosing inherit.
- * - D11: an alias on Bedrock or Vertex resolves only through `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`.
- *   Without it the sub-agent might fail to start, so the build writes no line (inherit) and says
- *   which variable is missing. Only the three aliases are checked: any other value is a model id
- *   the user wrote and owns.
+ * - D11 (revised 2026-11-17): the alias is ALWAYS written. On Bedrock or Vertex without
+ *   `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`, Claude Code resolves it to its built-in model id (seen on
+ *   2.1.326, Vertex: `haiku` -> claude-haiku-4-5@20251001, and the sub-agent runs), which may not
+ *   exist in the user's cloud project. So `model` is unchanged and `warning` carries the advice to
+ *   pin it; the doctor prints it (`tierEnvNotes`), the build says nothing. Only the three aliases
+ *   are checked: any other value is a model id the user wrote and owns.
  */
 export function claudeTierModel(tier, map = {}, env = {}) {
   if (!TIER_MAP_KEYS.includes(tier)) return { model: null, warning: null };
@@ -560,15 +562,12 @@ export function claudeTierModel(tier, map = {}, env = {}) {
   const alias = String(value).trim().toLowerCase();
   const cloud = ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX'].find((n) => envOn(env, n));
   const need = Object.hasOwn(CLAUDE_ALIAS_ENV, alias) ? CLAUDE_ALIAS_ENV[alias] : null;
-  if (cloud && need && !String(env[need] ?? '').trim()) {
-    return {
-      model: null,
-      warning: `[geneseed] WARN: --tiers auto: ${cloud} is set but ${need} is not, so the '${alias}' `
-        + `alias of the ${tier} tier may not resolve — ${tier} agents inherit the session model; `
-        + `set ${need} and rebuild`,
-    };
-  }
-  return { model: String(value), warning: null };
+  const warning = cloud && need && !String(env[need] ?? '').trim()
+    ? `--tiers auto: ${cloud} is set but ${need} is not, so the ${tier} tier's '${alias}' alias `
+      + `resolves to Claude Code's built-in model id, which may not exist in your cloud project — `
+      + `pin it: set ${need}`
+    : null;
+  return { model: String(value), warning };
 }
 
 /**
@@ -783,17 +782,9 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   const ov = overrides || {};
   if (bobDialect) warnBobIgnored(ov);
   else if (host === 'claude') warnClaudeIgnored(ov);
-  // One answer per tier per emit, so D11's warning prints once, not once per agent.
-  const tierModels = new Map();
-  const tierModelOf = (tier) => {
-    if (!tiers || host !== 'claude' || bobDialect) return null;
-    if (!tierModels.has(tier)) {
-      const { model, warning } = claudeTierModel(tier, tiers.map, tiers.env);
-      if (warning) warn(warning);
-      tierModels.set(tier, model);
-    }
-    return tierModels.get(tier);
-  };
+  // D11: the build never withholds the alias; the doctor warns about a cloud provider (`tierEnvNotes`).
+  const tierModelOf = (tier) => (!tiers || host !== 'claude' || bobDialect ? null
+    : claudeTierModel(tier, tiers.map, tiers.env).model);
   let nAgents = 0;
   let nSkills = 0;
   const written = [];

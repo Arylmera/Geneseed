@@ -9,8 +9,9 @@
 //      `strong` has no default and no map key: it is the parent's model, unless pinned.
 //   3. Defaults: standard -> `sonnet`, light -> `haiku`. A map key names another model; an empty
 //      value means inherit.
-//   4. D11: on Bedrock or Vertex an alias resolves only through ANTHROPIC_DEFAULT_<ALIAS>_MODEL.
-//      Without it the tier gets no line, and a warning names the variable, once per tier.
+//   4. D11 (revised): the alias is always written. On Bedrock or Vertex without ANTHROPIC_DEFAULT_<ALIAS>_MODEL
+//      Claude Code falls back to its built-in model id, which may not exist in the user's project, so
+//      `claudeTierModel` returns the model AND a warning that says to pin it; only the doctor prints it.
 //   5. With the option off or absent every emit is what it was; OpenClaude, Bob and OpenCode
 //      write no tier model (B6, D8, and the OpenCode resolver is not built yet).
 //   6. The choice is recorded in the carrier (`Model tiers: auto`, only off the default), read
@@ -105,11 +106,11 @@ const rows = [
   ['light', { light: '' }, {}, null, null],                                 // empty: the user chose inherit
   ['light', { standard: 'opus' }, {}, 'haiku', null],                       // a key for another tier is not ours
   ['unmarked', {}, {}, null, null],                                         // not a tier at all
-  // D11 — a cloud provider without the alias variable: no line, and the warning names it.
-  ['standard', {}, BEDROCK, null, 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
-  ['light', {}, BEDROCK, null, 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
-  ['light', {}, { CLAUDE_CODE_USE_VERTEX: 'true' }, null, 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
-  ['standard', { standard: 'opus' }, BEDROCK, null, 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
+  // D11 — a cloud provider without the alias variable: the alias stays, and the warning names the variable.
+  ['standard', {}, BEDROCK, 'sonnet', 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
+  ['light', {}, BEDROCK, 'haiku', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
+  ['light', {}, { CLAUDE_CODE_USE_VERTEX: 'true' }, 'haiku', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
+  ['standard', { standard: 'opus' }, BEDROCK, 'opus', 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
   // ... with the variable set, or the provider switch spelled off, or a model id the user wrote.
   ['standard', {}, { ...BEDROCK, ANTHROPIC_DEFAULT_SONNET_MODEL: 'us.anthropic.x' }, 'sonnet', null],
   ['light', {}, { CLAUDE_CODE_USE_BEDROCK: '0' }, 'haiku', null],
@@ -172,18 +173,13 @@ test('OpenClaude and Bob (bobDialect) and OpenCode write no tier model', () => {
   }
 });
 
-test('D11 through the writer: no line for a tier whose alias cannot resolve, one warning per tier', () => {
+test('D11 through the writer: a cloud provider changes no line and the build says nothing', () => {
+  const plain = emit({}, { tiers: tiers() });
   const { dir, err } = emit({}, { tiers: tiers({}, BEDROCK) });
-  assert.deepEqual(fs.readdirSync(dir).filter((f) => /^model: /m.test(read(dir, f))), []);
-  assert.equal(err.split('WARN').length - 1, 2, err);
-  assert.equal(err.split(/ANTHROPIC_DEFAULT_SONNET_MODEL is not/).length - 1, 1, err);
-  assert.equal(err.split(/ANTHROPIC_DEFAULT_HAIKU_MODEL is not/).length - 1, 1, err);
-  // Only the tier whose variable is missing loses its line.
-  const half = emit({}, { tiers: tiers({}, { ...BEDROCK, ANTHROPIC_DEFAULT_HAIKU_MODEL: 'h' }) });
-  assert.equal(modelOf(half.dir, 'explorer'), 'haiku');
-  assert.equal(modelOf(half.dir, 'developer'), null);
-  assert.match(half.err, /ANTHROPIC_DEFAULT_SONNET_MODEL/);
-  assert.doesNotMatch(half.err, /ANTHROPIC_DEFAULT_HAIKU_MODEL/);
+  for (const f of fs.readdirSync(plain.dir)) assert.equal(read(dir, f), read(plain.dir, f), f);
+  assert.equal(modelOf(dir, 'explorer'), 'haiku');
+  assert.equal(modelOf(dir, 'developer'), 'sonnet');
+  assert.doesNotMatch(err, /ANTHROPIC_DEFAULT/);
 });
 
 // ---- 3. the tiers map in agent-overrides.json ------------------------------------------------------
@@ -254,13 +250,14 @@ test('OpenClaude, Bob and OpenCode record the choice and route nothing', () => {
   }
 });
 
-test('D11 through a build: a Bedrock environment without the variables writes no line and warns', () => {
+test('D11 through a build: a Bedrock environment without the variables still writes the aliases', () => {
   const d = sandbox('gst-bedrock-');
   const r = withEnv({ ...NO_CLOUD, CLAUDE_CODE_USE_BEDROCK: '1' },
     () => build('--emit', 'claude', '--out', d, '--theme', 'neutral', '--tiers', 'auto'));
   assert.equal(r.value, 0, r.err);
-  assert.match(r.err, /CLAUDE_CODE_USE_BEDROCK is set but ANTHROPIC_DEFAULT_SONNET_MODEL is not/);
-  assert.equal(modelOf(path.join(d, '.claude', 'agents'), 'explorer'), null);
+  assert.doesNotMatch(r.err, /ANTHROPIC_DEFAULT/);
+  assert.equal(modelOf(path.join(d, '.claude', 'agents'), 'explorer'), 'haiku');
+  assert.equal(modelOf(path.join(d, '.claude', 'agents'), 'developer'), 'sonnet');
 });
 
 test('the map and a pin in agent-overrides.json reach a real build; the pin wins', () => {

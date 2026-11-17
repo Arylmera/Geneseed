@@ -231,11 +231,11 @@ export function renderedPathNotes() {
 
 /**
  * Each global Claude Code install built `--tiers auto` whose tier alias cannot resolve in this
- * process's environment (spec D11): a Bedrock or Vertex provider with no
- * `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`. The build wrote no `model:` line for that tier then, so its
- * agents inherit; this names the variable, and a rebuild after setting it writes the line. A
- * NOTE, not a problem: nothing is broken, a tier just routes nowhere. `env` is a parameter so a
- * test plants the provider without touching the real one.
+ * process's environment (spec D11, revised): a Bedrock or Vertex provider with no
+ * `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`. The build wrote the alias anyway, and Claude Code resolves it
+ * to its built-in model id, which may not exist in the user's cloud project; this names the
+ * variable to pin. A NOTE, not a problem: nothing is known to be broken. `env` is a parameter so
+ * a test plants the provider without touching the real one.
  */
 export function tierEnvNotes(env = process.env) {
   const notes = [];
@@ -248,7 +248,7 @@ export function tierEnvNotes(env = process.env) {
     const map = loadTierMap(dir, () => {});
     for (const tier of ['standard', 'light']) {
       const { warning } = claudeTierModel(tier, map, env);
-      if (warning) notes.push(`${NOTE}[tiers] ${host}: ${warning.replace(/^\[geneseed\] WARN: /, '')}`);
+      if (warning) notes.push(`${NOTE}[tiers] ${host}: ${warning}`);
     }
   }
   return notes;
