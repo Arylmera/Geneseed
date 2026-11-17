@@ -353,10 +353,12 @@ test('the primary and command layers are emitted only when their env vars ask fo
   // A PARTITION, not a presence check: the same emit is run twice and the DIFFERENCE is the
   // claim, so a layer that shipped unconditionally fails just as loudly as one that never ships.
   //
-  // SEVEN commands, one per `COMMAND_SET` entry. `/code-review` was missing from this list for
-  // as long as its skill had been `geneseed-code-review`: the set named the old skill, the
-  // lookup missed, and the command was dropped without a word — the list here was written
-  // from the output rather than from the set. The command keeps its short name.
+  // THREE commands: the `COMMAND_SET` entries whose skill ships by default. The other four (`/plan`,
+  // `/code-review`, `/debug`, `/review-response`) run the superpowers kit's skills, so they ship with the
+  // kit and not before (a kit that is off writes no command, as an excluded skill writes none).
+  // `/code-review` was once missing from the full list because its skill had been renamed
+  // `geneseed-code-review`: the lookup missed and the command was dropped without a word. The
+  // command keeps its short name.
   const filesUnder = (d) => {
     const out = [];
     const walk = (dir) => {
@@ -386,14 +388,10 @@ test('the primary and command layers are emitted only when their env vars ask fo
   assert.ok(off.length > 100, `only ${off.length} files in a default emit, so the diff is thin`);
   assert.deepEqual(added, [
     '.opencode/agents/orchestrator.md',
-    '.opencode/command/code-review.md',
     '.opencode/command/commit.md',
-    '.opencode/command/debug.md',
-    '.opencode/command/plan.md',
     '.opencode/command/research.md',
-    '.opencode/command/review-response.md',
     '.opencode/command/ship.md',
-  ], 'the opt-in layers no longer add exactly the primary agent and the seven commands');
+  ], 'the opt-in layers no longer add exactly the primary agent and the three commands');
   // And nothing is REMOVED by turning them on: these layers add, they do not replace.
   assert.deepEqual(off.filter((f) => !on.includes(f)), [],
     'turning the opt-in layers on removed a file the default emit writes');
@@ -427,12 +425,12 @@ test("a user's own command/ and orchestrator file survive the opt-in emit and th
       assert.match(err, new RegExp(`kept your existing ${rel}`), `${rel} was kept silently`);
     }
     // The positive control: the commands the user did NOT have are still Geneseed's.
-    assert.ok(owned.includes('command/plan.md'));
+    assert.ok(owned.includes('command/ship.md'));
     quiet(() => installUninstall(d, 'opencode', 'project', 'keep'));
     for (const [p, body] of Object.entries(mine)) {
       assert.equal(read(p), body, `uninstall deleted or changed the user's ${p}`);
     }
-    assert.ok(!existsSync(path.join(d, '.opencode', 'command', 'plan.md')),
+    assert.ok(!existsSync(path.join(d, '.opencode', 'command', 'ship.md')),
       'uninstall left a command Geneseed did write');
   });
 });
@@ -442,11 +440,11 @@ test('a per-repo --footprint lean emit renders lean skill text, not full', () =>
   // layer always rendered at the DEFAULT footprint ('full') regardless of the flag — the global
   // twin (`emitOpencodeGlobalRender`) and Claude's emit both pass `{ footprint, nativeCatalog }`
   // through. Written-out expectation, from `src/skills/_self-improvement.md`'s two LEAN halves,
-  // substituted for the `debug` skill: full opens "Close each run with one beat of reflection on
+  // substituted for the `commit` skill: full opens "Close each run with one beat of reflection on
   // the Skill itself:"; lean reads "One beat of reflection on this Skill: a step that misled".
   withDir((d) => {
     emitOpencodeLean('neutral', path.join(d, 'bundle'), d);
-    const skill = read(d, '.opencode', 'skills', 'debug', 'SKILL.md');
+    const skill = read(d, '.opencode', 'skills', 'commit', 'SKILL.md');
     assert.ok(skill.includes('One beat of reflection on this Skill: a step that misled'),
       'a --footprint lean per-repo emit must render the LEAN:else half');
     assert.ok(!skill.includes('Close each run with one beat of reflection on the Skill itself:'),

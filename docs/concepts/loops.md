@@ -34,6 +34,11 @@ all nest a short retry ring inside the iteration ring (`apply`↔`test`; `apply`
 tests, the second repairs CI directly through `ci-fix`, the third drafts a decision record and
 challenges it.
 
+`ci-fix` names the `debug` skill, which belongs to the [superpowers kit](superpowers-kit.md). The loop
+command reads the shipped bricks, never an install, so it cannot tell whether the kit is on; the brick
+therefore carries its own CI steps and says to load the plugin's `systematic-debugging` when there is no
+`debug` skill. It works the same with the kit on, off, or on a host with neither.
+
 Work closes into a commit whenever the graph re-enters the iteration loop's head — so any setup
 work before the loop starts (reproducing a bug, say) is its own unit, numbered iteration 0, kept
 out of iteration 1's diff. For the same reason the iteration has exactly one way in: its

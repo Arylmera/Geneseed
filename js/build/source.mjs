@@ -302,6 +302,13 @@ export function resolveCredits(text, src = SRC) {
 }
 
 /**
+ * The heading of the Workflow provider block a kit that is off leaves in the carrier (`kits/superpowers/provider.md`
+ * and `missing.md` write it through `{{PROVIDER_HEADING}}`). `kitAwareOfDir` matches it: one writer, so a rename
+ * cannot turn every post-kit install into a pre-kit one.
+ */
+export const WORKFLOW_PROVIDER_HEADING = '### Workflow provider';
+
+/**
  * `src/kits/<kit>.json`, parsed, as `Map<kit, manifest>` in sorted kit order. A manifest is
  * `{ description, skills, agents, rules, rulesWordBudget, catalogue, banned? }`, the sole writer of its
  * kit's membership; the `<kit>/` folder beside it holds the kit's `rules.md` and is not read
@@ -323,8 +330,37 @@ export function loadKits(src = SRC) {
     if (m.banned !== undefined && !(Array.isArray(m.banned) && m.banned.every((b) => typeof b === 'string' && b))) {
       throw new Error(`src/kits/${n}: 'banned' must be an array of non-empty strings`);
     }
+    // `replacedBy` names the plugin that stands in for the kit when it is off (the superpowers
+    // kit): only its shape is read here; `kitProblems` holds its content (mapping, upstream key).
+    const r = m.replacedBy;
+    if (r !== undefined && !(r !== null && typeof r === 'object' && !Array.isArray(r)
+        && typeof r.upstream === 'string' && r.hosts !== null && typeof r.hosts === 'object'
+        && r.skills !== null && typeof r.skills === 'object')) {
+      throw new Error(`src/kits/${n}: 'replacedBy' must be { upstream, hosts, skills } objects`);
+    }
     return [n.slice(0, -'.json'.length), m];
   }));
+}
+
+/**
+ * Where a markdown link target points inside `src`, as `{ kind: 'skills' | 'agents', name }`, or
+ * null (an URL, an anchor, a path outside the two folders, a link to the file's own skill). `rel`
+ * is the linking file's path under `src`, posix. The `{{DIR_SKILLS}}` / `{{DIR_AGENTS}}` tokens
+ * read as the folders they name, so one resolver serves the scan (`specLinks`) and the kit-off
+ * rewrite in `js/build/render.mjs`: the two cannot disagree about what a link points at.
+ */
+export function linkTargetOf(rel, target) {
+  const t = target.split('#')[0].replace(/\{\{DIR_SKILLS\}\}/g, 'skills').replace(/\{\{DIR_AGENTS\}\}/g, 'agents');
+  if (!t || /^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith('/')) return null;
+  // A target that LEADS with the folder token names the folder from the source root, whichever folder the
+  // linking file sits in (`laws/`, `doctrines/`, the template); a relative one, `../{{DIR_AGENTS}}/x.md`, is
+  // resolved from the file.
+  const anchored = /^\{\{DIR_(SKILLS|AGENTS)\}\}\//.test(target);
+  const hit = /^(skills|agents)\/([a-z0-9-]+)(?:\.md|\/.*)?$/.exec(path.posix.normalize(anchored ? t : path.posix.join(path.posix.dirname(rel), t)));
+  if (!hit) return null;
+  const own = rel.split('/');
+  if (own[0] === hit[1] && own[1] && own[1].replace(/\.md$/, '') === hit[2]) return null;
+  return { kind: hit[1], name: hit[2] };
 }
 
 /** Every skill and agent the kits handed in claim (a `loadKits` Map, or a subset of one). */
@@ -510,6 +546,17 @@ export function specLinks(src = SRC) {
         for (const m of text.matchAll(/\{\{DIR_(SKILLS|AGENTS)\}\}\/([a-z0-9-]+)/g)) {
           const kind = m[1].toLowerCase();
           links.push({ rel: sp.join('/'), kind, name: m[2], kit: ofKit(sp), owner: owners[kind].get(m[2]) ?? null });
+        }
+        // F1: a relative link (`(debug.md)`, `(../{{DIR_AGENTS}}/x.md)`) ships as dead as a token one
+        // when its target is left out. The token forms above are counted already, so a target
+        // spelled with one is skipped here. A brick's `skill:` is NOT a link: bricks never ship, and
+        // `availability` (js/loop/catalog.mjs) already turns a missing skill into an unavailable
+        // brick, which is why the minimal profile may exclude `bruno` and `factory`.
+        const add = (hit) => {
+          if (hit) links.push({ rel: sp.join('/'), ...hit, kit: ofKit(sp), owner: owners[hit.kind].get(hit.name) ?? null });
+        };
+        for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+          if (!m[1].includes('{{DIR_')) add(linkTargetOf(sp.join('/'), m[1]));
         }
       }
     }

@@ -21,8 +21,10 @@ import { isDoctorNote } from '../../js/inspect/scan.mjs';
 
 // A saved profile of a default install holds every key BUT `tiers`: that key is written only when the
 // install routes by tier (`profileFromInstall`), because an absent `tiers` means "this profile does not
-// set it" and keeps the install's own value on apply, while a written `off` would force it.
-const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'tiers');
+// set it" and keeps the install's own value on apply, while a written `off` would force it. Nor
+// `kitsByDetection`, which only a hand-written profile holds: an install's read-back has the kits it has,
+// never a kit "by detection".
+const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'tiers' && k !== 'kitsByDetection');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -51,7 +53,9 @@ function fixtureDir(files) {
 test('the shipped starter profile holds the values the spec decided (D4, D5, D27)', () => {
   const r = loadProfile('starter', SHIPPED_ONLY);
   assert.equal(r.ok, true, r.error);
-  assert.deepEqual(r.profile, STARTER);
+  // STARTER above is the fixture the other tests build from, kit-less; the shipped one adds the superpowers
+  // kit (a new user has no workflow provider yet, and the kit is Geneseed's own copy of one).
+  assert.deepEqual(r.profile, { ...STARTER, kits: ['superpowers'] });
   assert.equal(r.source, 'shipped');
   assert.equal(BASE_PROFILE, 'starter');
 });

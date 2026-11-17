@@ -62,6 +62,8 @@ The session keeps a ledger in its notebook (`notebook/foreman-ledger.md`), one l
 
 A new worker starts only when the old one cannot be resumed, and it receives a note of the ask, the diff so far and what was tried.
 
+A worker that the official superpowers plugin supplies (`dispatching-parallel-agents`, `subagent-driven-development`, `executing-plans`) is bound by the same brief: the session writes it by the Brief checklist, and the Workflow provider block of the instructions file says so when the [superpowers kit](superpowers-kit.md) is off.
+
 A new task gets a new worker by default. The session may give it to an idle worker whose own task is already merged or dropped, when the new task works in the same files and that worker's context is still under the size the mode sets. The worker then starts the new task on a new branch from the current BASE. It gets the full brief that any new worker gets (BASE, write set, proof commands, the Brief checklist), and the session checks its write set against every task in flight. The session writes its reason (same files, context size) in the new task's ledger line. Otherwise it starts a new worker. A worker never holds two live tasks at once. A worker past that size, or whose last task touched other code, retires.
 
 ### Status lines

@@ -341,7 +341,7 @@ test('GET /api/kits lists the shipped kits and each present install with its own
   withKitInstalls(({ oc, proj }) => {
     const res = apiKits(neutral());
     assert.equal(res.error, undefined);
-    assert.deepEqual(res.kits.map((k) => k.name), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'terminal-tools']);
+    assert.deepEqual(res.kits.map((k) => k.name), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools']);
     const spring = res.kits.find((k) => k.name === 'spring-boot');
     assert.equal(spring.skills.length, 3);
     assert.equal(spring.agents.length, 6);
@@ -451,13 +451,13 @@ test('catalog skill/agent rows and items name their kit, or null outside every k
     agents: [...inv.agents, member('spring-reviewer'), member('docker-expert')] } };
   const skills = apiCatalog(st, 'skills').items;
   assert.equal(skills.find((r) => r.name === 'spring-boot').kit, 'spring-boot');
-  assert.equal(skills.find((r) => r.name === 'plan').kit, null);
+  assert.equal(skills.find((r) => r.name === 'develop').kit, null);
   const agents = apiCatalog(st, 'agents').items;
   assert.equal(agents.find((r) => r.name === 'spring-reviewer').kit, 'spring-boot');
   assert.equal(agents.find((r) => r.name === 'reviewer').kit, null);
   assert.equal(apiItem(st, 'skill', 'spring-testing').kit, 'spring-boot');
   assert.equal(apiItem(st, 'agent', 'docker-expert').kit, 'spring-boot');
-  assert.equal(apiItem(st, 'skill', 'plan').kit, null);
+  assert.equal(apiItem(st, 'skill', 'develop').kit, null);
 });
 
 test('a kits body REPLACES the install kits: [] and "none" drop them, a name sets them', () => {
@@ -620,7 +620,7 @@ test('the deletion gate switch reaches the install command only as a boolean, el
     assert.ok(!argv({}).includes('--no-deletion-gate'), 'an armed install lost its gate on a plain rebuild');
     // A disarmed install: its carrier says so, and a body that says nothing keeps it off.
     fs.mkdirSync(cl, { recursive: true });
-    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\nActive packs: craft\nDeletion gate: off\n<!-- END GENESEED -->\n');
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\n### Workflow provider\n\nActive packs: craft\nDeletion gate: off\n<!-- END GENESEED -->\n');
     assert.deepEqual(argv({}).slice(-2), ['--no-deletion-gate', '--reset'], 'a plain rebuild re-armed a disarmed install');
     assert.deepEqual(argv({ deletionGate: 'true' }).slice(-2), ['--no-deletion-gate', '--reset'], 'a string re-armed it');
     assert.ok(!argv({ deletionGate: true }).includes('--no-deletion-gate'), 'true did not re-arm');

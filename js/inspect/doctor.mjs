@@ -35,8 +35,10 @@ import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/dr
 import { ROOT } from '../build/source.mjs';
 import { CLAUDE_STYLE, opencodeShadowedInstall, resolvePath } from '../hosts/hosts.mjs';
 import {
-  hookShellProblems, installedDefaults, openclaudeDualHarnessRoots, themeFiles,
+  hookShellProblems, installTargets, installedDefaults, openclaudeDualHarnessRoots, themeFiles,
 } from '../hosts/installs.mjs';
+import { installProfile } from '../build/profile.mjs';
+import { providerWarning } from '../maintain/kit-migration.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
 import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
@@ -76,6 +78,23 @@ export function openclaudeDualHarnessNotes() {
     + 'a claude/bob per-repo install — OpenClaude loads its own .openclaude/CLAUDE.md AND that '
     + 'root CLAUDE.md/AGENTS.md (every always-on doc doubles) — uninstall the one you no '
     + 'longer use if this was not intended');
+}
+
+/**
+ * The workflow-provider WARN per install (`providerWarning`): the superpowers kit and the official
+ * plugin both on, or neither. A NOTE, never a problem: either is a legal configuration its owner
+ * may have chosen, and doctor must not fail on it. Read from files only, and never on the hook path.
+ */
+export function providerNotes() {
+  const out = [];
+  for (const [host, scope, root] of installTargets()) {
+    let p;
+    try { p = installProfile(host, scope, root); } catch { continue; }
+    if (p.state === 'absent') continue;
+    const w = providerWarning({ host, scope, root, kits: p.kits });
+    if (w) out.push(`${NOTE}[superpowers] ${host}:${scope} — ${w}`);
+  }
+  return out;
 }
 
 /**
@@ -269,6 +288,7 @@ export function doctorCollect({
   problems = problems.concat(ran('openclaude_dual', 'OpenClaude dual harness',
     openclaudeDualHarnessNotes()));
   problems = problems.concat(ran('shared_paths', 'Rendered shared paths', renderedPathNotes()));
+  problems = problems.concat(ran('providers', 'Workflow provider', providerNotes()));
   problems = problems.concat(ran('tier_env', 'Model tier aliases', tierEnvNotes()));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));

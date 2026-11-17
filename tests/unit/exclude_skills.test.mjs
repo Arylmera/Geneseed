@@ -125,8 +125,8 @@ test('a command whose skill was excluded is skipped, not a build failure', () =>
   });
 });
 
-test('F21: the old `quiz` name excludes `teach`, which absorbed it, and is not retired', () => {
-  const r = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'quiz']);
-  assert.deepEqual(r.excludeSkills, ['teach'], 'quiz did not resolve through its alias');
-  assert.ok(!Object.hasOwn(RETIRED_SKILL_IDS, 'quiz'), 'an alias that is also retired fails doctor');
+test('F21: the old `bruno-test-writer` name excludes `bruno`, which absorbed it, and is not retired', () => {
+  const r = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'bruno-test-writer']);
+  assert.deepEqual(r.excludeSkills, ['bruno'], 'bruno-test-writer did not resolve through its alias');
+  assert.ok(!Object.hasOwn(RETIRED_SKILL_IDS, 'bruno-test-writer'), 'an alias that is also retired fails doctor');
 });

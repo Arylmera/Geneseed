@@ -37,6 +37,7 @@ import { isDir, printErr, printOut } from '../lib/fs.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
 import { NOTE } from '../inspect/scan.mjs';
 import { expanduser, resolvePath } from '../hosts/hosts.mjs';
+import { superpowersKitDefault } from './plugin-detect.mjs';
 
 /** Where the shipped profiles live: `profiles/` at the checkout (or package) root. */
 export const PROFILES_DIR = path.join(ROOT, 'profiles');
@@ -71,7 +72,7 @@ export const BASE_PROFILE = 'starter';
  * profile turns it on.
  */
 export const PROFILE_KEYS = ['description', 'hosts', 'theme', 'footprint', 'posture', 'mode', 'trust',
-  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'sharedTier', 'contextWindow', 'tiers', 'gates', 'login'];
+  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'kitsByDetection', 'sharedTier', 'contextWindow', 'tiers', 'gates', 'login'];
 
 /** A profile name: a file stem, never a path. */
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -167,6 +168,18 @@ export function profileProblems(p) {
     if (!stringList(p.kits)) errs.push(`'kits' must be a list of: ${list(kits)}`);
     else for (const k of p.kits.filter((x) => !kits.includes(x))) errs.push(`'kits': unknown kit '${k}' (valid: ${list(kits)})`);
   }
+  // A kit chosen at apply time by what the machine holds (`kitsByDetection`): only a kit that a
+  // plugin can stand in for (`replacedBy`) has anything to detect, and it is on, or by detection, never both.
+  if (p.kitsByDetection !== undefined) {
+    const all = loadKits();
+    const detectable = [...all].filter(([, m]) => m.replacedBy).map(([k]) => k);
+    if (!stringList(p.kitsByDetection)) errs.push(`'kitsByDetection' must be a list of: ${list(detectable)}`);
+    else {
+      for (const k of p.kitsByDetection.filter((x) => !all.has(x))) errs.push(`'kitsByDetection': unknown kit '${k}' (valid: ${list(detectable)})`);
+      for (const k of p.kitsByDetection.filter((x) => all.has(x) && !detectable.includes(x))) errs.push(`'kitsByDetection': kit '${k}' has no plugin to detect (valid: ${list(detectable)})`);
+      for (const k of p.kitsByDetection.filter((x) => Array.isArray(p.kits) && p.kits.includes(x))) errs.push(`'kitsByDetection': kit '${k}' is also in 'kits' — name it in one`);
+    }
+  }
   if (p.gates !== undefined) {
     const keys = GATE_SWITCHES.map((g) => g.key);
     if (!p.gates || typeof p.gates !== 'object' || Array.isArray(p.gates)) errs.push(`'gates' must be an object keyed by: ${list(keys)}`);
@@ -222,6 +235,20 @@ export function profileDoctrines(p) {
 }
 
 /**
+ * The kits profile `p` switches on for `host`: its `kits`, plus each `kitsByDetection` kit the
+ * plugin standing in for it is NOT seen for (`superpowersKitDefault`, the wizard's rule). A host
+ * with no plugin store to read gets the kit on. `detectRoots` names the roots to read; a test
+ * passes fixture roots, and the default is the machine's own.
+ */
+export function profileKits(p, host, project = null, detectRoots = {}) {
+  const kits = new Set(p.kits ?? []);
+  for (const k of p.kitsByDetection ?? []) {
+    if (superpowersKitDefault(host, { ...detectRoots, projectDir: project ?? detectRoots.projectDir ?? null }).on) kits.add(k);
+  }
+  return [...kits].sort();
+}
+
+/**
  * The generator argv that installs profile `p` into `host`: globally, or into the folder
  * `project` when one is given.
  *
@@ -231,14 +258,14 @@ export function profileDoctrines(p) {
  * here; posture and mode elide only at the value the driver would take anyway. `--reset` last,
  * as the wizard does: a profile is a whole selection and wins over the install it lands on (D14).
  */
-export function profileBuildArgs(p, host, project = null, current = null) {
+export function profileBuildArgs(p, host, project = null, current = null, detectRoots = {}) {
   // A stated selection, never null: `'all'` resolves to the packs, a list is the list.
   const doctrines = PACK_ORDER.filter((d) => profileDoctrines(p).includes(d));
   // PROJECT SCOPE (spec D32, D37): `--emit <host> --out <dir> --root <dir>`, and only here the
   // profile's `sharedTier`; a global install owns the tier, so a global apply ignores the field.
   const argv = setupBuildArgs(p.theme, project ? host : `${host}-global`, project, project, p.footprint,
     p.posture, p.mode, doctrines, PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [],
-    p.gates ?? {}, p.kits ?? [], project ? p.sharedTier === true : false,
+    p.gates ?? {}, profileKits(p, host, project, detectRoots), project ? p.sharedTier === true : false,
     p.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
     // The profile's own value, else the install's recorded one (`current`), else off: a profile
     // without the key never turns a routed install back off by being applied over it.

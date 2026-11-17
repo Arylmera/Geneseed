@@ -36,7 +36,7 @@ import path from 'node:path';
 
 import {
   CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER,
-  RETIRED_KIT_IDS, TIERS_CHOICES, TIERS_MARKER, THEMES, discoverNames, loadKits, resolveSkillNames,
+  RETIRED_KIT_IDS, TIERS_CHOICES, TIERS_MARKER, THEMES, WORKFLOW_PROVIDER_HEADING, discoverNames, linkedSkillIds, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
   CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, gateCarrierText, isHostGlobalDir,
@@ -448,7 +448,13 @@ export function excludedSkillsOfDir(d, host = null, notify = null) {
     const { ids, notices, unknown } = resolveSkillNames(m[1].split(',').map((s) => s.trim()).filter(Boolean));
     if (unknown.length) return [];
     if (notify) for (const n of notices) notify(n);
-    return ids;
+    // A skill some spec LINKS to became protected after the install was made (F1: relative links
+    // count): the flag would refuse the name and break every replay, and re-admitting a skill is
+    // the safe direction, so the exclusion is dropped with a notice, as an alias to a linked skill is.
+    const linked = ids.length ? linkedSkillIds() : [];
+    const kept = ids.filter((n) => !linked.includes(n));
+    if (notify) for (const n of ids.filter((x) => linked.includes(x))) notify(`'${n}' is linked to by another skill and cannot be excluded — exclusion dropped`);
+    return kept;
   }, [], host);
 }
 
@@ -479,6 +485,26 @@ export function kitsOfDir(d, host = null, notify = null) {
   }, [], host);
 }
 
+
+/**
+ * Was this install built by a Geneseed that knows the `superpowers` kit? Read off the carrier: such
+ * a build writes either `Active kits: ... superpowers` or, with the kit off, the Workflow provider
+ * block (`WORKFLOW_PROVIDER_HEADING`). An older build writes neither. The migration of an install made
+ * before the kit (`js/maintain/kit-migration.mjs`) reads this beside the release the marker records,
+ * because a build made after the kit but before its release carries the old release number.
+ * `null` when there is no Geneseed carrier to read: nothing is installed there to migrate.
+ */
+export function kitAwareOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    // A carrier with no `Active packs:` line is not one Geneseed rendered (a file the user wrote
+    // and the emit kept): there is nothing in it to migrate, so it reads like no carrier at all.
+    if (!/^Active packs:/m.test(text)) return undefined;
+    const line = KITS_RE.exec(text);
+    return new RegExp(`^${WORKFLOW_PROVIDER_HEADING}\\r?$`, 'm').test(text) || (line !== null && /(^|[ ,])superpowers\b/.test(line[1]));
+  }, null, host);
+}
 
 /**
  * Whether a DEPLOYED install reads the shared tier (`--shared-tier on`), read back so `rebuild-all`,

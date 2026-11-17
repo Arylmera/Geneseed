@@ -8,6 +8,7 @@
   "trust": "aggressive",
   "doctrines": "all",
   "kits": [],
+  "kitsByDetection": ["superpowers"],
   "contextWindow": "1m",
   "gates": { "ownershipGate": false },
   "login": true

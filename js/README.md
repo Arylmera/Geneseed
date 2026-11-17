@@ -241,6 +241,8 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers. `setup --profile` installs a profile with no prompt; `profile apply` (`cmdProfileApply`) shares its build loop |
 | `profiles.mjs` | Install profiles from two sources, Shipped (`profiles/*.json`) and Personal (`<machine tier>/profiles/`): load and validate against the generator's own sources, the per-host argv (global or project), `profile save` |
 | `profile-scope.mjs` | The scope half of `profile apply`: the project folder check (shared with the console's deploy) and what a global install still runs inside a project (`globalLayering`) |
+| `plugin-detect.mjs` | Is the official superpowers plugin installed? File reads only (the CLI may not spawn), every root a parameter, and never on the hook path. Its answer always names the file |
+| `kit-migration.mjs` | The one-time `superpowers` kit for an install built before the kit existed (`installProfile` calls it), and the `doctor`/`status` provider WARN |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |

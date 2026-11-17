@@ -7,7 +7,7 @@
   "mode": "direct",
   "trust": "prudent",
   "doctrines": "all",
-  "kits": [],
+  "kits": ["superpowers"],
   "contextWindow": "200k",
   "gates": { "ownershipGate": false, "ownBranchPass": false },
   "login": false

@@ -1366,6 +1366,42 @@
         "react"
       ],
       "theme": "neutral"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [
+        "superpowers"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "kits": [
+        "superpowers"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "kits": [],
+      "theme": "neutral"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "kits": [
+        "superpowers"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "kits": [],
+      "theme": "neutral"
     }
   ],
   "deletion_cells": [
@@ -1534,6 +1570,38 @@
       "sovereign": [
         "skills/spring-boot/web.md"
       ],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "claude",
+        "footprint": "lean",
+        "kits": [
+          "superpowers"
+        ],
+        "theme": "neutral"
+      },
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [],
+      "label": "claude/superpowers-kit-on-to-off",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "opencode",
+        "footprint": "lean",
+        "kits": [
+          "superpowers"
+        ],
+        "theme": "neutral"
+      },
+      "emit": "opencode",
+      "footprint": "lean",
+      "kits": [],
+      "label": "opencode/superpowers-kit-on-to-off",
+      "sovereign": [],
       "theme": "neutral"
     }
   ],

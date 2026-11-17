@@ -72,6 +72,16 @@ const listFiles = (dir, ext) => (isDir(dir)
   ? readdirSync(dir).filter((n) => n.endsWith(ext) && !n.startsWith('_') && n !== 'README.md').sort()
   : []);
 
+/**
+ * A brick is available when the agent or skill it names ships. THE SKILL CHECK READS `src/`, NOT AN
+ * INSTALL, and that is a decision, not an oversight: this catalogue serves `geneseed loop next`,
+ * which hands the model a brick's prompt and has no install to read (see the module header). A
+ * skill of a kit that is off (`debug`, for `ci-fix`) is therefore still "shipped" here. What keeps
+ * that honest is the brick, not this check: `ci-fix` carries its CI-specific steps in its own body
+ * and tells the model to load the plugin's `systematic-debugging` when there is no `debug` skill,
+ * so it works with the superpowers kit on, off, or on a host with no plugin. A brick that needed a
+ * kit skill's body would have to say so the same way.
+ */
 function availability(brick, srcRoot) {
   if (brick.agent && !isFile(path.join(srcRoot, 'agents', `${brick.agent}.md`))) {
     return { available: false, reason: `agent ${brick.agent} is not shipped` };

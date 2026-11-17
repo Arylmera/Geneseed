@@ -14,7 +14,7 @@
 ## When NOT to dispatch
 - No one has measured anything and nothing is slow — speculative tuning is the
   waste this {{AGENT}} exists to refuse.
-- The code is wrong, not slow — that is the debug {{SKILL}}.
+- The code is wrong, not slow — that is the [debug {{SKILL}}](../{{DIR_SKILLS}}/debug.md).
 
 ## Inputs
 - The symptom or the diff, the workload it runs under (data size, call rate,

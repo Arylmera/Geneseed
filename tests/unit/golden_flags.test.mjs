@@ -7,7 +7,7 @@
 // what runs is a way to make a gate pass by running less of it, so each one is tested for what
 // it selects AND for whether it announces itself to the orphan check.
 //
-// NOTHING HERE SPAWNS. 268 emits belong in the cells job; this runs on every push on both
+// NOTHING HERE SPAWNS. 273 emits belong in the cells job; this runs on every push on both
 // operating systems and costs milliseconds.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,12 +20,16 @@ import { cellId, argvFor } from '../helpers/golden.mjs';
 const DOC = loadMatrix();
 
 // 14 themes x 9 emits x 2 footprints = 252, plus 11 cells on the extra axes (posture, mode,
-// trust, doctrines), 5 on the kits axis (claude and opencode with the spring-boot kit, claude with
-// `--kits none`, claude with both kits at once, opencode with the react kit), and 12 deletion cells
-// (9 lean-to-full / theme-swap, 3 kit on-to-off).
+// trust, doctrines), 10 on the kits axis (claude and opencode with the spring-boot kit, claude with
+// `--kits none`, claude with both kits at once, opencode with the react kit; then the superpowers
+// kit: on for claude, opencode and bob, and off for opencode and bob beside claude's `none`), and 14
+// deletion cells (9 lean-to-full / theme-swap, 3 spring-boot on-to-off, then the superpowers kit
+// on-to-off for claude and opencode). A deletion cell must REMOVE something (`golden --deletion`
+// refuses one that does not, as a second `--idempotent`), so off-to-on has no cell here: turning the
+// kit on only adds, which `superpowers_kit.test.mjs` holds.
 test('the exported matrix is the matrix', () => {
-  assert.equal(DOC.cells.length, 268);
-  assert.equal(DOC.deletion_cells.length, 12);
+  assert.equal(DOC.cells.length, 273);
+  assert.equal(DOC.deletion_cells.length, 14);
 });
 
 test('a cell id is theme/emit/footprint, with the optional axes appended', () => {
@@ -87,9 +91,14 @@ test('the matrix really exercises the kits axis, and an empty kit list is spelle
   const kit = DOC.cells.filter((c) => c.kits !== undefined);
   assert.deepEqual(kit.map(cellId).sort(), ['neutral/claude/lean/kits:none',
     'neutral/claude/lean/kits:react+spring-boot', 'neutral/claude/lean/kits:spring-boot',
-    'neutral/opencode/lean/kits:react', 'neutral/opencode/lean/kits:spring-boot']);
+    'neutral/opencode/lean/kits:react', 'neutral/opencode/lean/kits:spring-boot',
+    'neutral/bob/lean/kits:none', 'neutral/bob/lean/kits:superpowers', 'neutral/claude/lean/kits:superpowers',
+    'neutral/opencode/lean/kits:none', 'neutral/opencode/lean/kits:superpowers'].sort());
   const del = DOC.deletion_cells.filter((c) => c.before?.kits?.length);
-  assert.equal(del.length, 3, 'the kit on-to-off deletion cells are missing');
+  assert.equal(del.length, 5, 'the kit on-to-off deletion cells are missing');
+  // The superpowers kit going off, on the two hosts a plugin can replace it on.
+  assert.deepEqual(DOC.deletion_cells.filter((c) => /superpowers-kit/.test(c.label)).map((c) => c.label).sort(),
+    ['claude/superpowers-kit-on-to-off', 'opencode/superpowers-kit-on-to-off']);
   assert.ok(del.some((c) => c.edit), 'no deletion cell edits a member before the kit goes off (R6)');
 });
 
@@ -127,7 +136,7 @@ test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow 
 
 test('every narrowing flag selects fewer cells, and none selects none', () => {
   const full = selectCells(DOC, parseArgs([]));
-  assert.equal(full.length, 268);
+  assert.equal(full.length, 273);
   for (const argv of [['--quick'], ['--emits', 'claude'], ['--only', 'neutral/claude'],
     ['--limit', '5'], ['--shard', '0/4']]) {
     const got = selectCells(DOC, parseArgs(argv));
@@ -138,18 +147,18 @@ test('every narrowing flag selects fewer cells, and none selects none', () => {
   }
 });
 
-test('--quick keeps the neutral theme only: 34 cells, which is what Windows CI re-emits', () => {
+test('--quick keeps the neutral theme only: 39 cells, which is what Windows CI re-emits', () => {
   // ci.yml runs `--idempotent --quick` on windows-latest. This row is the one home of the count:
   // the workflow comment points here rather than repeating the number.
-  // 34 = the neutral theme's 9 emits x 2 footprints (18), plus the 11 cells on the extra axes and
-  // the 5 kit cells, which are all neutral. A theme added to the matrix changes nothing here; an
+  // 39 = the neutral theme's 9 emits x 2 footprints (18), plus the 11 cells on the extra axes and
+  // the 10 kit cells, which are all neutral. A theme added to the matrix changes nothing here; an
   // axis cell added in another theme, or a neutral cell removed, moves the number.
-  assert.equal(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).length, 34);
+  assert.equal(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).length, 39);
   assert.ok(selectCells(DOC, parseArgs(['--idempotent', '--quick'])).every((c) => c.theme === 'neutral'));
 });
 
 test('--deletion selects the deletion matrix and nothing else', () => {
-  assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 12);
+  assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 14);
 });
 
 // TWO CORPUS TESTS STOOD HERE — one asserting every anchor cell really held verbatim text in

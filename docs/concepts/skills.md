@@ -46,7 +46,7 @@ Every skill ends with one beat of reflection: if a step misled or a step was mis
 
 ### Old names keep working
 
-When two skills merge, the old name still works as a slash command: `/deps-audit` runs `dependencies`, and `/ci-fix` runs `debug`. The old names are user-only, so the agent's list shows each skill once. If you had left out a skill that was later merged, a rebuild leaves out the merged skill instead. A skill removed with no replacement is dropped from that list, with a note.
+When two skills merge, the old name still works as a slash command: `/deps-audit` runs `dependencies`, and `/ci-fix` runs `debug` (a skill of the [superpowers kit](superpowers-kit.md), so that alias exists only with the kit on). The old names are user-only, so the agent's list shows each skill once. If you had left out a skill that was later merged, a rebuild leaves out the merged skill instead. A skill removed with no replacement is dropped from that list, with a note.
 
 ### What they cost
 

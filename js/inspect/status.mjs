@@ -52,6 +52,7 @@ import {
   installsReferencingShim, openclaudeDualHarnessRoots, themeOfDir, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
+import { providerWarning } from '../maintain/kit-migration.mjs';
 import { isDoctorNote } from './scan.mjs';
 import { pendingDrafts } from '../hosts/hooks-context.mjs';
 import { factCount } from '../hosts/memory-files.mjs';
@@ -379,7 +380,8 @@ export function statusData() {
         // Only when something is kept, so `--json` without kits stays the bytes it was.
         const kept = keptKitFiles(host, scope, root, p.kits);
         const rebuild = rebuildCommand(p.argv);
-        return { ...p, ...(kept ? { keptKitFiles: kept } : {}), rebuild };
+        const warn = providerWarning({ host, scope, root, kits: p.kits });
+        return { ...p, ...(kept ? { keptKitFiles: kept } : {}), ...(warn ? { providerWarning: warn } : {}), rebuild };
       } catch (e) {
         return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
       }
@@ -515,6 +517,7 @@ export function statusLines(d, color = false, boxed = true) {
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
         .map((g) => `${g.marker.toLowerCase()}: off${g.law ? ` (Law ${g.law} text still binds)` : ''}`)]
       .join(` ${DOT} `) + where]);
+    if (p.providerWarning) rows.push([`${p.host}:${p.scope}`, `${p.providerWarning}${where}`]);
     // R6: a member its owner edited outlives its kit; name it, so turning the kit off is visible.
     for (const [kit, rels] of Object.entries(p.keptKitFiles ?? {})) {
       rows.push([`${p.host}:${p.scope}`, `kept from inactive kit ${kit}: ${rels.join(', ')}${where}`]);

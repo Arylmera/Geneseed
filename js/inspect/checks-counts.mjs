@@ -8,7 +8,7 @@
  */
 import path from 'node:path';
 import {
-  DOCS, DOC_FOLDERS, PLUGIN_SRC, RETIRED_KIT_IDS, ROOT, SRC, kitMembers, loadKits, makeCfg, ruleCanon, specLinks, upstreams,
+  DOCS, DOC_FOLDERS, PLUGIN_SRC, RETIRED_KIT_IDS, ROOT, SRC, kitMembers, linkTargetOf, loadKits, makeCfg, ruleCanon, specLinks, upstreams,
 } from '../build/source.mjs';
 import { effectiveTheme, renderFile } from '../build/render.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
@@ -375,6 +375,7 @@ export function kitProblems(src = SRC) {
     if (words > budget) {
       problems.push(`[authoring] src/${m.rules} renders to ${words} words, over kit '${kit}' rulesWordBudget of ${budget}`);
     }
+    if (m.replacedBy) problems.push(...replacedByProblems(src, kit, m, cfg, theme, budget));
   }
   // R4. A core member (R3, named above) is left out: every core file linking it would repeat that.
   const r4 = new Set();
@@ -382,10 +383,80 @@ export function kitProblems(src = SRC) {
     // Links run kit -> core only: a core file, or ANOTHER kit's file, linking a member dangles
     // whenever that member's kit is off.
     if (!l.owner || l.kit === l.owner || core[l.kind].has(l.name)) continue;
+    // `replacedBy` is the one exception: the render rewrites a link to such a member when its kit is off.
+    // ...and only where the rewrite resolves the link (`linkTargetOf`), the same function it runs.
+    if (l.kind === 'skills' && kits.get(l.owner)?.replacedBy && !l.kit && linkTargetOf(l.rel, `{{DIR_SKILLS}}/${l.name}.md`)) continue;
     r4.add(l.kit
       ? `[authoring] src/${l.rel} (kit '${l.kit}') links ${l.kind}/${l.name}, a member of kit '${l.owner}' — links run kit → core only`
       : `[authoring] src/${l.rel} links ${l.kind}/${l.name}, a kit member — the link dangles when the kit is off`);
   }
   problems.push(...r4);
+  problems.push(...bareMentionProblems(src, kits));
   return problems;
+}
+
+/**
+ * A kit's `replacedBy` (spec 2): a plugin skill for EVERY member and for nothing else, an upstream
+ * key `src/upstreams.json` holds, a spelling per host that carries `{name}`, and the two blocks
+ * the render leaves behind with the kit off (`provider`, `missing`), each inside the word budget.
+ */
+function replacedByProblems(src, kit, m, cfg, theme, budget) {
+  const at = `src/kits/${kit}.json`;
+  const r = m.replacedBy;
+  const out = [];
+  let keys = [];
+  try { keys = Object.keys(upstreams()); } catch { /* creditProblems names a bad upstreams.json */ }
+  if (!keys.includes(r.upstream)) out.push(`[authoring] ${at}: replacedBy.upstream '${r.upstream}' is not a key of src/upstreams.json`);
+  for (const s of m.skills) {
+    if (typeof r.skills[s] !== 'string' || !r.skills[s]) out.push(`[authoring] ${at}: replacedBy.skills has no plugin skill for member '${s}'`);
+  }
+  if (r.plain !== undefined) {
+    for (const s of m.skills) {
+      if (typeof r.plain[s] !== 'string' || !r.plain[s]) out.push(`[authoring] ${at}: replacedBy.plain has no wording for member '${s}'`);
+    }
+  }
+  for (const s of Object.keys(r.skills)) {
+    if (!m.skills.includes(s)) out.push(`[authoring] ${at}: replacedBy.skills names '${s}', which is not a skill of kit '${kit}'`);
+  }
+  for (const [host, tpl] of Object.entries(r.hosts)) {
+    if (typeof tpl !== 'string' || !tpl.includes('{name}')) out.push(`[authoring] ${at}: replacedBy.hosts.${host} must be a spelling with {name}`);
+  }
+  for (const field of ['provider', 'missing']) {
+    const f = r[field];
+    if (typeof f !== 'string' || !isFile(path.join(src, f))) {
+      out.push(`[authoring] ${at}: replacedBy.${field} must name a file under src/`);
+      continue;
+    }
+    const words = renderFile(cfg, path.join(src, f), theme).split(/\s+/).filter(Boolean).length;
+    if (words > budget) out.push(`[authoring] src/${f} renders to ${words} words, over kit '${kit}' rulesWordBudget of ${budget}`);
+  }
+  return out;
+}
+
+/**
+ * A member of a kit with `replacedBy` named in prose, with no link: the kit-off rewrite only sees
+ * links, so the name would ship as a Rite the install does not have. Refused in core specs:
+ * `<member> {{SKILL}}` or a backticked `member` outside a link label. Turn the mention into a link.
+ */
+function bareMentionProblems(src, kits) {
+  const names = [...kits.values()].filter((k) => k.replacedBy).flatMap((k) => k.skills);
+  if (!names.length) return [];
+  const owned = new Set([...kits.values()].flatMap((k) => [...k.skills, ...k.agents]));
+  const alt = names.join('|');
+  const re = new RegExp(`(?<![\\[\\x60/-])(?:\\b(?:${alt}) \\{\\{SKILL\\}\\}|\\x60(?:${alt})\\x60 (?:skill|\\{\\{SKILL\\}\\}))`);
+  const out = [];
+  // Every folder that renders into an install, not only skills/ and agents/ (the rewrite reads them all).
+  for (const dir of ['skills', 'agents', 'laws', 'doctrines', 'modes', 'postures', 'ontology', '.']) {
+    for (const f of mdIn(path.join(src, dir)).concat(dir === '.' ? ['AGENT.md.tmpl'] : [])) {
+      if (dir !== '.' && (owned.has(f.slice(0, -3)) || f.startsWith('_'))) continue;
+      const rel = dir === '.' ? f : `${dir}/${f}`;
+      if (!isFile(path.join(src, rel))) continue;
+      readText(path.join(src, rel)).split('\n').forEach((line, i) => {
+        if (re.test(line.replace(/\[[^\]]*\]\([^)]*\)/g, ''))) {
+          out.push(`[authoring] src/${rel}:${i + 1} names a superpowers-kit skill without a link, so the kit-off rewrite cannot see it`);
+        }
+      });
+    }
+  }
+  return out;
 }

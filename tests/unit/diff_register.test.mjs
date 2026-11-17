@@ -205,8 +205,8 @@ test('a stale AGENT.md beside a Claude install answers for none of its registers
     // A leftover from an older layout: it excludes a skill, which would drop it from
     // `expected` and report the deployed copy as a file that should not be there. It describes
     // nothing of the install, whose carrier is CLAUDE.md.
-    fs.writeFileSync(path.join(gcfg, 'AGENT.md'), 'Excluded skills: brainstorm\n');
-    assert.deepEqual(rels(diffCollect({ target: gcfg }).files).filter((f) => f.startsWith('skills/brainstorm')), [],
+    fs.writeFileSync(path.join(gcfg, 'AGENT.md'), 'Excluded skills: adhd\n');
+    assert.deepEqual(rels(diffCollect({ target: gcfg }).files).filter((f) => f.startsWith('skills/adhd')), [],
       'the stale AGENT.md answered for the install');
   });
 });

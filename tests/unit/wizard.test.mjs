@@ -185,12 +185,12 @@ function wizardJobs() {
     // Every sequence below carries a FOURTH answer, between mode and the install mode: the
     // Doctrine-packs gate. It is the one question with two levels, so the count of answers a
     // run consumes is no longer fixed — `all` costs one line and `choose` costs six.
-    // The shipped tree has five kits, ci-pipelines, docker, react, spring-boot and terminal-tools, so five
-    // Kits questions (one yes/no each) sit between the packs gate and the install mode: every answer string
-    // below carries five lines for them (an empty line keeps the default, `no` on a fresh install;
-    // `wizard-files` types `2`, the `no` option, for each).
-    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\n'],
-    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\nn\n'],
+    // The shipped tree has six kits, ci-pipelines, docker, react, spring-boot, superpowers and terminal-tools, so six
+    // Kits questions (one yes/no each) sit between the install mode and the footprint: every answer string
+    // below carries six lines for them (an empty line keeps the default, `no` on a fresh install, except the
+    // superpowers kit, which defaults by detection; `wizard-files` types `2`, the `no` option, for each).
+    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\n\n'],
+    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\nn\n'],
     // The same six empty lines and an `n` on a tree with NO kit: the Kits question is not asked, so
     // the `n` lands on the confirm and the wizard is declined. Were the question still asked, the `n`
     // would be spent on it and the run would end confirmed.
@@ -199,20 +199,20 @@ function wizardJobs() {
     // answer. `1` at the packs gate is `all`, the same answer an empty line gives.
     // The shared-tier question follows the repo root, for a per-repo install only; the empty line takes
     // its default, `no`, so this job's result is what it was before the question existed.
-    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n\n\n\n\n\n3\n1\n/tmp/somerepo\n\ny\n'],
+    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n\n\n\n\n\n\n1\n/tmp/somerepo\n\ny\n'],
     // The same walk answering `2` (yes) to the shared-tier question: the selection carries it and the plan line says it.
-    ['wizard-project-tier', [['collect_setup_lines', []]], '1\n1\n1\n1\n\n\n\n\n\n3\n1\n/tmp/somerepo\n2\ny\n'],
+    ['wizard-project-tier', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n\n\n\n\n\n\n1\n/tmp/somerepo\n2\ny\n'],
     // `files`, the other arm: one answer, `out` only, `root` left null. This is also the
     // per-pack arm — `choose`, then five y/n — and the subset it keeps is NON-CONTIGUOUS
     // (rigor and process, skipping craft, ops and comms), so a port that dropped the filter and kept
     // a prefix, a suffix or the whole list answers differently from one that reads each y/n.
     ['wizard-files', [['collect_setup_lines', []]],
-      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n2\n2\n2\n2\n2\n7\nfull\n\ny\n'],
+      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n7\n2\n2\n2\n2\n2\n2\nfull\n\ny\n'],
     // Every pack declined. A real configuration (invariants and ontology only), and the only
     // input that reaches `--doctrines none` — the spelling an empty list has to take, because
     // an empty `--doctrines ` is a usage error at the driver.
     ['wizard-no-packs', [['collect_setup_lines', []]],
-      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n\n\n\n\n\n'],
+      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n\n\n\n\n\n\n'],
     // EOF before the first question. Every reader returns its default, which is the PRE-SELECTED
     // one — so this is the case that fails if `installedDefaults` stopped answering posture, mode
     // or footprint.
@@ -242,6 +242,11 @@ function wizardJobs() {
     // Two kits, `gx` deployed: `yes` typed for `fx`, then EOF keeps `gx` on — both kits in one run,
     // which a single pick could not express.
     ['ask-kits-two', [['ask_kits', [['gx'], KIT2_SRC]]], 'yes\n'],
+    // The superpowers kit defaults by what the install mode's host holds (EOF: every answer the default).
+    // The plugin is enabled in the sandbox's Claude settings: for `claude-global` the kit defaults to `no`,
+    // for `bob-global`, which has no plugin store to read, to `yes`: the matched pair that proves the host is read.
+    ['wizard-eof-plugin', [['collect_setup_lines', []]], '', PLUGIN_HOME],
+    ['wizard-eof-plugin-bob', [['collect_setup_lines', []]], '', PLUGIN_BOB_HOME],
   ].map(([name, cases, stdin, home]) => [name, cases.map(([fn, args]) => ({ fn, args })),
     stdin, home]);
 }
@@ -290,6 +295,10 @@ const NARROW_HOME = seed('home-narrow', NARROWED_INSTALL);
 const EXCLUDED_HOME = seed('home-excluded', EXCLUDED_INSTALL);
 const GATED_HOME = seed('home-gated', GATED_INSTALL);
 const GATED_ELSEWHERE_HOME = seed('home-gated-elsewhere', GATED_ELSEWHERE_INSTALL);
+const PLUGIN_SETTINGS = JSON.stringify({ enabledPlugins: { 'superpowers@claude-plugins-official': true } });
+const PLUGIN_HOME = seed('home-plugin', { ...WIZARD_INSTALL, '.claude/settings.json': PLUGIN_SETTINGS });
+const PLUGIN_BOB_HOME = seed('home-plugin-bob', { ...WIZARD_INSTALL, '.config/opencode/.geneseed-emit': 'bob-global\n',
+  '.claude/settings.json': PLUGIN_SETTINGS });
 /** A `src` holding one kit, `fx`, and one holding none — what `askKits` reads its menu from. */
 const KIT_SRC = seed('src-kit', { 'kits/fx.json': JSON.stringify({
   description: 'Fixture kit', skills: [], agents: [], rules: 'kits/fx/rules.md' }) });
@@ -434,7 +443,7 @@ test('the wizard job really walks the wizard', () => {
     'About to run:  geneseed build --theme pirate --emit claude-global --footprint full '
       + '--posture artisan --mode foreman',
     '{"theme":"pirate","posture":"artisan","mode":"foreman","doctrines":["craft","rigor","ops",'
-      + '"process","comms"],"excludeRules":null,"emit":"claude-global"',
+      + '"process","comms"],"excludeRules":null,"kits":["superpowers"],"emit":"claude-global"',
   ]) assert.ok(out.includes(line), `the wizard did not print:\n  ${line}`);
   // The gate is a GATE: taking `all` must not print the five per-pack questions.
   assert.ok(!out.includes('Include craft'),
@@ -454,7 +463,7 @@ test('holding Enter through a re-run keeps a narrowed pack selection instead of 
   const narrowed = runs()['wizard-eof-narrowed'];
   assert.deepEqual(narrowed.results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman', doctrines: ['rigor', 'process'],
-    excludeRules: null, emit: 'claude-global', out: null, root: null, footprint: 'full',
+    excludeRules: null, kits: ['superpowers'], emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over a two-pack install did not come back with two packs');
   assert.deepEqual(runs()['wizard-eof'].results[0].doctrines, ['craft', 'rigor', 'ops', 'process', 'comms'],
     'the all-four half of the pair moved, so the narrowed half proves nothing');
@@ -488,7 +497,7 @@ test('a re-run keeps the RULES an install excluded, without asking about them', 
   assert.deepEqual(excl.results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: ['craft.2', 'process.5'],
-    emit: 'claude-global', out: null, root: null, footprint: 'full',
+    kits: ['superpowers'], emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over an install with excluded rules did not carry them back');
   // ...and it reaches the argv, in the dotted form the flag parses. A selection that came back
   // right and was then dropped before the build is the same bug arriving one step later.
@@ -515,11 +524,11 @@ test('a re-run keeps the GATES an install switched off, without asking about the
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
     gates: { secretsGate: true, doneGate: false, deletionGate: false, ownershipGate: true, externalGate: true, testNote: true,
       ownBranchPass: true },
-    emit: 'claude-global', out: null, root: null, footprint: 'full',
+    kits: ['superpowers'], emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over an install with switched-off gates did not carry them back');
   // ...and into the plan line, in law order, Law I still armed, then the `--reset` the plan line
   // ends on (the wizard's answers are a whole selection the preserve guard must not refuse).
-  assert.ok(/--no-done-gate --no-deletion-gate --reset\r?\n/.test(gated.text),
+  assert.ok(/--no-done-gate --no-deletion-gate --kits superpowers --reset\r?\n/.test(gated.text),
     `the plan line dropped the switches:\n${gated.text}`);
   assert.ok(!gated.text.includes('--no-secrets-gate'), 'an armed gate was disarmed');
   // THE MATCHED HALF: an all-armed install carries no `gates` key and spells no flag.
@@ -563,8 +572,22 @@ test('the declined wizard returns null and the confirmed one does not', () => {
   assert.deepEqual(runs()['wizard-defaults'].results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
-    emit: 'claude-global', out: null, root: null, footprint: 'full',
+    kits: ['superpowers'], emit: 'claude-global', out: null, root: null, footprint: 'full',
   }]);
+});
+
+test('the superpowers kit question defaults by detection: no where the plugin is seen, yes where the host has none', () => {
+  const seen = runs()['wizard-eof-plugin'];
+  assert.equal('kits' in seen.results[0], false, 'a seen plugin still defaulted the kit on');
+  assert.ok(/Kit superpowers — .*\[the official superpowers plugin: seen in .*settings\.json\]/.test(seen.text),
+    `the question did not say what it saw:\n${seen.text.slice(0, 3000)}`);
+  assert.ok(seen.text.includes('2) no — leave superpowers out   (default)'), 'the default is not `no`');
+  const bob = runs()['wizard-eof-plugin-bob'];
+  assert.deepEqual(bob.results[0].kits, ['superpowers'], 'Bob has no plugin, so the kit defaults on');
+  assert.match(bob.text, /\[the official superpowers plugin: no plugin store to read on this host\]/);
+  // The unmatched half: no plugin file at all, and the question says where it looked.
+  assert.match(runs()['wizard-eof'].text, /\[the official superpowers plugin: not seen in /);
+  assert.deepEqual(runs()['wizard-eof'].results[0].kits, ['superpowers']);
 });
 
 test('the Kits question is asked only when the tree ships a kit', () => {
@@ -574,7 +597,7 @@ test('the Kits question is asked only when the tree ships a kit', () => {
   const kitMenus = (text) => text.split(/\r?\n/).filter((l) => l.startsWith('Kit ')).map((l) => l.split(' ')[1]);
   assert.deepEqual(runs()['wizard-no-kit'].results, [null]);
   assert.deepEqual(kitMenus(runs()['wizard-no-kit'].text), [], 'a tree with no kit still asked a Kit question');
-  assert.deepEqual(kitMenus(runs()['wizard-declined'].text), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'terminal-tools'],
+  assert.deepEqual(kitMenus(runs()['wizard-declined'].text), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools'],
     'the shipped tree did not ask once per kit');
 });
 
@@ -586,7 +609,7 @@ test('the project arm asks a sixth question and the files arm does not', () => {
   assert.deepEqual(runs()['wizard-project'].results, [{
     theme: 'neutral', posture: 'peer', mode: 'direct',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
-    emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
+    kits: ['superpowers'], emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
   }]);
   assert.deepEqual(runs()['wizard-files'].results, [{
     theme: 'neutral', posture: 'expert', mode: 'foreman', doctrines: ['rigor', 'process'],
@@ -599,7 +622,7 @@ test('the project arm asks the shared-tier question with the trade and the machi
   assert.deepEqual(asked.results, [{
     theme: 'neutral', posture: 'peer', mode: 'direct',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null, sharedTier: true,
-    emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
+    kits: ['superpowers'], emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
   }]);
   for (const line of [
     'Shared tier — Benefit: This project sees your machine-wide rules, profile and memory map, so what you taught one tool or repo applies here too.',
@@ -686,7 +709,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 22, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 24, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

@@ -11,12 +11,13 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER } from './source.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER, loadKits } from './source.mjs';
+import { migrateSuperpowersKit } from '../maintain/kit-migration.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
 import {
   EMIT_FOR, EMIT_HOST_SCOPE, contextWindowOfDir, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  emitHostScopeOf, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, sharedTierOfDir,
+  emitHostScopeOf, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitAwareOfDir, kitsOfDir, sharedTierOfDir,
   gatesOfDir, installState, modeOfDir, postureOfDir, readMaybe, themeOfDir, tiersOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 
@@ -154,7 +155,8 @@ export function installProfile(host, scope, root, notify = null) {
   // the install. A missing marker reads as armed.
   const gates = gatesOfDir(root, host);
   // Kits on stay on (spec A3); one this checkout no longer ships drops with a notice (R2).
-  const kits = kitsOfDir(root, host, notify);
+  // An install built before the superpowers kit existed keeps its five Rites unless the plugin is seen.
+  const kits = migrateSuperpowersKit({ host, scope, root, kits: kitsOfDir(root, host, notify), notify, knownKits: [...loadKits().keys()], aware: kitAwareOfDir(root, host) });
   // A project install's `Shared tier: on` stays on across a rebuild; a global install never has it.
   const sharedTier = sharedTierOfDir(root, host);
   // `Context window: 1m` stays 1m: a rebuild that forgot it would shrink the listing cap.

@@ -177,8 +177,8 @@ const LIVE = fs.readdirSync(path.join(SRC, 'skills'), { withFileTypes: true })
  * the placeholder is the folder of the SKILL.md carrying it, a relative path is the workspace
  * root's, an absolute one is itself. Returns `{ <file rel to base>: [resolved, …] }`.
  */
-function pointers(base, root) {
-  const names = LIVE.map((s) => s.split('/')[1]).join('|');
+function pointers(base, root, live = LIVE) {
+  const names = live.map((s) => s.split('/')[1]).join('|');
   const re = new RegExp(`\`([^\`\\n]+/(?:${names}))\``, 'g');
   const out = {};
   const walk = (dir) => {
@@ -213,19 +213,20 @@ function withCommands(fn) {
   }
 }
 
-// Which files carry a pointer, per host family: the three skills with side files (brainstorm,
-// debug, rule), the aliases of the two that have one (ci-fix, consolidate-memory; brainstorm's
-// grill-me was retired, so no emit writes it) on the Claude dialect (alias skills), on OpenCode (alias commands, `command/`) and
-// on Bob (alias commands too, host-compat O2/R1 — but `commands/`, Bob's own documented
-// folder name, and never `command/debug.md`: Bob never runs `writeCommandLayer`, the
-// `GENESEED_COMMANDS` opt-in layer, only the unconditional alias commands), plus OpenCode's
-// opt-in `/debug` command. Each pointer must resolve to a file the emit wrote.
-const CLAUDE_CARRIERS = ['skills/brainstorm/SKILL.md', 'skills/ci-fix/SKILL.md',
-  'skills/consolidate-memory/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
-const BOB_CARRIERS = ['commands/ci-fix.md', 'commands/consolidate-memory.md',
-  'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
-const OPENCODE_CARRIERS = ['command/ci-fix.md', 'command/consolidate-memory.md', 'command/debug.md',
-  'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
+// Which files carry a pointer, per host family, in a default build: the one core skill with side
+// files (rule) and its alias consolidate-memory, on the Claude dialect (alias skills), on OpenCode
+// (alias commands, `command/`) and on Bob (alias commands too, host-compat O2/R1 — but `commands/`,
+// Bob's own documented folder name). The superpowers kit adds brainstorm and debug and debug's alias
+// ci-fix, and OpenCode's opt-in `/debug` command (a second block below, kit on). Each pointer must
+// resolve to a file the emit wrote.
+const CLAUDE_CARRIERS = ['skills/consolidate-memory/SKILL.md', 'skills/rule/SKILL.md'];
+const BOB_CARRIERS = ['commands/consolidate-memory.md', 'skills/rule/SKILL.md'];
+const OPENCODE_CARRIERS = ['command/consolidate-memory.md', 'skills/rule/SKILL.md'];
+// The same with the superpowers kit on: only the pointers of the kit's own side files are counted.
+const KIT_SIDE_FILES = ['brainstorm/builder-check.md', 'debug/ci.md'];
+const CLAUDE_KIT_CARRIERS = ['skills/brainstorm/SKILL.md', 'skills/ci-fix/SKILL.md', 'skills/debug/SKILL.md'];
+const BOB_KIT_CARRIERS = ['commands/ci-fix.md', 'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md'];
+const OPENCODE_KIT_CARRIERS = ['command/ci-fix.md', 'command/debug.md', 'skills/brainstorm/SKILL.md', 'skills/debug/SKILL.md'];
 
 function assertResolves(found, carriers) {
   assert.deepEqual(Object.keys(found).sort(), carriers);
@@ -254,6 +255,18 @@ for (const [host, dot, carriers] of [['claude', '.claude', CLAUDE_CARRIERS],
       // No workspace at global scope: a relative pointer would resolve against nothing, so
       // `root` is a directory that cannot exist.
       assertResolves(pointers(cfgDir, path.join(d, 'no-such-root')), carriers);
+    });
+  });
+}
+
+for (const [host, _dot, carriers] of [['claude', '.claude', CLAUDE_KIT_CARRIERS], ['bob', '.bob', BOB_KIT_CARRIERS],
+  ['openclaude', '.openclaude', CLAUDE_KIT_CARRIERS], ['opencode', '.opencode', OPENCODE_KIT_CARRIERS]]) {
+  test(`with the superpowers kit on, the kit's side-file pointers resolve on a global ${host} emit`, async () => {
+    await withSandbox('gsside-', (d) => {
+      const cfgDir = path.join(d, 'cfg');
+      withCommands(() => emitGlobalInto(host, {
+        theme: 'neutral', out: path.join(d, 'bundle'), cfgDir, footprint: 'lean', kits: ['superpowers'] }));
+      assertResolves(pointers(cfgDir, path.join(d, 'no-such-root'), KIT_SIDE_FILES), carriers);
     });
   });
 }

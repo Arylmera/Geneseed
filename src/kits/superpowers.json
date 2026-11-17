@@ -1,0 +1,45 @@
+{
+  "description": "Geneseed's vendored, modified versions of the obra/superpowers skills (Jesse Vincent, MIT): brainstorm, debug, plan, code review and review response. Turn it off when the official superpowers plugin is installed; keep one of the two.",
+  "skills": [
+    "brainstorm",
+    "debug",
+    "plan",
+    "geneseed-code-review",
+    "review-response"
+  ],
+  "agents": [],
+  "rules": "kits/superpowers/rules.md",
+  "rulesWordBudget": 300,
+  "replacedBy": {
+    "upstream": "superpowers",
+    "provider": "kits/superpowers/provider.md",
+    "missing": "kits/superpowers/missing.md",
+    "plain": {
+      "brainstorm": "brainstorming pass",
+      "debug": "debugging pass",
+      "plan": "written plan",
+      "geneseed-code-review": "code review",
+      "review-response": "review-feedback pass"
+    },
+    "hosts": {
+      "claude": "superpowers:{name}",
+      "opencode": "{name}"
+    },
+    "skills": {
+      "brainstorm": "brainstorming",
+      "debug": "systematic-debugging",
+      "plan": "writing-plans",
+      "geneseed-code-review": "requesting-code-review",
+      "review-response": "receiving-code-review"
+    }
+  },
+  "catalogue": {
+    "skills": [
+      "| [brainstorm]({{DIR_SKILLS}}/brainstorm.md) | a new feature or project with no design yet, or whose goal, scope, or success criteria need pinning down first |",
+      "| [debug]({{DIR_SKILLS}}/debug.md) | a bug or failure to diagnose before fixing — a red CI run or pre-merge check included, reproduced under CI's conditions |",
+      "| [plan]({{DIR_SKILLS}}/plan.md) | a task has more than a couple of steps |",
+      "| [geneseed-code-review]({{DIR_SKILLS}}/geneseed-code-review.md) | reviewing a diff or PR |",
+      "| [review-response]({{DIR_SKILLS}}/review-response.md) | acting on review feedback you have received |"
+    ]
+  }
+}

@@ -2,7 +2,7 @@
 //
 // Written out, not recorded. Every case runs on a copy of the shipped `src/` (and `registry.json`
 // beside it) with ONE clean fixture kit planted — `fx`: a skill `fx-skill`, an agent `fx-agent`,
-// a `rules.md` that links its own skill and the core `debug`, and a registry row per member — and
+// a `rules.md` that links its own skill and the core `commit`, and a registry row per member — and
 // then ONE fault planted on top:
 //   1. `kitProblems` is silent on the clean kit, and on a tree with no kit at all
 //   2. it refuses, each with the message written out below: a manifest missing `description`,
@@ -34,7 +34,7 @@ import { kitProblems } from '../../js/inspect/checks-counts.mjs';
 import { withSandbox } from '../helpers/sandbox.mjs';
 
 const RULES = '### Fx rules\n\n{{VOICE}}\n\n'
-  + 'Read [fx-skill]({{DIR_SKILLS}}/fx-skill.md) before [debug]({{DIR_SKILLS}}/debug.md).\n';
+  + 'Read [fx-skill]({{DIR_SKILLS}}/fx-skill.md) before [commit]({{DIR_SKILLS}}/commit.md).\n';
 const MANIFEST = {
   description: 'Fixture kit', skills: ['fx-skill'], agents: ['fx-agent'], rules: 'kits/fx/rules.md',
   catalogue: {
@@ -78,7 +78,13 @@ function tree(d, fault = {}) {
   return src;
 }
 
-const debugMd = () => fs.readFileSync(path.join(SRC, 'skills', 'debug.md'), 'utf8');
+const REPLACED = {
+  upstream: 'superpowers', provider: 'kits/fx/provider.md', missing: 'kits/fx/missing.md',
+  hosts: { claude: 'plug:{name}' }, skills: { 'fx-skill': 'fx-plugin-skill' },
+};
+const PROVIDERS = { 'kits/fx/provider.md': '### Provider\n\nThe plugin provides it.\n', 'kits/fx/missing.md': '### Missing\n\nNone.\n' };
+
+const commitMd = () => fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
 
 /** [what the row proves, the fault, the exact problems kitProblems must return]. */
 const ROWS = [
@@ -99,8 +105,8 @@ const ROWS = [
   ['a member in two kits (R3)', {
     files: { 'kits/fy.json': JSON.stringify({ ...MANIFEST, skills: ['fx-skill'], agents: [], catalogue: { skills: [skillRow('fx-skill')] } }) },
   }, ["[authoring] skills/fx-skill is in two kits: 'fx' and 'fy'"]],
-  ['a core skill in a kit (R3)', { manifest: { skills: ['fx-skill', 'debug'], catalogue: { ...MANIFEST.catalogue, skills: [...MANIFEST.catalogue.skills, skillRow('debug')] } } },
-    ["[authoring] skills/debug is core (AGENT.md.tmpl lists it), but kit 'fx' claims it"]],
+  ['a core skill in a kit (R3)', { manifest: { skills: ['fx-skill', 'commit'], catalogue: { ...MANIFEST.catalogue, skills: [...MANIFEST.catalogue.skills, skillRow('commit')] } } },
+    ["[authoring] skills/commit is core (AGENT.md.tmpl lists it), but kit 'fx' claims it"]],
   ["a kit file linking another kit's member (R4: links run kit → core only)", {
     files: {
       'kits/fy.json': JSON.stringify({ ...MANIFEST, skills: ['fy-skill'], agents: [], rules: 'kits/fy/rules.md', catalogue: { skills: [skillRow('fy-skill')] } }),
@@ -110,8 +116,8 @@ const ROWS = [
     registry: { 'skills/fy-skill': ROW },
   }, ["[authoring] src/skills/fy-skill.md (kit 'fy') links skills/fx-skill, a member of kit 'fx' — links run kit → core only"]],
   ['a core file linking a kit member (R4)', {
-    files: { 'skills/debug.md': `${debugMd()}\nSee {{DIR_SKILLS}}/fx-skill.md.\n` },
-  }, ['[authoring] src/skills/debug.md links skills/fx-skill, a kit member — the link dangles when the kit is off']],
+    files: { 'skills/commit.md': `${commitMd()}\nSee {{DIR_SKILLS}}/fx-skill.md.\n` },
+  }, ['[authoring] src/skills/commit.md links skills/fx-skill, a kit member — the link dangles when the kit is off']],
   ['a stray file directly under kits/ belongs to no kit (R4)', {
     files: { 'kits/README.md': '# Kits\n\nSee {{DIR_SKILLS}}/fx-skill.md.\n' },
   }, ['[authoring] src/kits/README.md links skills/fx-skill, a kit member — the link dangles when the kit is off']],
@@ -121,8 +127,8 @@ const ROWS = [
   ['a member with no registry row', { registry: { 'skills/fx-skill': null } },
     ["[authoring] skills/fx-skill (kit 'fx') has no row in registry.json"]],
   ['a catalogue row for a skill the kit does not own (A6)', { manifest: { catalogue: {
-    skills: [...MANIFEST.catalogue.skills, '| [debug]({{DIR_SKILLS}}/debug.md) | x |'], agents: MANIFEST.catalogue.agents,
-  } } }, ["[authoring] src/kits/fx.json catalogue lists skills/debug, which is not a member of kit 'fx'"]],
+    skills: [...MANIFEST.catalogue.skills, '| [commit]({{DIR_SKILLS}}/commit.md) | x |'], agents: MANIFEST.catalogue.agents,
+  } } }, ["[authoring] src/kits/fx.json catalogue lists skills/commit, which is not a member of kit 'fx'"]],
   ['a member that is a vendored folder skill', {
     manifest: { skills: ['fx-skill', 'token-report'], catalogue: { ...MANIFEST.catalogue, skills: [...MANIFEST.catalogue.skills, skillRow('token-report')] } },
     registry: { 'skills/token-report': ROW },
@@ -161,6 +167,46 @@ const ROWS = [
   ['rules over the budget, counted rendered', { manifest: { rulesWordBudget: 10 } },
     ["[authoring] src/kits/fx/rules.md renders to 19 words, over kit 'fx' rulesWordBudget of 10"]],
   ['rules exactly at the budget', { manifest: { rulesWordBudget: 19 } }, []],
+  // `replacedBy` (the superpowers kit): a plugin skill for every member, an upstream key that exists,
+  // the two provider blocks, and the one exception to R4 — a core link to a member is rewritten with the
+  // kit off, so it does not dangle. A bare mention of a member in prose cannot be rewritten, so it is refused.
+  ['replacedBy, complete: a core file may link the member (the R4 exception)', {
+    manifest: { replacedBy: REPLACED },
+    files: { ...PROVIDERS, 'skills/zz-core.md': '# {{SKILL}}: zz-core\n\n> core.\n\nSee [fx-skill](fx-skill.md) and [again]({{DIR_SKILLS}}/fx-skill.md).\n' },
+  }, []],
+  // The exemption is exactly what the rewrite resolves: a token link from laws/ or doctrines/ is rewritten too
+  // (a token that LEADS the target names the folder from the source root), so it is clean, and a bare mention
+  // there is refused as it is in skills/.
+  ['replacedBy: a token link to the member from a law is rewritten too, so it is clean', {
+    manifest: { replacedBy: REPLACED },
+    files: { ...PROVIDERS, 'laws/zz.md': 'See [fx]({{DIR_SKILLS}}/fx-skill.md).\n' },
+  }, []],
+  ['a core law naming a replacedBy member in prose, with no link', {
+    manifest: { replacedBy: REPLACED },
+    files: { ...PROVIDERS, 'laws/zz.md': 'Run the fx-skill {{SKILL}} first.\n' },
+  }, ['[authoring] src/laws/zz.md:1 names a superpowers-kit skill without a link, so the kit-off rewrite cannot see it']],
+  ['replacedBy with no plain wording for a member', {
+    manifest: { replacedBy: { ...REPLACED, plain: {} } }, files: PROVIDERS,
+  }, ["[authoring] src/kits/fx.json: replacedBy.plain has no wording for member 'fx-skill'"]],
+  ['replacedBy with no plugin skill for a member', {
+    manifest: { replacedBy: { ...REPLACED, skills: {} } }, files: PROVIDERS,
+  }, ["[authoring] src/kits/fx.json: replacedBy.skills has no plugin skill for member 'fx-skill'"]],
+  ['replacedBy naming a skill the kit does not own', {
+    manifest: { replacedBy: { ...REPLACED, skills: { ...REPLACED.skills, ghost: 'ghosting' } } }, files: PROVIDERS,
+  }, ["[authoring] src/kits/fx.json: replacedBy.skills names 'ghost', which is not a skill of kit 'fx'"]],
+  ['replacedBy with an upstream that is not in upstreams.json', {
+    manifest: { replacedBy: { ...REPLACED, upstream: 'ghost-upstream' } }, files: PROVIDERS,
+  }, ["[authoring] src/kits/fx.json: replacedBy.upstream 'ghost-upstream' is not a key of src/upstreams.json"]],
+  ['replacedBy with a host spelling that has no {name}', {
+    manifest: { replacedBy: { ...REPLACED, hosts: { claude: 'plugin:fixed' } } }, files: PROVIDERS,
+  }, ['[authoring] src/kits/fx.json: replacedBy.hosts.claude must be a spelling with {name}']],
+  ['replacedBy whose provider block is missing', {
+    manifest: { replacedBy: { ...REPLACED, provider: 'kits/fx/none.md' } }, files: PROVIDERS,
+  }, ['[authoring] src/kits/fx.json: replacedBy.provider must name a file under src/']],
+  ['a core spec naming a replacedBy member in prose, with no link', {
+    manifest: { replacedBy: REPLACED },
+    files: { ...PROVIDERS, 'skills/zz-core.md': '# {{SKILL}}: zz-core\n\n> core.\n\nRun the fx-skill {{SKILL}} first, or the `fx-skill` skill.\n' },
+  }, ['[authoring] src/skills/zz-core.md:5 names a superpowers-kit skill without a link, so the kit-off rewrite cannot see it']],
 ];
 
 for (const [name, fault, want] of ROWS) {
@@ -177,11 +223,11 @@ test('kitProblems: a manifest that does not parse is a problem, not a crash', as
   });
 });
 
-// The shipped tree has five kits, `ci-pipelines` (two members), `docker` (one), `react` (four),
-// `spring-boot` (nine) and `terminal-tools` (two), each member with a
+// The shipped tree has six kits, `ci-pipelines` (two members), `docker` (one), `react` (four),
+// `spring-boot` (nine), `superpowers` (five) and `terminal-tools` (two), each member with a
 // registry row and a catalogue row, none in both kits, and the kit gate reports nothing on it.
-test('kitProblems: the shipped tree, which has the ci-pipelines, docker, react, spring-boot and terminal-tools kits, is clean', async () => {
-  assert.deepEqual([...loadKits().keys()], ['ci-pipelines', 'docker', 'react', 'spring-boot', 'terminal-tools']);
+test('kitProblems: the shipped tree, which has the ci-pipelines, docker, react, spring-boot, superpowers and terminal-tools kits, is clean', async () => {
+  assert.deepEqual([...loadKits().keys()], ['ci-pipelines', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools']);
   assert.deepEqual(kitProblems(), []);
 });
 
@@ -191,7 +237,7 @@ test('--exclude-skills accepts a kit skill only kit files link (R5), and keeps c
     assert.deepEqual(parseExcludeSkills('fx-skill', src), ['fx-skill']);
     const linked = linkedSkillIds(src);
     assert.ok(!linked.includes('fx-skill'), 'a kit-only link protected its kit skill');
-    assert.ok(linked.includes('debug'), 'a core skill linked by core files lost its protection');
+    assert.ok(linked.includes('commit'), 'a core skill linked by core files lost its protection');
     let msg = null;
     try { parseExcludeSkills('council', src); } catch (e) { msg = e.message; }
     assert.match(msg ?? '', /'council' cannot be excluded/);

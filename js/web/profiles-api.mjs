@@ -18,7 +18,7 @@ import { HOSTS, expanduser } from '../hosts/hosts.mjs';
 import { installState, installTargets, tiersOfDir } from '../hosts/installs.mjs';
 import {
   BASE_PROFILE, isGitClone, listProfiles, loadProfile, profileBuildArgs, profileDiff, profileDirs,
-  profileFromInstall, profileHosts,
+  profileFromInstall, profileHosts, profileKits,
 } from '../maintain/profiles.mjs';
 import { checkProjectFolder, globalLayering, markerCollision } from '../maintain/profile-scope.mjs';
 import { hostTools, profileChanges } from '../maintain/setup.mjs';
@@ -50,9 +50,13 @@ function activeTargets() {
  * `starter`, which lists four hosts, could match no install). `sharedTier` counts only on a
  * project install: a global apply ignores it (D37), so a global install cannot differ on it.
  */
-export function followsProfile(installP, scope, p) {
+export function followsProfile(installP, scope, p, root = null) {
   const skip = new Set(['hosts', 'login', ...(scope === 'global' ? ['sharedTier'] : [])]);
-  return profileDiff(installP, p).every((d) => skip.has(d.key));
+  // A kit chosen by detection is the kit an apply would have built for the install's own host: an
+  // install has the kits it has, never a kit "by detection", so compare the resolved list.
+  const resolved = p.kitsByDetection?.length
+    ? { ...p, kits: profileKits(p, installP.hosts?.[0] ?? '', scope === 'project' ? root : null), kitsByDetection: [] } : p;
+  return profileDiff(installP, resolved).every((d) => skip.has(d.key));
 }
 
 /** The hosts row of the tab: `{ host, label, present }` in HOSTS order. */
@@ -114,14 +118,14 @@ export function apiProfiles(state, url, { src = {}, tools = hostTools } = {}) {
       ...head, description: p.description ?? '', profile: p,
       gatesOff: Object.keys(p.gates ?? {}),
       diff: base.ok ? profileDiff(p, base.profile) : [],
-      matches: readBacks.filter((rb) => followsProfile(rb.profile, rb.scope, p))
+      matches: readBacks.filter((rb) => followsProfile(rb.profile, rb.scope, p, rb.path))
         .map(({ host, scope, path: at }) => ({ host, scope, path: at })),
     };
   });
   const loaded = profiles.filter((x) => x.profile);
   const installs = readBacks.map((rb) => ({
     host: rb.host, scope: rb.scope, path: rb.path,
-    matches: loaded.filter((x) => followsProfile(rb.profile, rb.scope, x.profile)).map((x) => x.name),
+    matches: loaded.filter((x) => followsProfile(rb.profile, rb.scope, x.profile, rb.path)).map((x) => x.name),
     diff: base.ok ? profileDiff(rb.profile, base.profile) : [],
   }));
   const hosts = hostRows(tools);
