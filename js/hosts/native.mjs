@@ -417,12 +417,10 @@ const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
  * cannot name tools it has never seen, so a read-only agent in a session with such a server can
  * still write through it, until this becomes an allowlist (`tools:`).
  */
-function claudeAgentFrontmatter(stem, text, overrides, tierModel = null) {
+function claudeAgentFrontmatter(stem, text, model = null) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
-  const ov = agentOverride(overrides, stem);
-  // Precedence, highest first (spec D5): the user's pin, then the tier's model, then inherit.
-  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
-  else if (tierModel) fm.push(`model: ${formatValue(tierModel)}`);
+  // `model` is `claudeAgentModel(...).model`: the one precedence, resolved by the caller.
+  if (model) fm.push(`model: ${model}`);
   if (isReadonly(text)) {
     const list = ['Write', 'Edit', 'NotebookEdit', 'Agent', 'Task'];
     if (!text.includes(WEBFETCH_MARKER)) list.push('WebFetch');
@@ -480,7 +478,7 @@ const OVERRIDE_KEYS = ['model', 'temperature', 'variant', 'steps'];
  * boolean, a list, an object — threw a bare TypeError that aborted the emit with a stack trace
  * naming nothing the user wrote.
  */
-function overrideProblem(v) {
+export function overrideProblem(v) {
   if (typeof v === 'string') return /[\r\n\u2028\u2029]/.test(v) ? 'contains a line break' : '';
   // `parseJson` yields exactly one object `isDict` refuses: its number wrapper.
   const isNumber = typeof v === 'object' && v !== null && !Array.isArray(v) && !isDict(v);
@@ -577,6 +575,24 @@ export function claudeTierModel(tier, map = {}, env = {}) {
       + `pin it: set ${need}`
     : null;
   return { model: String(value), warning };
+}
+
+/**
+ * The model one agent gets on Claude Code, and why — THE ONE HOME of the precedence (spec D5),
+ * highest first: the user's pin (`agents.<name>.model`), then the `tiers` map, then the tier's
+ * default alias, then inherit. The emit writes `model` into the agent's frontmatter
+ * (`writeNativeLayer`) and the console shows the same answer (`js/web/agent-models-api.mjs`).
+ *
+ * `tiers` is `{ map, env }` while `--tiers auto` is on, else null (a pin still applies).
+ * `from`: `pin`, `map` (the map names the tier, an empty value included), `default`, `inherit`.
+ * `warning` is `claudeTierModel`'s, and only for a model the tier gave: a pinned agent has none.
+ */
+export function claudeAgentModel(tier, pin, tiers = null) {
+  if (isTruthy(pin)) return { model: formatValue(pin), from: 'pin', warning: null };
+  if (!tiers) return { model: null, from: 'inherit', warning: null };
+  const { model, warning } = claudeTierModel(tier, tiers.map, tiers.env);
+  if (!model) return { model: null, from: 'inherit', warning: null };
+  return { model: formatValue(model), from: Object.hasOwn(tiers.map, tier) ? 'map' : 'default', warning };
 }
 
 /**
@@ -792,8 +808,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   if (bobDialect) warnBobIgnored(ov);
   else if (host === 'claude') warnClaudeIgnored(ov);
   // D11: the build never withholds the alias; the doctor warns about a cloud provider (`tierEnvNotes`).
-  const tierModelOf = (tier) => (!tiers || host !== 'claude' || bobDialect ? null
-    : claudeTierModel(tier, tiers.map, tiers.env).model);
+  const tiersHere = tiers && host === 'claude' && !bobDialect ? tiers : null;
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
@@ -872,7 +887,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let userOnly = false;
     if (folder === 'agents') {
       if (bobDialect) fm = bobAgentFrontmatter(stem, text);
-      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, ov, tierModelOf(tier));
+      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, claudeAgentModel(tier, agentOverride(ov, stem).model, tiersHere).model);
       else fm = opencodeAgentFrontmatter(stem, text, ov, theme);
       dest = path.join(agentsDir, `${stem}.md`);
       body = stripAgentSkillLinks(body);

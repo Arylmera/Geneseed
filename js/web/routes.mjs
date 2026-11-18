@@ -28,6 +28,7 @@ import { apiUsage } from './usage-api.mjs';
 import { apiProfiles } from './profiles-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
+import { apiAgentModels, apiAgentModelsSave } from './agent-models-api.mjs';
 import { migratePreview } from '../maintain/migrate.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesDecide, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
 
@@ -64,6 +65,8 @@ export const POST_ROUTES = new Map([
   // ever consulted — the same shape as `/api/memory/delete` and `/api/activity` above.
   ['/api/loops/preset', [apiLoopsPresetMutate, false]],
   ['/api/autostart', [apiAutostart, true]],
+  // The `tiers` map and the per-agent model pins of one Claude Code install's agent-overrides.json.
+  ['/api/agent-models', [apiAgentModelsSave, true]],
 ]);
 
 /**
@@ -74,7 +77,7 @@ export const POST_ROUTES = new Map([
  * are the only actions that read the request's install.
  */
 export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/rules',
-  '/api/rules/promote', '/api/rules/decide', '/api/profile', '/api/actions/restore', '/api/actions/build']);
+  '/api/rules/promote', '/api/rules/decide', '/api/profile', '/api/actions/restore', '/api/actions/build', '/api/agent-models']);
 
 /**
  * The GETs that answer for the whole machine, not one install: they IGNORE a `?host=&path=`
@@ -229,6 +232,7 @@ export const STATE_ROUTES = {
   // answers — a daemon whose POST worked and whose GET 501'd would have no way to obtain one.
   '/api/rules': apiRules,
   '/api/loadout': (state) => apiLoadout(state),
+  '/api/agent-models': (state) => apiAgentModels(state),
   '/api/mcp': apiMcp,
   '/api/loops': apiLoops,
   '/api/loops/active': apiLoopsActive,
