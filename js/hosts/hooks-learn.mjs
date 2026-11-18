@@ -1,23 +1,36 @@
 /**
- * `learn` — the Stop/SubagentStop/PreCompact verb: distil notes or a transcript into memory
- * entries (a new fact, or an update or archive of a stored one) through the model CLI
- * `$GENESEED_LLM` names. THE ONE SPAWN in the hook entry's closure; the store's file format it writes through lives in `./memory-files.mjs`, which does
+ * `learn` — the Stop/SubagentStop/PreCompact/SessionEnd verb: distil notes or a transcript into
+ * memory entries (a new fact, or an update or archive of a stored one) through the model CLI
+ * `$GENESEED_LLM` names. THE MODEL SPAWN in the hook entry's closure (ADR 0002 names it and its
+ * detached twin); the store's file format it writes through lives in `./memory-files.mjs`, which does
  * not spawn and is what the CLI imports. See `js/hosts/hooks.mjs`'s header for the contract.
+ *
+ * WHEN THE MODEL RUNS (spec 2026-11-18-learn-model-row, D8/D12). A turn's Stop and a sub-agent's
+ * SubagentStop do their no-model work only (the spec-feedback copy, the done check, the change report,
+ * the outcome line) and return: a model call after every reply was the cost the spec ruled out. The
+ * distil runs on PreCompact and SessionEnd, once, in a DETACHED WORKER: a SessionEnd hook is killed
+ * when the session ends (S1b), and a compaction must not wait 5-10 s for a model, so the hook writes a
+ * small job file and starts `geneseed-hook learn-worker <job>` apart from itself (S1c). A sub-agent's
+ * lesson is queued at its SubagentStop and distilled by that worker, so a session pays for one run.
  */
+import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import {
+  appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync,
+} from 'node:fs';
 import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
-import { NO_WINDOW } from '../lib/proc.mjs';
+import { NO_WINDOW, resolveCommand } from '../lib/proc.mjs';
 import {
-  globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
+  GLOBAL_MANIFEST, globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
 import { doneGate } from './hooks-done.mjs';
 import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
-  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
+  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson, writeLearnLast,
 } from './memory-files.mjs';
 import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
 import { gitRootOf } from './gitref.mjs';
@@ -243,9 +256,106 @@ function llmTimeoutSeconds() {
   return Number.isFinite(n) && n > 0 ? n : LLM_TIMEOUT_S;
 }
 
-function runLlm(llm, prompt) {
+/**
+ * The lean child (D13, S1e). A bare `claude -p` loads the user's whole harness (CLAUDE.md, hooks,
+ * MCP servers: ~68k tokens, 8 s); with these flags it reads ~3k tokens and answers in 5 s, still on the
+ * subscription login. `--bare` is NOT among them: it reads Anthropic auth from an API key only, and
+ * the machine rule is subscription only. Appended only when the command's first word is `claude`, or
+ * `openclaude` AND its own `--help` lists the flag (a flag it does not know would end the call in a usage
+ * error). Any other command is used as given. A flag the user's command already names is left alone.
+ *
+ * ORDER MATTERS: `--tools` is variadic and would take the prompt as a tool name, so a flag follows it.
+ */
+const DISTIL_ROLE = 'You distil durable memories from notes. Follow the instructions in the user message '
+  + 'exactly, and reply with only what they ask for.';
+const LEAN_FLAGS = [
+  ['--setting-sources', ''], ['--strict-mcp-config'], ['--tools', ''], ['--disable-slash-commands'],
+  ['--no-session-persistence'], ['--system-prompt', DISTIL_ROLE],
+];
+const HELP_SECONDS = 20;
+const helpCache = new Map();
+
+/**
+ * The command's name without its folder or Windows extension, lower case. `path.win32.basename` splits on `/`
+ * AND `\`, so a Windows path names the same command on every platform (`path.basename` on POSIX kept
+ * `C:\bin\Claude.EXE` whole and missed it).
+ */
+const binName = (word) => path.win32.basename(word).toLowerCase().replace(/[.](?:exe|cmd|bat)$/, '');
+
+/** `<cli> --help`'s text, or '' when it will not run: the flags an `openclaude` of this machine knows. */
+function helpOf(cli) {
+  if (!helpCache.has(cli)) {
+    const proc = runLlm(`${cli} --help`, null, { seconds: HELP_SECONDS, track: false });
+    helpCache.set(cli, proc.returncode === 0 ? proc.stdout : '');
+  }
+  return helpCache.get(cli);
+}
+
+/** Whether `--help` text lists `flag` as a flag of its own, not as the tail of a longer one (`--append-system-prompt`). */
+const listsFlag = (help, flag) => new RegExp(`(^|[\\s,\\[])${flag}(?=[\\s,=\\]<]|$)`, 'm').test(help);
+
+/** Exported for the unit tier: `help` is the probe, so a test names the `--help` text it reads. */
+export function leanArgv(argv, help = helpOf) {
+  const bin = binName(argv[0] ?? '');
+  if (bin !== 'claude' && bin !== 'openclaude') return argv;
+  const known = bin === 'openclaude' ? help(argv[0]) : null;
+  const lean = [...argv];
+  for (const [flag, ...value] of LEAN_FLAGS) {
+    if (argv.includes(flag) || (known !== null && !listsFlag(known, flag))) continue;
+    lean.push(flag, ...value);
+  }
+  return lean;
+}
+
+/**
+ * What to hand `spawnSync` for the words `words` and the prompt (F5) — pure, so a table states every row.
+ *
+ * Off Windows the OS resolves the word at spawn time and the words run as they are. On Windows a word that
+ * resolves to nothing on PATH refuses the call (S-F4: CreateProcess would look in the current folder first). On Windows `CreateProcess` runs only `.exe`, so
+ * an npm-installed CLI (`claude.cmd`) was "not found" and learning silently did nothing: the word is
+ * resolved against PATH and PATHEXT (`resolveCommand`, which `doctor` shares), an `.exe` is run directly,
+ * and a `.cmd`/`.bat` goes through `cmd.exe /d /s /c "<line>"` with every word double-quoted. THE PROMPT
+ * NEVER RIDES THAT LINE: it goes over stdin, so the notes of a session (anything a person or a web page
+ * typed) are never parsed by cmd.exe. What remains on the line is the command's own words and the fixed
+ * lean flags, and a word cmd.exe could still read inside quotes (`"`, `%`, a line break, a trailing
+ * backslash) refuses the call instead of being passed on.
+ */
+export function spawnPlan(words, prompt, { platform = process.platform, env = process.env, exists = undefined } = {}) {
+  // The prompt goes over stdin for `claude` and `openclaude` on every path (`claude -p` reads it there; spec S1):
+  // a Windows command line holds 32 767 characters, and a long session's notes overran it (ENOENT/E2BIG, silently).
+  // Any other command keeps it as the last argument, which is what `$GENESEED_LLM="llm -m x"` and the CLI cells expect.
+  const viaStdin = prompt !== null && ['claude', 'openclaude'].includes(binName(words[0] ?? ''));
+  const direct = { file: words[0], args: [...words.slice(1), ...(prompt === null || viaStdin ? [] : [prompt])],
+    input: viaStdin ? prompt : undefined, verbatim: false, refuse: null };
+  if (platform !== 'win32') return direct;
+  const found = resolveCommand(words[0], env, exists, platform);
+  // Nothing on PATH: the bare word would be handed to CreateProcess, which looks in the CURRENT folder first, and a
+  // `claude.exe` planted in a repository would then run at every session end. So nothing runs.
+  if (!found) return { ...direct, refuse: `could not run ${words[0]}: not found on PATH - nothing learned` };
+  if (!/[.](?:cmd|bat)$/i.test(found)) return { ...direct, file: found };
+  const parts = [found, ...words.slice(1)];
+  const bad = parts.find((a) => /["%\r\n\0]|[\\]$/.test(a));
+  if (bad !== undefined) {
+    return { ...direct, refuse: `${JSON.stringify(bad)} cannot be passed through cmd.exe safely - nothing learned` };
+  }
+  const shell = path.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'cmd.exe');
+  return { file: shell, args: ['/d', '/s', '/c', `"${parts.map((a) => `"${a}"`).join(' ')}"`],
+    input: prompt === null ? undefined : prompt, verbatim: true, refuse: null };
+}
+
+/**
+ * The run in flight (`runJob`): its first failure, and the facts it stored. null outside a run, so a manual
+ * `learn` and the `--help` probe record nothing. `runJob` writes it to `learn-last.json` when it ends.
+ */
+let run = null;
+function noteFail(reason) { if (run && !run.fail) run.fail = reason; }
+
+/**
+ * `prompt` null runs the words as they are (the `--help` probe above); a string is appended after the
+ * lean flags. The ONE `spawnSync` call site of this module: the test that pins it reads this line.
+ */
+function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {}) {
   const argv = splitWords(llm);
-  const seconds = llmTimeoutSeconds();
   // `NO_WINDOW` folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
   //
@@ -254,10 +364,42 @@ function runLlm(llm, prompt) {
   // `learn` — one recursion per nested session, stopped only by the host's 600 s timeout
   // killing the outermost call. The marker rides in the child's own environment (inherited by
   // every grandchild too), and `cmdLearn`'s first line stands down the instant it sees it.
-  const proc = spawnSync(argv[0], [...argv.slice(1), prompt],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: seconds * 1000, killSignal: 'SIGKILL',
-      env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+  const plan = spawnPlan(prompt === null ? argv : leanArgv(argv), prompt);
+  if (plan.refuse) {
+    if (track) noteFail(plan.refuse);
+    return { stdout: '', stderr: `[learn] ${plan.refuse}\n`, returncode: 1, error: null };
+  }
+  // The answer goes to FILES, not pipes. On the Windows `.cmd` path the timeout kills cmd.exe but not the node the
+  // shim started under it; that orphan keeps a pipe's write end open, and `spawnSync` waits for the pipe to close, so
+  // a hung CLI held the wait for as long as it lived (measured: 15.7 s for a 2 s timeout). A file has no reader to
+  // wait for: `spawnSync` returns when cmd.exe is gone. The prompt comes from a file for the same reason (an orphan
+  // would hold a stdin pipe too).
+  // The scratch folder holds the prompt (transcript text), so every exit, a throw included, removes it.
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'geneseed-learn-'));
+  const outFile = path.join(scratch, 'out');
+  const errFile = path.join(scratch, 'err');
+  const inFile = path.join(scratch, 'in');
+  const fds = [];
+  const closeAll = () => { for (const fd of fds.splice(0)) { try { closeSync(fd); } catch { /* already closed */ } } };
+  let proc;
+  try {
+    writeFileSync(inFile, plan.input ?? '');
+    fds.push(openSync(inFile, 'r'), openSync(outFile, 'w'), openSync(errFile, 'w'));
+    try {
+      proc = spawnSync(plan.file, plan.args,
+        { windowsVerbatimArguments: plan.verbatim, stdio: [...fds], timeout: seconds * 1000, killSignal: 'SIGKILL',
+          env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+    } finally {
+      closeAll();
+    }
+    const slurp = (f) => { try { return readFileSync(f, 'utf8'); } catch { return ''; } };
+    proc = { ...proc, stdout: slurp(outFile), stderr: slurp(errFile) };
+  } finally {
+    closeAll();
+    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* an orphan may still hold it open: the OS temp sweep gets it */ }
+  }
   if (proc.error && /** @type {NodeJS.ErrnoException} */ (proc.error).code === 'ETIMEDOUT') {
+    if (track) noteFail(`${argv[0]} gave no answer in ${seconds} s and was stopped`);
     err(`[learn] ${argv[0]} gave no answer in ${seconds} s and was stopped - nothing learned.\n`);
     return { stdout: '', stderr: '', returncode: 0, error: null };
   }
@@ -267,6 +409,11 @@ function runLlm(llm, prompt) {
   // bytes, so without this the stored fact is written with `\r\r\n` on every line.
   const universal = (s) => (s === null || s === undefined ? ''
     : String(s).replaceAll('\r\n', '\n').replaceAll('\r', '\n'));
+  if (track && (proc.error || proc.status !== 0)) {
+    const said = universal(proc.stderr).split('\n').find((l) => l.trim()) || '';
+    noteFail(proc.error ? `could not run ${argv[0]}: ${proc.error.message}`
+      : `${argv[0]} exited ${proc.status === null ? 'by signal' : proc.status}${said ? `: ${said.trim()}` : ''}`);
+  }
   return {
     stdout: universal(proc.stdout),
     stderr: proc.error ? `[learn] could not run ${argv[0]}: ${proc.error.message}\n`
@@ -279,40 +426,26 @@ function runLlm(llm, prompt) {
 }
 
 /**
- * `_learn_agent_lesson` — the SubagentStop path: at most one per-agent lesson into
- * `memory/agents/<name>.md`. Skips silently when the host does not name the subagent:
- * parity of mechanism, degrading to a no-op, never a crash.
+ * `_learn_agent_lesson` — at most one per-agent lesson into `memory/agents/<name>.md`, from the notes
+ * of that agent's final turn. Run by the detached worker, once per queued agent (`runJob`).
  */
-function learnAgentLesson(meta, notes, args) {
-  const agent = subagentNameOf(meta);
-  if (!agent) return 0;
-  const memDir = resolveMemoryDir(args.memory);
-  if (!memDir) return 0;
+function learnAgentLesson(agent, notes, memDir, llm) {
   const prompt = [agentLessonPrompt(), '', 'NOTES:', notes].join('\n');
-  const llm = process.env.GENESEED_LLM;
-  // Unreachable through the hook path: `cmdLearn` already returned above when `$GENESEED_LLM`
-  // was unset, because a SubagentStop payload always names its own event. Left in as the same
-  // defensive no-op `resolveMemoryDir`'s check above is, should this ever be called directly.
-  if (!llm) {
-    err('[learn] $GENESEED_LLM unset \u2014 printing agent-lesson prompt.\n\n');
-    out(`${prompt}\n`);
-    return 0;
-  }
   const proc = runLlm(llm, prompt);
-  const text = proc.stdout.trim();
+  // A model that failed (a lapsed login, a usage error) said nothing: what it printed is never a lesson.
+  const text = proc.returncode === 0 ? proc.stdout.trim() : '';
+  if (proc.returncode === 0 && !text) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
   if (text && text.toUpperCase() !== 'NOTHING') {
     const lesson = splitLines(text)[0].replace(/^[-*]+/, '').trim();
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
     if (n >= 10 && n <= 300) {
       const written = recordOwnWrites(path.dirname(memDir), () => appendAgentLesson(memDir, agent, lesson));
+      if (written && run) run.facts += 1;
       err(written ? `[learn] agent lesson -> ${written}\n`
         : `[learn] ${agent}'s lesson file is not UTF-8 - left as it is, lesson dropped\n`);
     }
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
-  // Only a SubagentStop hook reaches this, and the model CLI's code is not the hook's: exit 2
-  // there sends the subagent back to work. The failure is on stderr above.
-  return 0;
 }
 
 /** `--memory` of a global install's hook, swapped for the shared store when that exists. */
@@ -493,41 +626,70 @@ export function cmdLearn(args) {
 
   // B3: a real hook call with `$GENESEED_LLM` unset has nothing to send a prompt to — stdout on
   // Stop/SubagentStop/PreCompact reaches only the debug log, never the user (docs `hooks.md`) —
-  // so reading and flattening the transcript (a 2 MB tail or more, every turn) just to print it nowhere
-  // is pure waste. Checked BEFORE `readNotes`, which is what does that read. A manual
-  // invocation keeps printing the prompt on an unset `$GENESEED_LLM` — that is the documented,
-  // deliberate behaviour (docs/reference/env-context.md) for someone running `learn` by hand to
-  // see what would have been sent, and `hookEvent` being unset is exactly what tells the two
-  // apart.
-  if (hookEvent && !process.env.GENESEED_LLM) {
-    err('[learn] $GENESEED_LLM unset \u2014 nothing to distil.\n');
+  // so reading and flattening the transcript (a 2 MB tail or more) just to print it nowhere
+  // is pure waste. A manual invocation keeps printing the prompt on an unset `$GENESEED_LLM` — that
+  // is the documented, deliberate behaviour (docs/reference/env-context.md) for someone running
+  // `learn` by hand to see what would have been sent, and `hookEvent` being unset is exactly what
+  // tells the two apart.
+  const llm = process.env.GENESEED_LLM;
+  if (hookEvent && !llm) {
+    err('[learn] $GENESEED_LLM unset — nothing to distil.\n');
     return 0;
   }
 
+  // D8: the model runs at the end of a session or before a compaction, never after a turn. A Stop
+  // has done its no-model work above; a sub-agent's stop queues its lesson for the session's one run.
+  if (hookEvent === 'Stop') return 0;
+  if (hookEvent === 'SubagentStop') {
+    queueAgentLesson(meta, args, install);
+    return 0;
+  }
+  if (hookEvent === 'PreCompact' || hookEvent === 'SessionEnd') {
+    return startDistil(meta, args, install, hookEvent, llm);
+  }
+  // Any other event name is no moment this verb knows to learn at.
+  if (hookEvent) return 0;
+
+  // A person running `learn` by hand: notes on stdin, a file or a transcript, distilled now, and the
+  // reply (or the prompt, with no model set) printed for them.
   let notes = readNotes(raw, meta, read);
   if (!notes.trim()) {
-    err('[learn] no notes or transcript content \u2014 nothing to distil.\n');
+    err('[learn] no notes or transcript content — nothing to distil.\n');
     return 0;
   }
   notes = tail(notes, MAX_NOTES_CHARS);   // keep the tail: most recent, most durable
+  return distil(notes, resolveMemoryDir(args.memory), llm, null);
+}
 
-  if (meta.hook_event_name === 'SubagentStop') return learnAgentLesson(meta, notes, args);
-
-  const memDir = resolveMemoryDir(args.memory);
+/**
+ * The distil itself: the prompt, the model CLI, and what it said into the store. `hookEvent` is the
+ * event the worker runs for, or null for a person at a terminal. On a hook run stdout is the host's
+ * and the model CLI's code is not the hook's (exit 2 would block a compaction), so it returns 0 and
+ * speaks on stderr; a manual run keeps the model's code, so a script can test it.
+ */
+function distil(notes, memDir, llm, hookEvent) {
   const existing = memDir ? existingSlugs(memDir) : new Set();
   const prompt = buildLearnPrompt(notes, memDir ? readFacts(memDir) : new Map());
-
-  const llm = process.env.GENESEED_LLM;
   if (!llm) {
-    err('[learn] $GENESEED_LLM unset \u2014 printing prompt instead.\n\n');
+    err('[learn] $GENESEED_LLM unset — printing prompt instead.\n\n');
     out(`${prompt}\n`);
     return 0;
   }
 
   const proc = runLlm(llm, prompt);
-  const output = proc.stdout;
+  // On a hook run a failed model said nothing (S1f: a lapsed login prints on stdout or stderr alike).
+  const output = hookEvent && proc.returncode !== 0 ? '' : proc.stdout;
+  const said = output.trim();
+  // A zero exit with nothing said is a lapsed login or a swallowed error, never an answer: NOTHING is the answer.
+  if (hookEvent && proc.returncode === 0 && !output.trim()) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
     const { created, updated, archived } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
+    if (run) run.facts += created.length + updated.length;
+    // Prose is no memory file: a model that answers "Please run /login" exited 0 and stored nothing. A reply with
+    // a name: line that merely repeats stored facts is a duplicate, not a failure.
+    if (hookEvent && !created.length && !updated.length && !archived.length && !/^name:\s*\S/m.test(output)) {
+      noteFail(`unparseable reply: ${said.split(/\r?\n/)[0].slice(0, 80)}`);
+    }
     if (created.length) {
       err(`[learn] wrote ${created.length} memory file(s) to `
         + `${memDir}: ${created.join(', ')}\n`);
@@ -544,14 +706,232 @@ export function cmdLearn(args) {
     // A person running `learn` by hand with no store: the reply is what they asked to see.
     out(output);
   } else if (output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
-    // On a hook call stdout is the host's: it holds at most ONE JSON document (the change report
-    // or an advisory above), and the model's raw words after it made two, which no host parses,
-    // so the report was lost. A bare NOTHING says nothing and is dropped.
+    // On a hook run stdout is the host's, so the model's words go to stderr; a bare NOTHING says
+    // nothing and is dropped.
     err(output);
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
-  // On a hook call the model CLI's code is not this hook's: exit 2 on Stop or PreCompact blocks
-  // the turn's end or the compaction, and any non-zero drops the JSON already on stdout. The
-  // failure is on stderr above. A manual run keeps the code, so a script can test it.
   return hookEvent ? 0 : proc.returncode;
+}
+
+// ---- the job: what a hook hands the detached worker ------------------------------------------------
+
+/**
+ * Where the jobs and the queued lessons live: the machine tier's `cache/learn-jobs`, never an install's own
+ * folder (a project install's folder is the user's repo, and holds nothing of ours that uninstall would not
+ * take). A stale file there is swept after a week. null when the account has no home directory.
+ */
+const JOB_DIR = 'learn-jobs';
+function jobDir() {
+  try { return path.join(sharedPaths().root, 'cache', JOB_DIR); } catch { return null; }
+}
+const JOB_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+/** The most sub-agents one run asks a lesson of: each is one model call, and a session pays once. */
+const MAX_LESSON_AGENTS = 3;
+const MAX_QUEUED_LESSONS = 40;
+const MAX_QUEUED_LINE_CHARS = 4000;
+const MAX_QUEUED_REPLY_CHARS = 3000;
+const sessionKey = (id) => (typeof id === 'string' && id ? id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) : 'nosession');
+
+function sweepJobs(dir) {
+  try {
+    for (const name of readdirSync(dir)) {
+      const file = path.join(dir, name);
+      if (Date.now() - statSync(file).mtimeMs > JOB_MAX_AGE_MS) unlinkSync(file);
+    }
+  } catch { /* a sweep is a favour */ }
+}
+
+/**
+ * SubagentStop: queue the finished sub-agent for the session's one run, no model. The agent's notes are
+ * read later, by the worker, from the paths kept here (its own transcript, never the parent's: B10).
+ */
+function queueAgentLesson(meta, args, install) {
+  const agent = subagentNameOf(meta);
+  const dir = jobDir();
+  if (!agent || !install || !dir) return;
+  const payload = {};
+  for (const k of ['agent_transcript_path', 'transcript_path', 'last_assistant_message']) {
+    if (typeof meta[k] === 'string' && meta[k]) payload[k] = meta[k];
+  }
+  if (!payload.agent_transcript_path && !payload.transcript_path && !payload.last_assistant_message) return;
+  // One queued line stays small (the tail of the report is what a lesson is about); a line still over the
+  // cap, a path too long to be one, is dropped rather than written.
+  if (payload.last_assistant_message) payload.last_assistant_message = tail(payload.last_assistant_message, MAX_QUEUED_REPLY_CHARS);
+  const line = JSON.stringify({ agent, payload });
+  if (line.length > MAX_QUEUED_LINE_CHARS) return;
+  try {
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `agents-${sessionKey(meta.session_id)}.jsonl`);
+    appendFileSync(file, `${line}\n`);
+  } catch { /* a lesson is a favour, never a failed hook */ }
+}
+
+/**
+ * The queued lessons of a session: the latest per agent, at most `MAX_LESSON_AGENTS`, and the queue's file. The
+ * queue is NOT removed here: `startDistil` removes it once the job is written and started, so a failed write or
+ * start leaves the lessons for the next PreCompact or SessionEnd.
+ */
+function readQueuedLessons(session) {
+  const dir = jobDir();
+  if (!dir) return { agents: [], file: null };
+  const file = path.join(dir, `agents-${sessionKey(session)}.jsonl`);
+  let text;
+  try { text = readFileSync(file, 'utf8'); } catch { return { agents: [], file: null }; }
+  const latest = new Map();
+  for (const line of splitLines(text).slice(-MAX_QUEUED_LESSONS)) {
+    try {
+      const row = JSON.parse(line);
+      if (typeof row.agent === 'string' && row.payload && typeof row.payload === 'object') latest.set(row.agent, row);
+    } catch { /* a torn line is skipped */ }
+  }
+  return { agents: [...latest.values()].slice(-MAX_LESSON_AGENTS), file };
+}
+
+/**
+ * PreCompact and SessionEnd: write the job, start the worker apart from this process, return at once
+ * (D12, D14). Nothing here waits on the model, and nothing reads the transcript: a SessionEnd hook is
+ * killed when its session ends (S1b), and a compaction must not wait. `GENESEED_LEARN_INLINE=1` runs the
+ * same job in this process instead: for a test, or a person debugging the distil.
+ */
+function startDistil(meta, args, install, hookEvent, llm) {
+  const transcript = typeof meta.transcript_path === 'string' && meta.transcript_path ? meta.transcript_path : null;
+  const { agents, file: queue } = readQueuedLessons(meta.session_id);
+  if (!transcript && !agents.length) return 0;
+  const job = {
+    v: 1, event: hookEvent, host: args.host || 'claude', memory: args.memory ?? null, transcript, agents,
+  };
+  const dropQueue = () => { if (queue) { try { unlinkSync(queue); } catch { /* the sweep gets it */ } } };
+  const dir = jobDir();
+  if (process.env.GENESEED_LEARN_INLINE) {
+    runJob(job, llm);
+    dropQueue();
+    return 0;
+  }
+  // Never inline on a real hook event: it would hold the session on the model (D12). No folder to put the job
+  // in, or no install to name its store: skip, say so, and let status and doctor say so too.
+  if (!install || !dir) {
+    const why = !install ? 'no Geneseed install found for this hook' : 'no machine cache folder';
+    err(`[learn] ${why} - distil skipped.
+`);
+    writeLearnLast(false, `${why}; distil skipped`);
+    return 0;
+  }
+  try {
+    mkdirSync(dir, { recursive: true });
+    sweepJobs(dir);
+    const file = path.join(dir, `job-${Date.now()}-${process.pid}.json`);
+    writeFileSync(file, `${JSON.stringify(job)}\n`);
+    spawnWorker(file);
+    dropQueue();
+  } catch (e) {
+    err(`[learn] could not start the distil worker: ${e instanceof Error ? e.message : e}\n`);
+    writeLearnLast(false, `could not start the distil worker: ${e instanceof Error ? e.message : e}`);
+  }
+  return 0;
+}
+
+/**
+ * THE SECOND SPAWN on the hook path (ADR 0002): this process's own node, running this checkout's hook
+ * entry with one verb, detached and unref'd with no stdio, so it outlives the session's end (S1c). The
+ * argv is fixed: no `$GENESEED_LLM` word, no payload text, reaches it but the job file's path.
+ */
+function spawnWorker(jobFile) {
+  const child = spawn(process.execPath, [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn-worker', jobFile],
+    { detached: true, windowsHide: true, stdio: 'ignore' });
+  child.on('error', (e) => { writeLearnLast(false, `could not start the distil worker: ${e.message}`); });
+  child.unref();
+}
+
+/** The job's run: the transcript's distil, then each queued sub-agent's lesson. Always 0. */
+function runJob(job, llm) {
+  if (!job) return 0;
+  if (typeof llm !== 'string' || !llm.trim()) {
+    writeLearnLast(false, '$GENESEED_LLM is not set for the distil worker');
+    return 0;
+  }
+  run = { fail: null, facts: 0 };
+  // Marked running BEFORE the model is called, with the latest time the run may end (every call can take the
+  // timeout): a hung CLI never reaches the line below, so this mark is what `status` finds.
+  writeLearnLast(null, '', 0, { runningFor: (1 + MAX_LESSON_AGENTS) * llmTimeoutSeconds() + 60 });
+  try { return runJobIn(job, llm); } finally {
+    const { fail, facts } = run;
+    run = null;
+    writeLearnLast(!fail, fail || '', facts);
+  }
+}
+
+function runJobIn(job, llm) {
+  const memDir = typeof job.memory === 'string' ? resolveMemoryDir(job.memory) : null;
+  try {
+    if (typeof job.transcript === 'string' && job.transcript) {
+      const payload = { transcript_path: job.transcript };
+      const notes = tail(readNotes(JSON.stringify(payload), payload), MAX_NOTES_CHARS);
+      if (notes.trim()) distil(notes, memDir, llm, job.event || 'SessionEnd');
+    }
+    for (const row of Array.isArray(job.agents) ? job.agents.slice(0, MAX_LESSON_AGENTS) : []) {
+      const agent = resolveAgentName(row?.agent);
+      if (!agent || !memDir || !row.payload) continue;
+      const notes = tail(readNotes(JSON.stringify(row.payload), row.payload), MAX_NOTES_CHARS);
+      if (notes.trim()) learnAgentLesson(agent, notes, memDir, llm);
+    }
+  } catch (e) {
+    err(`[learn] the distil stopped: ${e instanceof Error ? e.message : e}\n`);
+    noteFail(`the distil stopped: ${e instanceof Error ? e.message : e}`);
+  }
+  return 0;
+}
+
+/** `a` and `b` name one folder, symlinks and Windows short names resolved; false when either cannot be resolved. */
+function sameDir(a, b) {
+  try { return realpathSync.native(a) === realpathSync.native(b); } catch { return false; }
+}
+
+/**
+ * Whether `memory` is a store a job may write: the machine tier's `memory/`, or the `memory/` of a Geneseed
+ * install (its folder holds the install's manifest). A job names a write target, so it never names an arbitrary one.
+ */
+function allowedMemory(memory) {
+  try {
+    // The path as the hook was given it: an install's `memory/` may be a junction or a symlink to a folder of another
+    // name, and its name and manifest are those of the install, not of where it points. The real path is for the
+    // machine-tier comparison only.
+    const abs = path.resolve(memory);
+    if (path.basename(abs) !== 'memory' || !isDir(abs)) return false;
+    if (sameDir(abs, sharedPaths().memory)) return true;
+    return existsSync(path.join(path.dirname(abs), GLOBAL_MANIFEST));
+  } catch { return false; }
+}
+
+/**
+ * `learn-worker <job>` — the detached process's verb: run the job file a hook wrote, then delete it.
+ * Nothing it prints is read (stdio is ignored), and nothing here exits non-zero: no host waits on it.
+ *
+ * A JOB IS DATA, NEVER A COMMAND. The path arrives on an argv an agent could be talked into running, and a
+ * repository can ship a file of that name, so three things hold: the file sits in the machine cache's own
+ * learn-jobs folder (its real path equals `jobDir()`'s, so a folder merely NAMED learn-jobs does not count);
+ * the model command is this process's own `$GENESEED_LLM`, inherited from the hook that started it, and a job
+ * holds none; and the store it names is the machine tier's memory or an install's. A file outside that folder
+ * or not named job-*.json is left exactly as it is; a job inside it that names a foreign store is deleted without being run.
+ */
+export function cmdLearnWorker(args) {
+  if (process.env.GENESEED_LEARN_CHILD || !args.file) return 0;
+  const file = path.resolve(args.file);
+  const dir = jobDir();
+  if (!dir || !sameDir(path.dirname(file), dir) || !/^job-[\w.-]+\.json$/.test(path.basename(file))) return 0;
+  try {
+    const job = JSON.parse(readFileSync(file, 'utf8'));
+    if (!job || typeof job.memory !== 'string' || !allowedMemory(job.memory)) {
+      err('[learn] the job names no memory store of ours - refused.\n');
+      writeLearnLast(false, 'the job names no memory store of ours - refused');
+    } else {
+      runJob(job, process.env.GENESEED_LLM);
+    }
+  } catch (e) {
+    // An unreadable job is no job, but the last verdict must not go on saying the run before it was fine.
+    writeLearnLast(false, `the job could not be read: ${e instanceof Error ? e.message : e}`);
+  } finally {
+    try { if (existsSync(file)) unlinkSync(file); } catch { /* the sweep gets it */ }
+  }
+  return 0;
 }

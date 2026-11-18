@@ -96,7 +96,8 @@ test('the hook entry carries exactly the verbs the emitter wires', () => {
   assert.deepEqual(sorted(wired), ['activity', 'context', 'git-gate', 'learn', 'rule-gate', 'tool-gate'],
     'js/hosts/settings.mjs wires a different set of hook commands than this gate was written for — '
     + 'read the new one before deciding what it needs');
-  assert.deepEqual(sorted(verbsOf(HOOK)), sorted(wired),
+  // `learn-worker` is the one verb the entry carries and no settings.json wires: `learn` starts it, detached.
+  assert.deepEqual(sorted(verbsOf(HOOK)), sorted([...wired, 'learn-worker']),
     'bin/geneseed-hook.mjs and the emitted settings.json disagree about which verbs are hooks. A '
     + 'wired verb the entry does not carry is a dead hook the day the shim names this file; a '
     + 'verb it carries that nothing wires is unreachable code no cell can reach either.');
@@ -197,7 +198,9 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // `profile` saves an install profile from an install, or applies one globally or to a project,
 // born with `setup --profile`: its absolute gates are tests/unit/profiles.test.mjs (save) and
 // tests/unit/profile_apply.test.mjs (apply), the second with real builds in a sandboxed child.
-const NATIVE = ['activity', 'catalog', 'export', 'factory', 'loop', 'mcp', 'memory', 'profile', 'scorecard', 'tool-gate'];
+// `learn-worker` is native too: the detached distil `learn` starts on PreCompact/SessionEnd (ADR 0002's second
+// spawn), born with the learn model setting; its absolute gates are tests/unit/learn_worker.test.mjs.
+const NATIVE = ['activity', 'catalog', 'export', 'factory', 'learn-worker', 'loop', 'mcp', 'memory', 'profile', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the
@@ -647,7 +650,7 @@ test('the fold reaches neither js/maintain nor js/web', () => {
   assert.deepEqual(closure.filter((f) => /^js\/(maintain|web)\//.test(f)), []);
 });
 
-test('the only spawn in the hook entry is the model CLI', () => {
+test('the spawns in the hook entry are the model CLI and its one detached worker', () => {
   // STATIC, and narrower than the driver's ban because it has to be: `learn` genuinely spawns —
   // `$GENESEED_LLM` is the whole verb — so "imports no child-process module" is not the property.
   // The property is that there is exactly ONE spawn site and it is the model CLI, which is what
@@ -659,10 +662,25 @@ test('the only spawn in the hook entry is the model CLI', () => {
   // import. Naming the one binding that may be imported closes both.
   const imports = [...text.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)]
     .map((m) => m[1]);
-  assert.deepEqual(imports, ['{ spawnSync }'],
-    `js/hosts/hooks-learn.mjs imports ${imports} from child_process; exactly one binding is allowed`);
+  // ADR 0002, amended 2026-11-18: TWO bindings and two call sites. `spawnSync` runs the model CLI (and its
+  // `--help` probe, through the same call); `spawn` starts the detached worker, in ONE fixed shape below.
+  assert.deepEqual(imports, ['{ spawn, spawnSync }'],
+    `js/hosts/hooks-learn.mjs imports ${imports} from child_process; exactly spawn and spawnSync are allowed`);
   assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
     'js/hosts/hooks-learn.mjs has more than one spawnSync call site');
+  // F5: the one model spawn may run a Windows `.cmd` shim, and only as `cmd.exe /d /s /c "<quoted words>"` with the
+  // prompt on stdin (`spawnPlan`; tests/unit/learn_cmd_shim.test.mjs states the rows). Never a shell option.
+  assert.ok(!/shell\s*:\s*true/.test(text), 'js/hosts/hooks-learn.mjs asks spawnSync for a shell');
+  assert.equal((text.match(/windowsVerbatimArguments/g) ?? []).length, 1, 'the verbatim flag is set from the plan alone');
+  assert.ok(text.includes("args: ['/d', '/s', '/c',"), 'the cmd.exe form is no longer /d /s /c');
+  const detached = [...text.matchAll(/(?<![.\w])spawn\s*\(/g)];
+  assert.equal(detached.length, 1, 'js/hosts/hooks-learn.mjs has more than one spawn call site');
+  // The exact shape, whitespace folded: this node, this checkout's hook entry, the one verb, the job's path,
+  // detached with no window and no stdio. A wider call (a shell, another verb, inherited stdio) is a new row.
+  const call = text.slice(detached[0].index).split(');')[0].replace(/\s+/g, ' ');
+  assert.equal(call, "spawn(process.execPath, [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn-worker', jobFile], "
+    + "{ detached: true, windowsHide: true, stdio: 'ignore' }",
+  'the detached worker spawn is no longer the one shape ADR 0002 allows');
   assert.ok(text.includes('const argv = splitWords(llm);'),
     'the one spawn no longer takes its command from $GENESEED_LLM');
   // The entry point must not spawn either — and again the check is the IMPORT, not the word: a

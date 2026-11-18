@@ -20,7 +20,7 @@
  * and there is no in-process equivalent — `vm.Script` compiles as a SCRIPT and every plugin is
  * ESM (`import { promises as fs } from "node:fs"`), which `node --check` accepts through
  * module-syntax detection and `vm.Script` rejects with a SyntaxError of its own. So the ban is
- * an ALLOW-LIST of exactly the shape the hook entry already carries for `$GENESEED_LLM`: one
+ * an ALLOW-LIST of exactly the shape the hook entry carries for `$GENESEED_LLM` (and, since ADR 0002's 2026-11-18 amendment, for its detached `learn-worker`): one
  * binding, one call site, and a test that names the argv. What the ban actually protects —
  * that this tool never shells back to the generator — is asserted directly instead.
  *
@@ -30,6 +30,7 @@
  * four lines of accumulator that keep the Doctor page's per-check cards a parameter rather
  * than a rewrite.
  */
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
@@ -40,9 +41,10 @@ import {
 import { installProfile } from '../build/profile.mjs';
 import { providerWarning } from '../maintain/kit-migration.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
-import { learnState } from '../hosts/memory-files.mjs';
+import { learnState, readLearnLast } from '../hosts/memory-files.mjs';
 import { learnInstalls } from './status.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
+import { resolveCommand } from '../lib/proc.mjs';
 import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
@@ -68,6 +70,35 @@ export function themesToCheck(theme, allThemes, detected, available) {
   if (theme) return [theme];
   if (!allThemes && detected && available.includes(detected)) return [detected];
   return [...available].sort();
+}
+
+/**
+ * Whether `word` (a command's first word) is something `learn`'s spawn can run (`resolveCommand`).
+ * Pure over `exists`, so a test names every row.
+ */
+export function commandOnPath(word, env = process.env, exists = existsSync, platform = process.platform) {
+  // The spawn's own resolver (`resolveCommand`, F5): on Windows a `claude.cmd` shim counts, a `.ps1` does not.
+  return resolveCommand(word, env, exists, platform) !== null;
+}
+
+/**
+ * D9: the one case where `active` would lie. An install whose learn command (`$GENESEED_LLM`, from its
+ * settings or the shell) names a first word the hook's PATH does not hold learns nothing. A NOTE and never a
+ * problem: doctor runs in a terminal whose PATH may differ from the one the host app hands its hooks.
+ */
+export function learnCommandNotes(installs, env = process.env, onPath = commandOnPath) {
+  const seen = new Set();
+  const notes = [];
+  for (const { host, settingsEnv = [] } of installs) {
+    if (host === 'opencode' || host === 'bob') continue;
+    const llm = [...settingsEnv].reverse().find((e) => e && typeof e === 'object' && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+    const word = String(llm).trim().split(/\s+/)[0];
+    if (!word || seen.has(`${host} ${word}`) || onPath(word, env)) continue;
+    seen.add(`${host} ${word}`);
+    notes.push(`${NOTE}learn: ${host}'s model command '${word}' is not on PATH here, so its hook may learn `
+      + 'nothing. Install it, or put it on the PATH the host app starts hooks with.');
+  }
+  return notes;
 }
 
 /**
@@ -292,7 +323,9 @@ export function doctorCollect({
   problems = problems.concat(ran('shared_paths', 'Rendered shared paths', renderedPathNotes()));
   problems = problems.concat(ran('providers', 'Workflow provider', providerNotes()));
   problems = problems.concat(ran('tier_env', 'Model tier aliases', tierEnvNotes()));
-  problems = problems.concat(ran('learn', 'Memory learning', [`${NOTE}learn: ${learnState(process.env, learnInstalls())}`]));
+  const learning = learnInstalls();
+  problems = problems.concat(ran('learn', 'Memory learning',
+    [`${NOTE}learn: ${learnState(process.env, learning, readLearnLast())}`, ...learnCommandNotes(learning)]));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
   problems = problems.concat(ran('host_claims', 'Host claims',

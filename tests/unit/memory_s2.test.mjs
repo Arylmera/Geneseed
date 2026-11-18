@@ -116,11 +116,15 @@ async function stopHook(w, d, { hook = true, payload = null } = {}) {
   fs.writeFileSync(llm, `console.log(${JSON.stringify(fact('alpha-fact'))})`);
   const notes = path.join(d, 'notes.txt');
   // A hook call names its own event; a hand-typed note carries none (the swap is for the hook only).
-  fs.writeFileSync(notes, payload ?? (hook ? JSON.stringify({ hook_event_name: 'Stop', note: 'the build fails on windows' })
+  // The distil runs at PreCompact (D8), in this process (`GENESEED_LEARN_INLINE`), from the transcript the hook names.
+  const transcript = path.join(d, 'tp.jsonl');
+  fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'the build fails on windows' } })}
+`);
+  fs.writeFileSync(notes, payload ?? (hook ? JSON.stringify({ hook_event_name: 'PreCompact', transcript_path: transcript })
     : 'notes: the build fails on windows\n'));
   const empty = path.join(d, 'empty-project');
   fs.mkdirSync(empty, { recursive: true });
-  await inEnv({ GENESEED_LLM: `node ${llm}`, GENESEED_MEMORY: undefined, GENESEED_HARNESS: undefined,
+  await inEnv({ GENESEED_LEARN_INLINE: '1', GENESEED_LLM: `node ${llm}`, GENESEED_MEMORY: undefined, GENESEED_HARNESS: undefined,
     XDG_CONFIG_HOME: w.xdg, CLAUDE_PROJECT_DIR: empty, GENESEED_LEARN_CHILD: undefined }, w.repo,
   () => cmdLearn({ memory: path.join(w.cfg, 'memory'), host: 'claude', file: notes }));
   return [w.sharedMem, path.join(w.cfg, 'memory'), path.join(w.repo, 'memory')]

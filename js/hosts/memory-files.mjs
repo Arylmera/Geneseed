@@ -21,6 +21,7 @@ import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
 
@@ -695,29 +696,90 @@ export const MEMORY_DRAFT_HOST = 'memory';
 const LEARN_UNSET = 'dormant ($GENESEED_LLM unset)';
 
 /**
- * Whether `learn` can run (D12), per host of the installs present. One wording for `status` and
+ * The last distil run's verdict, `<machine cache>/learn-last.json`: `{ at, ok, reason, facts }`. The detached
+ * worker has no stdio, so this file is the only place its failure (a refused command, a timeout, a lapsed
+ * login) can surface: `status` and `doctor` read it, so "active" is never the whole story. `reason` is one line.
+ */
+const LEARN_LAST = 'learn-last.json';
+export function learnLastFile() {
+  try { return path.join(sharedPaths().root, 'cache', LEARN_LAST); } catch { return null; }
+}
+export function writeLearnLast(ok, reason, facts = 0, { runningFor = 0 } = {}) {
+  const file = learnLastFile();
+  if (!file) return;
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    const line = String(reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    const now = Date.now();
+    // `ok: null` + `by`: a run that has begun and says by when it must be over. Nothing else ever clears it but the
+    // run's own end, so a run still marked running past `by` hung: a model CLI whose own child never exits.
+    const row = runningFor > 0
+      ? { at: new Date(now).toISOString(), ok: null, running: true, by: new Date(now + runningFor * 1000).toISOString(), reason: 'running', facts: 0 }
+      : { at: new Date(now).toISOString(), ok: !!ok, reason: line, facts };
+    writeTextAtomic(file, `${JSON.stringify(row)}\n`);
+  } catch { /* a verdict is a favour, never a failed hook */ }
+}
+/** The verdict, or null: no run yet, or an unreadable file. */
+export function readLearnLast(file = learnLastFile()) {
+  try {
+    const v = JSON.parse(readFileSync(file, 'utf8'));
+    return isDict(v) && (typeof v.ok === 'boolean' || v.running === true) ? v : null;
+  } catch { return null; }
+}
+/** ` · last run failed <date>: <reason>` for a failed verdict, else ''. A success adds nothing. */
+export function learnLastNote(last, now = Date.now()) {
+  if (!last) return '';
+  // The file is read from disk and printed to a terminal: a date that is not an ISO date is dropped, and the reason
+  // loses its control characters (an ESC sequence would drive the terminal) and is cut.
+  const day = /^\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z)?$/.test(String(last.at)) ? String(last.at).slice(0, 10) : 'an unknown date';
+  if (last.running === true) {
+    const by = Date.parse(String(last.by));
+    return Number.isFinite(by) && now > by ? ` · last run stuck since ${day}` : '';
+  }
+  if (last.ok !== false) return '';
+  const reason = String(last.reason || '').replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, ' ').trim().slice(0, 200) || 'no reason recorded';
+  return ` · last run failed ${day}: ${reason}`;
+}
+
+/**
+ * Whether `learn` can run (D12, D9), per host of the installs present. One wording for `status` and
  * `doctor`. Pure: the caller reads the files.
  *
  * Only the Claude-shaped hook needs `$GENESEED_LLM`, and it reads the HOOK's env — which Claude
  * Code builds from the shell AND from the `"env"` object of the settings files. This verb runs in a
  * terminal or in the web daemon, which see neither, so `settingsEnv` carries those objects in.
  * Reading only `process.env` called a learning install dormant (6.0.3, on an install that learned).
+ * Who set the command is said too: a value equal to what the manifest recorded (`recorded`) is
+ * Geneseed's, from the `--learn` choice (`active (haiku)`); any other is the user's (`active (set by
+ * you)`). With no command, `--learn off` reads `off` and anything else `dormant`.
  * OpenCode's learn plugin distils with the session's own model and reads no `$GENESEED_LLM` at all.
  * Bob's Stop payload carries no transcript, so learn returns at once there: not dormant, n/a.
  *
- * `installs` is `[{ host, settingsEnv?: object[] }]`; with none, the env alone answers, as before.
+ * `last` is `readLearnLast()`: a failed verdict appends ` · last run failed <date>: <reason>`, a run still marked
+ * running past its `by` ` · last run stuck since <date>`. The file is machine-wide: it holds the latest run of any install.
+ * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, learn?: string|null }]`;
+ * with none, the env alone answers, as before.
  */
-export function learnState(env = process.env, installs = []) {
-  if (!installs.length) return env.GENESEED_LLM ? 'active' : LEARN_UNSET;
+export function learnState(env = process.env, installs = [], last = null) {
+  if (!installs.length) return env.GENESEED_LLM ? `active${learnLastNote(last)}` : LEARN_UNSET;
   const byHost = new Map();
-  for (const { host, settingsEnv = [] } of installs) {
-    const state = host === 'opencode' ? 'active (session model)'
-      : host === 'bob' ? 'n/a (Bob sends no transcript)'
-        : env.GENESEED_LLM || settingsEnv.some((e) => isDict(e) && e.GENESEED_LLM) ? 'active' : LEARN_UNSET;
+  for (const { host, settingsEnv = [], recorded = null, learn = null } of installs) {
+    let state;
+    if (host === 'opencode') state = 'active (session model)';
+    else if (host === 'bob') state = 'n/a (Bob sends no transcript)';
+    else {
+      // The files run user < project < local, and Claude Code applies the later one: search from the end.
+      const llm = [...settingsEnv].reverse().find((e) => isDict(e) && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+      if (!llm) state = learn === 'off' ? 'off' : LEARN_UNSET;
+      else if (recorded && recorded === llm) state = `active (${/--model\s+(\S+)/.exec(llm)?.[1] ?? 'session model'})`;
+      else state = 'active (set by you)';
+    }
     if (!byHost.has(host)) byHost.set(host, new Set());
     byHost.get(host).add(state);
   }
-  return [...byHost].map(([host, states]) => `${host}: ${[...states].join(' / ')}`).join(' · ');
+  const line = [...byHost].map(([host, states]) => `${host}: ${[...states].join(' / ')}`).join(' · ');
+  // The verdict is the machine's, not a host's: said once, and only where something is active to be wrong.
+  return /active/.test(line) ? line + learnLastNote(last) : line;
 }
 
 const oneLine = (text, max) => {

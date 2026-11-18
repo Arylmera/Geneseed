@@ -152,9 +152,10 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
 
     // Foreman's depth, main → worker → sub-worker, is armed in Claude Code's own setting, and
     // the manifest records the pair so uninstall can take exactly that back.
-    assert.deepEqual(s.env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
-    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env,
-      { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+    // And, since --learn defaults to light, the learn command: Haiku on Claude Code (spec D4).
+    const wired = { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2', GENESEED_LLM: 'claude -p --model haiku' };
+    assert.deepEqual(s.env, wired);
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env, wired);
 
     // No `cat AGENT.md` at global scope, and the plugins dir is never written.
     assert.ok(!hookCmds(s).some((c) => c.includes('cat AGENT.md')));
@@ -516,8 +517,10 @@ test("a depth cap the user set is theirs: the emit keeps it and the uninstall le
     fs.writeFileSync(path.join(cfg, 'settings.json'),
       JSON.stringify({ env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' } }));
     globalEmit('claude', path.join(d, 'bundle'), cfg);
-    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' });
-    assert.ok(!('settings_env' in readJson(cfg, GLOBAL_MANIFEST).managed));
+    const mine = { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5', GENESEED_LLM: 'claude -p --model haiku' };
+    assert.deepEqual(readJson(cfg, 'settings.json').env, mine);
+    // Only the learn command is recorded: the user's depth cap is not Geneseed's to take back.
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env, { GENESEED_LLM: 'claude -p --model haiku' });
     captured(() => uninstallGlobal(cfg, false, 'claude'));
     assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' });
   });
@@ -604,8 +607,9 @@ test('deactivate then reactivate round-trips, and the user prose never moves', (
     assert.ok(cm.includes('<!-- BEGIN GENESEED -->'));
     assert.ok(cm.includes('keep'));
     assert.ok(geneseedCmds(readJson(cfg, 'settings.json')).length > 0, 'hooks were not re-wired');
-    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' },
-      'the depth cap was not re-wired');
+    assert.deepEqual(readJson(cfg, 'settings.json').env,
+      { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2', GENESEED_LLM: 'claude -p --model haiku' },
+      'the depth cap and the learn command were not re-wired');
     assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')), 'the stash was not cleaned up');
   });
 });
@@ -1432,8 +1436,9 @@ test('an OpenClaude project emit keeps the repo root clean and excludes ITS glob
     const want = path.resolve(path.join(openclaudeConfigDir(), 'CLAUDE.md'))
       .split(path.sep).join('/');
     assert.deepEqual(s.claudeMdExcludes, [want]);
-    // No depth cap: OpenClaude's source has no such variable (checked on 0.31).
-    assert.ok(!('env' in s), JSON.stringify(s.env));
+    // No depth cap: OpenClaude's source has no such variable (checked on 0.31). Only the learn command:
+    // OpenClaude has no tier default, so `light` is the session model and no `--model` is written (spec Q2).
+    assert.deepEqual(s.env, { GENESEED_LLM: 'openclaude -p' });
 
     const ctx = hookCmds(s).filter((c) => c.includes(' context '));
     assert.ok(ctx.length > 0 && ctx.every((c) => c.includes('--host openclaude')),
@@ -2818,5 +2823,107 @@ test('every host and scope drops an excluded rule\'s citations from its root fil
         }
       });
     }
+  }
+});
+
+// R-F3 (D5): a `GENESEED_LLM` exported in the shell that differs from the value an earlier build recorded is the
+// user's, and the settings `env` would override it in a session. Geneseed stops managing the key, removes its own
+// value, and says so. A shell holding exactly the recorded value is a session that inherited ours: still ours.
+// `inSession` sets CLAUDECODE (the app sets it in every session); otherwise it is cleared, so a run inside a real session
+// of the developer's own reads as the CI would.
+function withShellLlm(value, fn, inSession = false) {
+  const saved = process.env.GENESEED_LLM;
+  const savedApp = process.env.CLAUDECODE;
+  if (value === undefined) delete process.env.GENESEED_LLM; else process.env.GENESEED_LLM = value;
+  if (inSession) process.env.CLAUDECODE = '1'; else delete process.env.CLAUDECODE;
+  try { return fn(); } finally {
+    if (saved === undefined) delete process.env.GENESEED_LLM; else process.env.GENESEED_LLM = saved;
+    if (savedApp === undefined) delete process.env.CLAUDECODE; else process.env.CLAUDECODE = savedApp;
+  }
+}
+const HAIKU_CMD = 'claude -p --model haiku';
+
+test('the learn command and the shell: the user\'s value wins, ours is removed, an inherited one stays ours', () => {
+  const emit = (cfg, d, learn) => capturedOut(() => emitGlobalInto('claude', { theme: 'neutral', out: path.join(d, 'bundle'), cfgDir: cfg, footprint: 'full', learn }));
+  const llmOf = (cfg) => readJson(cfg, 'settings.json').env?.GENESEED_LLM;
+  const recorded = (cfg) => readJson(cfg, GLOBAL_MANIFEST).managed.settings_env?.GENESEED_LLM;
+  // No earlier build, a shell value: nothing is written, nothing recorded.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    withShellLlm('ollama run x', () => emit(cfg, d, 'light'));
+    assert.equal(llmOf(cfg), undefined);
+    assert.equal(recorded(cfg), undefined);
+  });
+  // An earlier build wrote ours; the user then exports their own: ours goes, the warning says why.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    withShellLlm(undefined, () => emit(cfg, d, 'light'));
+    assert.equal(llmOf(cfg), HAIKU_CMD);
+    const [, , err] = withShellLlm('ollama run x', () => emit(cfg, d, 'light'));
+    assert.equal(llmOf(cfg), undefined, 'our value is removed');
+    assert.equal(recorded(cfg), undefined, 'and no longer recorded');
+    assert.match(err, /GENESEED_LLM is set in your shell .*stops managing/);
+  });
+  // A rebuild run inside a session that inherited our own value, with the choice changed: still ours, replaced.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    withShellLlm(undefined, () => emit(cfg, d, 'light'));
+    const [, , err] = withShellLlm(HAIKU_CMD, () => emit(cfg, d, 'standard'));
+    assert.equal(llmOf(cfg), 'claude -p --model sonnet');
+    assert.equal(recorded(cfg), 'claude -p --model sonnet');
+    assert.doesNotMatch(err, /stops managing/);
+  });
+});
+
+// S-F3: a session carries the GENESEED_LLM of the install it runs under, and a rebuild reaches the others. Global
+// records haiku, the project records sonnet; `rebuild-all` run inside a session of the global holds haiku, which is
+// the global's own recorded value, so the project keeps its key. A value no install recorded is the user's.
+test('a shell value that another install recorded is an inherited session, not the user\'s', () => {
+  withDir((d) => {
+    const home = claudeConfigDir();
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    const saved = process.env.CLAUDECODE;
+    delete process.env.CLAUDECODE;
+    try {
+      withShellLlm(undefined, () => {
+        capturedOut(() => emitGlobalInto('claude', { theme: 'neutral', out: path.join(d, 'b1'), cfgDir: home, footprint: 'full', learn: 'light' }));
+        capturedOut(() => emitProjectInto('claude', { theme: 'neutral', out: path.join(d, 'b2'), root: repo, footprint: 'full', learn: 'standard' }));
+      });
+      const proj = (...p) => path.join(repo, '.claude', ...p);
+      assert.equal(readJson(proj('settings.local.json')).env.GENESEED_LLM, 'claude -p --model sonnet');
+      // Inside a session of the global install: the shell holds haiku.
+      const [, , err] = withShellLlm(HAIKU_CMD, () => capturedOut(() => emitProjectInto('claude', { theme: 'neutral', out: path.join(d, 'b3'), root: repo, footprint: 'full', learn: 'standard' })));
+      assert.equal(readJson(proj('settings.local.json')).env.GENESEED_LLM, 'claude -p --model sonnet', 'the project kept its key');
+      assert.doesNotMatch(err, /stops managing/);
+      // A value nobody recorded is the user's: the project's key goes, with the warning.
+      const [, , err2] = withShellLlm('ollama run x', () => capturedOut(() => emitProjectInto('claude', { theme: 'neutral', out: path.join(d, 'b4'), root: repo, footprint: 'full', learn: 'standard' })));
+      assert.equal(readJson(proj('settings.local.json')).env?.GENESEED_LLM, undefined);
+      assert.match(err2, /stops managing/);
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDECODE; else process.env.CLAUDECODE = saved;
+    }
+  });
+});
+
+// The app sets CLAUDECODE in every session (seen in a real session's environment): an install holding a record keeps
+// its key whatever the session inherited, and one with no record still treats a shell value as the user's.
+test('inside a Claude Code session an install with a record keeps its key; without one the shell is the user\'s', () => {
+  {
+    withDir((d) => {
+      const cfg = path.join(d, 'dotclaude');
+      fs.mkdirSync(cfg);
+      const emit = () => capturedOut(() => emitGlobalInto('claude', { theme: 'neutral', out: path.join(d, 'bundle'), cfgDir: cfg, footprint: 'full', learn: 'light' }));
+      withShellLlm('ollama run x', emit, true);
+      assert.equal(readJson(cfg, 'settings.json').env?.GENESEED_LLM, undefined, 'no record: the shell value is the user\'s');
+      withShellLlm(undefined, emit, true);
+      assert.equal(readJson(cfg, 'settings.json').env.GENESEED_LLM, HAIKU_CMD);
+      const [, , err] = withShellLlm('ollama run x', emit, true);
+      assert.equal(readJson(cfg, 'settings.json').env.GENESEED_LLM, HAIKU_CMD, 'a record: the key stays');
+      assert.doesNotMatch(err, /stops managing/);
+    });
   }
 });

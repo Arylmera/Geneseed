@@ -1234,6 +1234,28 @@
       "mutex": []
     },
     {
+      "name": "learn-worker",
+      "help": "the detached distil: run the job file a PreCompact/SessionEnd `learn` hook wrote (<machine dir>/cache/learn-jobs/job-*.json, nowhere else), with the model command from this process's own $GENESEED_LLM and a store of the machine tier or an install, then delete it. Started by `learn`, never wired in settings; prints nothing and always exits 0",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "file",
+          "metavar": null,
+          "help": "the job file `learn` wrote",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [],
+      "mutex": []
+    },
+    {
       "name": "link",
       "help": "put `geneseed` on PATH so it runs from any directory",
       "description": "",

@@ -196,7 +196,7 @@ test('with process 1 excluded a rule write the transcript shows is still reporte
 });
 
 // On Stop, stdout holds at most one JSON document. The change report is that document, so nothing
-// the model CLI does may add to it: a reply of NOTHING is dropped, a reply that is no memory
+// the model CLI does may add to it (a Stop calls no model since D8, so every stderr below is empty): a reply of NOTHING is dropped, a reply that is no memory
 // stores nothing and says so on stderr, and a model CLI that exits 2 neither blocks the Stop nor changes stdout. In
 // every row stdout is exactly the one line written out below, and rc is 0. Before this, the raw
 // reply followed the report on stdout: two documents, which no host parses, so the report was lost.
@@ -215,8 +215,8 @@ test('Stop with a changed store prints the change report alone, whatever the mod
     for (const [says, extra, stderr] of [
       ['NOTHING\n', {}, ''],
       ['nothing', {}, ''],
-      ['I could not find anything durable.\n', {}, '[learn] nothing new to store (all duplicates).\n'],
-      ['NOTHING\n', { RC: '2', FAILS: 'quota exceeded\n' }, 'quota exceeded\n'],
+      ['I could not find anything durable.\n', {}, ''],
+      ['NOTHING\n', { RC: '2', FAILS: 'quota exceeded\n' }, ''],
     ]) {
       // A report is said once, so each row changes the rule file again before its Stop.
       fs.appendFileSync(path.join(w.root, 'user-rules.md'), ' changed');

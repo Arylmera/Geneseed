@@ -117,6 +117,11 @@ const VERBS = {
     },
     positional: 'file',
   },
+  // The detached distil (ADR 0002's second spawn): `learn` writes a job on PreCompact/SessionEnd and
+  // starts `<node> <this file> learn-worker <job>` apart from itself. Wired by no settings.json.
+  'learn-worker': {
+    load: () => import('../js/hosts/hooks-learn.mjs'), fn: 'cmdLearnWorker', flags: {}, positional: 'file',
+  },
   // UserPromptSubmit and SessionEnd: no verb runs there, and the activity view needs both.
   activity: { load: () => import('../js/hosts/hooks-prims.mjs'), fn: 'cmdActivity', flags: HOSTED },
 };

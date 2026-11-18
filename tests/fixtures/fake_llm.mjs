@@ -42,10 +42,23 @@ import path from 'node:path';
 const echo = process.env.FAKE_LLM_ECHO;
 if (echo) {
   fs.mkdirSync(path.dirname(echo), { recursive: true });
-  const prompt = process.argv[2] ?? '';
+  // The prompt is the last argument, or stdin when there is none (a `.cmd` shim is fed over stdin: F5).
+  let prompt = process.argv[2] ?? '';
+  if (process.argv[2] === undefined || process.env.FAKE_LLM_STDIN) { try { prompt = fs.readFileSync(0, 'utf8'); } catch { /* no stdin */ } }
   fs.writeFileSync(echo, Buffer.from(os.EOL === '\n' ? prompt : prompt.replaceAll('\n', os.EOL),
     'utf8'));
 }
+
+//     FAKE_LLM_LOG    file each call appends its argv to, one JSON array per line (the call count and the flags)
+//     FAKE_LLM_DELAY_MS   milliseconds to wait before answering (a slow model, for the detached worker)
+const log = process.env.FAKE_LLM_LOG;
+if (log) {
+  fs.mkdirSync(path.dirname(log), { recursive: true });
+  fs.appendFileSync(log, `${JSON.stringify(process.argv.slice(2))}
+`);
+}
+const delay = Number(process.env.FAKE_LLM_DELAY_MS || 0);
+if (delay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
 
 const src = process.env.FAKE_LLM_OUT;
 if (src && fs.existsSync(src) && fs.statSync(src).isFile()) {

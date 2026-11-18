@@ -35,7 +35,7 @@ import path from 'node:path';
 import { main as driverMain } from './driver.mjs';
 import { GATE_SWITCHES, makeCfg } from './source.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
-import { installState, installTargets } from '../hosts/installs.mjs';
+import { claudeCfg, claudeReadManifest, installState, installTargets } from '../hosts/installs.mjs';
 import { installProfile } from './profile.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
@@ -160,6 +160,10 @@ export function rebuildAll() {
     return 0;
   }
   const failures = [];
+  // D10: which Claude-family installs hold no learn command now, so the ones that start learning are said once.
+  const learnCmd = ([host, scope, root]) => (host === 'claude' || host === 'openclaude'
+    ? claudeReadManifest(claudeCfg(root, scope, host)).managed?.settings_env?.GENESEED_LLM ?? null : null);
+  const before = new Map(targets.map((t) => [t, learnCmd(t)]));
   for (const [host, scope, root] of targets) {
     const label = `${host}:${scope} (${root})`;
     // The one replay that speaks when an excluded skill's name got older: status and the console
@@ -184,6 +188,11 @@ export function rebuildAll() {
     printErr(`[rebuild-all] ${failures.length}/${targets.length} install(s) failed: `
       + `${failures.join(', ')}\n`);
     return 1;
+  }
+  const started = targets.filter((t) => before.get(t) === null && learnCmd(t) !== null).map(([h, sc]) => `${h}:${sc}`);
+  if (started.length) {
+    printOut(`[rebuild-all] memory learning now runs on ${started.join(', ')} (the --learn setting, default light); `
+      + 'rebuild with --learn off to stop it.\n');
   }
   printOut(`[rebuild-all] rebuilt ${targets.length} install(s).\n`);
   return 0;
