@@ -275,8 +275,12 @@ const LEAN_FLAGS = [
 const HELP_SECONDS = 20;
 const helpCache = new Map();
 
-/** The command's name without its folder or Windows extension, lower case. */
-const binName = (word) => path.basename(word).toLowerCase().replace(/[.](?:exe|cmd|bat)$/, '');
+/**
+ * The command's name without its folder or Windows extension, lower case. `path.win32.basename` splits on `/`
+ * AND `\`, so a Windows path names the same command on every platform (`path.basename` on POSIX kept
+ * `C:\bin\Claude.EXE` whole and missed it).
+ */
+const binName = (word) => path.win32.basename(word).toLowerCase().replace(/[.](?:exe|cmd|bat)$/, '');
 
 /** `<cli> --help`'s text, or '' when it will not run: the flags an `openclaude` of this machine knows. */
 function helpOf(cli) {
