@@ -57,7 +57,7 @@ The reviewer reads the change, runs the tests, and comes back with findings orde
 
 ### 4. The session teaches the next one
 
-When a session winds down, the **learn** step reads the conversation and keeps what is worth remembering. On OpenCode this happens by itself, with the model the session already uses. On Claude Code it is off until you set `GENESEED_LLM` to a model command, for example `claude -p`.
+At each compaction and when a session winds down, the **learn** step reads the conversation and keeps what is worth remembering. On OpenCode this happens by itself, with the model the session already uses. On Claude Code and OpenClaude it is on by default (`--learn light`, Haiku): the build writes the model command into the install's settings, and a detached worker runs it. Choose another model, or none, with `--learn off|light|standard|session`.
 
 A new file appears in the memory store. On a global install that is `~/.config/geneseed/memory/`, so every host on the machine sees it; a project install keeps its own `memory/` folder:
 

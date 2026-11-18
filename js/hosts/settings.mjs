@@ -1465,7 +1465,8 @@ function reconcileClaudeEnv(p, want, recorded) {
   for (const k of new Set([...Object.keys(recorded), ...Object.keys(wanted)])) {
     if (has(wanted, k)) {
       if (!has(env, k) || ours(k)) { next[k] = wanted[k]; record[k] = wanted[k]; }
-      else if (env[k] !== wanted[k]) {
+      // Only the learn command's refusal is news: MAX_SUBAGENT_SPAWN_DEPTH was always the user's to set, and said nothing.
+      else if (env[k] !== wanted[k] && k === 'GENESEED_LLM') {
         process.stderr.write(`[geneseed] "env.${k}" in ${path.basename(p)} is set by you (${jsonDumpsCompact(env[k])}) `
           + `— kept, not replaced by ${jsonDumpsCompact(wanted[k])}. Remove it and rebuild to let Geneseed set it.\n`);
       }

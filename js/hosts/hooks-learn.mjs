@@ -29,7 +29,7 @@ import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs
 import { doneGate } from './hooks-done.mjs';
 import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
-  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
+  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson, writeLearnLast,
 } from './memory-files.mjs';
 import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
 import { gitRootOf } from './gitref.mjs';
@@ -280,7 +280,7 @@ const binName = (word) => path.basename(word).toLowerCase().replace(/[.](?:exe|c
 /** `<cli> --help`'s text, or '' when it will not run: the flags an `openclaude` of this machine knows. */
 function helpOf(cli) {
   if (!helpCache.has(cli)) {
-    const proc = runLlm(`${cli} --help`, null, { seconds: HELP_SECONDS });
+    const proc = runLlm(`${cli} --help`, null, { seconds: HELP_SECONDS, track: false });
     helpCache.set(cli, proc.returncode === 0 ? proc.stdout : '');
   }
   return helpCache.get(cli);
@@ -339,10 +339,17 @@ export function spawnPlan(words, prompt, { platform = process.platform, env = pr
 }
 
 /**
+ * The run in flight (`runJob`): its first failure, and the facts it stored. null outside a run, so a manual
+ * `learn` and the `--help` probe record nothing. `runJob` writes it to `learn-last.json` when it ends.
+ */
+let run = null;
+function noteFail(reason) { if (run && !run.fail) run.fail = reason; }
+
+/**
  * `prompt` null runs the words as they are (the `--help` probe above); a string is appended after the
  * lean flags. The ONE `spawnSync` call site of this module: the test that pins it reads this line.
  */
-function runLlm(llm, prompt, { seconds = llmTimeoutSeconds() } = {}) {
+function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {}) {
   const argv = splitWords(llm);
   // `NO_WINDOW` folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
@@ -353,11 +360,15 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds() } = {}) {
   // killing the outermost call. The marker rides in the child's own environment (inherited by
   // every grandchild too), and `cmdLearn`'s first line stands down the instant it sees it.
   const plan = spawnPlan(prompt === null ? argv : leanArgv(argv), prompt);
-  if (plan.refuse) return { stdout: '', stderr: `[learn] ${plan.refuse}\n`, returncode: 1, error: null };
+  if (plan.refuse) {
+    if (track) noteFail(plan.refuse);
+    return { stdout: '', stderr: `[learn] ${plan.refuse}\n`, returncode: 1, error: null };
+  }
   const proc = spawnSync(plan.file, plan.args,
     { input: plan.input, windowsVerbatimArguments: plan.verbatim, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: seconds * 1000, killSignal: 'SIGKILL',
       env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
   if (proc.error && /** @type {NodeJS.ErrnoException} */ (proc.error).code === 'ETIMEDOUT') {
+    if (track) noteFail(`${argv[0]} gave no answer in ${seconds} s and was stopped`);
     err(`[learn] ${argv[0]} gave no answer in ${seconds} s and was stopped - nothing learned.\n`);
     return { stdout: '', stderr: '', returncode: 0, error: null };
   }
@@ -367,6 +378,11 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds() } = {}) {
   // bytes, so without this the stored fact is written with `\r\r\n` on every line.
   const universal = (s) => (s === null || s === undefined ? ''
     : String(s).replaceAll('\r\n', '\n').replaceAll('\r', '\n'));
+  if (track && (proc.error || proc.status !== 0)) {
+    const said = universal(proc.stderr).split('\n').find((l) => l.trim()) || '';
+    noteFail(proc.error ? `could not run ${argv[0]}: ${proc.error.message}`
+      : `${argv[0]} exited ${proc.status === null ? 'by signal' : proc.status}${said ? `: ${said.trim()}` : ''}`);
+  }
   return {
     stdout: universal(proc.stdout),
     stderr: proc.error ? `[learn] could not run ${argv[0]}: ${proc.error.message}\n`
@@ -392,6 +408,7 @@ function learnAgentLesson(agent, notes, memDir, llm) {
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
     if (n >= 10 && n <= 300) {
       const written = recordOwnWrites(path.dirname(memDir), () => appendAgentLesson(memDir, agent, lesson));
+      if (written && run) run.facts += 1;
       err(written ? `[learn] agent lesson -> ${written}\n`
         : `[learn] ${agent}'s lesson file is not UTF-8 - left as it is, lesson dropped\n`);
     }
@@ -630,8 +647,11 @@ function distil(notes, memDir, llm, hookEvent) {
   const proc = runLlm(llm, prompt);
   // On a hook run a failed model said nothing (S1f: a lapsed login prints on stdout or stderr alike).
   const output = hookEvent && proc.returncode !== 0 ? '' : proc.stdout;
+  // A zero exit with nothing said is a lapsed login or a swallowed error, never an answer: NOTHING is the answer.
+  if (hookEvent && proc.returncode === 0 && !output.trim()) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
     const { created, updated, archived } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
+    if (run) run.facts += created.length + updated.length;
     if (created.length) {
       err(`[learn] wrote ${created.length} memory file(s) to `
         + `${memDir}: ${created.join(', ')}\n`);
@@ -745,9 +765,18 @@ function startDistil(meta, args, install, hookEvent, llm) {
   };
   const dropQueue = () => { if (queue) { try { unlinkSync(queue); } catch { /* the sweep gets it */ } } };
   const dir = jobDir();
-  if (!install || !dir || process.env.GENESEED_LEARN_INLINE) {
+  if (process.env.GENESEED_LEARN_INLINE) {
     runJob(job, llm);
     dropQueue();
+    return 0;
+  }
+  // Never inline on a real hook event: it would hold the session on the model (D12). No folder to put the job
+  // in, or no install to name its store: skip, say so, and let status and doctor say so too.
+  if (!install || !dir) {
+    const why = !install ? 'no Geneseed install found for this hook' : 'no machine cache folder';
+    err(`[learn] ${why} - distil skipped.
+`);
+    writeLearnLast(false, `${why}; distil skipped`);
     return 0;
   }
   try {
@@ -759,6 +788,7 @@ function startDistil(meta, args, install, hookEvent, llm) {
     dropQueue();
   } catch (e) {
     err(`[learn] could not start the distil worker: ${e instanceof Error ? e.message : e}\n`);
+    writeLearnLast(false, `could not start the distil worker: ${e instanceof Error ? e.message : e}`);
   }
   return 0;
 }
@@ -771,13 +801,26 @@ function startDistil(meta, args, install, hookEvent, llm) {
 function spawnWorker(jobFile) {
   const child = spawn(process.execPath, [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn-worker', jobFile],
     { detached: true, windowsHide: true, stdio: 'ignore' });
-  child.on('error', () => { /* no node to start: nothing is learned, the session is unharmed */ });
+  child.on('error', (e) => { writeLearnLast(false, `could not start the distil worker: ${e.message}`); });
   child.unref();
 }
 
 /** The job's run: the transcript's distil, then each queued sub-agent's lesson. Always 0. */
 function runJob(job, llm) {
-  if (!job || typeof llm !== 'string' || !llm.trim()) return 0;
+  if (!job) return 0;
+  if (typeof llm !== 'string' || !llm.trim()) {
+    writeLearnLast(false, '$GENESEED_LLM is not set for the distil worker');
+    return 0;
+  }
+  run = { fail: null, facts: 0 };
+  try { return runJobIn(job, llm); } finally {
+    const { fail, facts } = run;
+    run = null;
+    writeLearnLast(!fail, fail || '', facts);
+  }
+}
+
+function runJobIn(job, llm) {
   const memDir = typeof job.memory === 'string' ? resolveMemoryDir(job.memory) : null;
   try {
     if (typeof job.transcript === 'string' && job.transcript) {
@@ -793,6 +836,7 @@ function runJob(job, llm) {
     }
   } catch (e) {
     err(`[learn] the distil stopped: ${e instanceof Error ? e.message : e}\n`);
+    noteFail(`the distil stopped: ${e instanceof Error ? e.message : e}`);
   }
   return 0;
 }
@@ -838,6 +882,7 @@ export function cmdLearnWorker(args) {
     const job = JSON.parse(readFileSync(file, 'utf8'));
     if (!job || typeof job.memory !== 'string' || !allowedMemory(job.memory)) {
       err('[learn] the job names no memory store of ours - refused.\n');
+      writeLearnLast(false, 'the job names no memory store of ours - refused');
     } else {
       runJob(job, process.env.GENESEED_LLM);
     }

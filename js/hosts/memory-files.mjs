@@ -21,6 +21,7 @@ import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
 
@@ -695,6 +696,37 @@ export const MEMORY_DRAFT_HOST = 'memory';
 const LEARN_UNSET = 'dormant ($GENESEED_LLM unset)';
 
 /**
+ * The last distil run's verdict, `<machine cache>/learn-last.json`: `{ at, ok, reason, facts }`. The detached
+ * worker has no stdio, so this file is the only place its failure (a refused command, a timeout, a lapsed
+ * login) can surface: `status` and `doctor` read it, so "active" is never the whole story. `reason` is one line.
+ */
+const LEARN_LAST = 'learn-last.json';
+export function learnLastFile() {
+  try { return path.join(sharedPaths().root, 'cache', LEARN_LAST); } catch { return null; }
+}
+export function writeLearnLast(ok, reason, facts = 0) {
+  const file = learnLastFile();
+  if (!file) return;
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    const line = String(reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    writeTextAtomic(file, `${JSON.stringify({ at: new Date().toISOString(), ok: !!ok, reason: line, facts })}\n`);
+  } catch { /* a verdict is a favour, never a failed hook */ }
+}
+/** The verdict, or null: no run yet, or an unreadable file. */
+export function readLearnLast(file = learnLastFile()) {
+  try {
+    const v = JSON.parse(readFileSync(file, 'utf8'));
+    return isDict(v) && typeof v.ok === 'boolean' ? v : null;
+  } catch { return null; }
+}
+/** ` · last run failed <date>: <reason>` for a failed verdict, else ''. A success adds nothing. */
+export function learnLastNote(last) {
+  if (!last || last.ok !== false) return '';
+  return ` · last run failed ${String(last.at ?? '').slice(0, 10)}: ${String(last.reason || 'no reason recorded')}`;
+}
+
+/**
  * Whether `learn` can run (D12, D9), per host of the installs present. One wording for `status` and
  * `doctor`. Pure: the caller reads the files.
  *
@@ -708,11 +740,12 @@ const LEARN_UNSET = 'dormant ($GENESEED_LLM unset)';
  * OpenCode's learn plugin distils with the session's own model and reads no `$GENESEED_LLM` at all.
  * Bob's Stop payload carries no transcript, so learn returns at once there: not dormant, n/a.
  *
+ * `last` is `readLearnLast()`: a failed verdict appends ` · last run failed <date>: <reason>`.
  * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, learn?: string|null }]`;
  * with none, the env alone answers, as before.
  */
-export function learnState(env = process.env, installs = []) {
-  if (!installs.length) return env.GENESEED_LLM ? 'active' : LEARN_UNSET;
+export function learnState(env = process.env, installs = [], last = null) {
+  if (!installs.length) return env.GENESEED_LLM ? `active${learnLastNote(last)}` : LEARN_UNSET;
   const byHost = new Map();
   for (const { host, settingsEnv = [], recorded = null, learn = null } of installs) {
     let state;
@@ -728,7 +761,9 @@ export function learnState(env = process.env, installs = []) {
     if (!byHost.has(host)) byHost.set(host, new Set());
     byHost.get(host).add(state);
   }
-  return [...byHost].map(([host, states]) => `${host}: ${[...states].join(' / ')}`).join(' · ');
+  const line = [...byHost].map(([host, states]) => `${host}: ${[...states].join(' / ')}`).join(' · ');
+  // The verdict is the machine's, not a host's: said once, and only where something is active to be wrong.
+  return /active/.test(line) ? line + learnLastNote(last) : line;
 }
 
 const oneLine = (text, max) => {

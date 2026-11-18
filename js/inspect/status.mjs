@@ -55,7 +55,7 @@ import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { providerWarning } from '../maintain/kit-migration.mjs';
 import { isDoctorNote } from './scan.mjs';
 import { pendingDrafts } from '../hosts/hooks-context.mjs';
-import { factCount, learnState } from '../hosts/memory-files.mjs';
+import { factCount, learnState, readLearnLast } from '../hosts/memory-files.mjs';
 import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
@@ -396,7 +396,7 @@ export function statusData() {
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
     drafts_pending: pendingDrafts(),
-    learn: learnState(process.env, learnInstalls()),
+    learn: learnState(process.env, learnInstalls(), readLearnLast()),
     store_report: lastStoreReport(),
     opencode_shadow: opencodeShadowedInstall(),
     openclaude_dual_harness: openclaudeDualHarnessRoots(),

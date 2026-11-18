@@ -19,7 +19,9 @@ tool call of every agent session, where a spawn costs time and a console window 
 - **Amended 2026-11-18** (the learn model setting): the same module gains a **second spawn**, the detached
   worker. A `SessionEnd` hook is killed when its session ends, and a compaction must not wait 5 to 10 s for a
   model, so on `SessionEnd` and `PreCompact` `learn` writes a job file and starts the
-  worker, then returns. The job lives in the machine tier's cache, `<machine dir>/cache/learn-jobs/job-*.json`
+  worker, then returns at once. The one exception is `GENESEED_LEARN_INLINE=1` (a test, or a person debugging the
+  distil), which runs the same job inside the hook process and waits for the model; nothing else runs inline, and a hook
+  event that can name no install or no machine cache folder skips the distil instead of falling back to it. The job lives in the machine tier's cache, `<machine dir>/cache/learn-jobs/job-*.json`
   (`~/.config/geneseed/cache/learn-jobs`), never in an install: a project install's folder is the user's repo. A job
   is DATA: the transcript path, the memory dir, the host, the sub-agents queued for a lesson. It holds no model
   command. The shape is fixed and nothing else may be spawned this way:
@@ -33,6 +35,9 @@ tool call of every agent session, where a spawn costs time and a console window 
   the `memory/` of a folder holding a Geneseed install manifest, or the job is refused and deleted without being run. It then runs the distil
   with the one model spawn above, and deletes the job. Measured
   on Windows 11 (spec S1c): the hook returns in 26 ms and the worker finishes 9 s later, after the session is gone.
+  The worker has no stdio, so it reports through one file: after each run (the inline path too) it writes
+  `<machine dir>/cache/learn-last.json`, `{ at, ok, reason, facts }`, which `status` and `doctor` append to the learn
+  line when the last run failed. No stdout, no further spawn.
   The model CLI itself runs lean (`--setting-sources ""`, `--strict-mcp-config`, `--tools ""`,
   `--disable-slash-commands`, `--no-session-persistence`, a short `--system-prompt`; never `--bare`, which needs an
   API key) and, for `openclaude`, runs `openclaude --help` first, through the same one `spawnSync` call.
@@ -52,6 +57,9 @@ tool call of every agent session, where a spawn costs time and a console window 
   words on the line are the user's own command and the fixed lean flags; a word holding a double quote, `%`, a line
   break or a trailing backslash refuses the call. For `claude` and `openclaude` the prompt goes over stdin on every path, native `.exe` and non-Windows included (a long
   prompt overran the 32 767-character Windows line and failed silently); any other command keeps it as its last argument.
+- **Known limit, `.cmd` path on Windows:** the model call's timeout bounds the *wait*, not the child's life. `SIGKILL`
+  ends `cmd.exe`, and the node process the npm shim started under it can outlive that kill. A kill-tree would be a
+  new spawn (`taskkill`), which this ADR does not allow, so it is not done; an `.exe` model CLI is killed whole.
 - `bin/geneseed-cli.mjs`, the user-facing CLI, spawns only from modules on a declared allow-list
   (`ALLOWED_SPAWNS`), each row naming the exact argv it may start — `git` for update, `node --check`
   for doctor, the web daemon relaunching this program, and so on. A new spawn is a new row with its

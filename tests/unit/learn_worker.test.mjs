@@ -13,7 +13,7 @@ import { learnEnvCommand } from '../../js/build/emit-claude.mjs';
 import { leanArgv } from '../../js/hosts/hooks-learn.mjs';
 import { commandOnPath, learnCommandNotes } from '../../js/inspect/doctor.mjs';
 import { learnInstalls } from '../../js/inspect/status.mjs';
-import { learnState } from '../../js/hosts/memory-files.mjs';
+import { learnState, readLearnLast } from '../../js/hosts/memory-files.mjs';
 import { FAKE_LLM } from '../helpers/cli_golden.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
@@ -308,5 +308,78 @@ test('wireClaudeEnv with nothing wanted and nothing recorded does not read the f
 `);
     const [, said2] = quietly(() => wireClaudeEnv(p, {}, { [KEY]: HAIKU }));
     assert.match(said2, /has comments/);
+  });
+});
+
+// ---- F1: a failed worker run is not hidden behind "active" -------------------------------------------------------
+
+const lastFile = (r) => path.join(r.sb.path, 'home', '.config', 'geneseed', 'cache', 'learn-last.json');
+function workerRun(r, env) {
+  fs.mkdirSync(r.jobs, { recursive: true });
+  const file = path.join(r.jobs, `job-${Date.now()}.json`);
+  fs.writeFileSync(file, JSON.stringify({ v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(r.inst, 'memory'),
+    transcript: r.transcript, agents: [] }));
+  return spawnHook(['learn-worker', file], '', { env: { ...r.env, ...env } });
+}
+const installs = [{ host: 'claude', settingsEnv: [{ GENESEED_LLM: HAIKU }], recorded: HAIKU }];
+
+test('a worker run whose model fails leaves a verdict that learnState words; a later success clears it', () => {
+  const r = rig();
+  try {
+    workerRun(r, { FAKE_LLM_RC: '1', FAKE_LLM_ERR: 'Invalid API key' });
+    const failed = readLearnLast(lastFile(r));
+    assert.equal(failed.ok, false, 'a model that exited 1 is a failed run');
+    assert.match(failed.reason, /exited 1: Invalid API key/, 'the reason is one line naming the exit and what the model said');
+    assert.match(learnState({}, installs, failed), /^claude: active \(haiku\) · last run failed \d{4}-\d{2}-\d{2}: .*exited 1/);
+    workerRun(r, {});
+    const fine = readLearnLast(lastFile(r));
+    assert.equal(fine.ok, true, 'the next run, with a model that answers, replaces the verdict');
+    assert.equal(fine.facts, 1, 'and counts the fact it stored');
+    assert.equal(learnState({}, installs, fine), 'claude: active (haiku)', 'a success adds nothing to the line');
+    assert.equal(learnState({}, installs, null), 'claude: active (haiku)', 'no verdict adds nothing either');
+  } finally { r.sb.cleanup(); }
+});
+
+test('a model that exits 0 and says nothing is a failed run (a lapsed login), not NOTHING', () => {
+  const r = rig({ FAKE_LLM_OUT: '' });
+  try {
+    delete r.env.FAKE_LLM_OUT;
+    workerRun(r, {});
+    assert.match(readLearnLast(lastFile(r)).reason, /empty reply/);
+  } finally { r.sb.cleanup(); }
+});
+
+test('learnState says a failed verdict only where something is active', () => {
+  const bad = { at: '2026-11-18T10:00:00Z', ok: false, reason: 'timeout' };
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [], learn: 'off' }], bad), 'claude: off');
+  assert.equal(learnState({ GENESEED_LLM: 'x' }, [], bad), 'active · last run failed 2026-11-18: timeout');
+});
+
+// ---- F4: a hook event never runs the model inline ----------------------------------------------------------------
+
+test('a hook event with no install found skips the distil: no model call, the skip is the verdict', () => {
+  const r = rig();
+  try {
+    // No `--memory`: the hook can name no install.
+    const res = spawnHook(['learn', '--no-done-gate'],
+      JSON.stringify({ session_id: 's', transcript_path: r.transcript, hook_event_name: 'SessionEnd' }), { env: r.env });
+    assert.equal(res.status, 0);
+    assert.deepEqual(r.calls(), [], 'the model was not called in the hook process');
+    assert.match(res.stderr, /no Geneseed install/);
+    const last = readLearnLast(lastFile(r));
+    assert.equal(last.ok, false);
+    assert.match(last.reason, /skipped/);
+  } finally { r.sb.cleanup(); }
+});
+
+// ---- F6: only GENESEED_LLM's refusal is news ---------------------------------------------------------------------
+
+test('wireClaudeEnv: a user-set spawn depth is kept silently; a user-set GENESEED_LLM is still said', () => {
+  withDir((d) => {
+    const p = path.join(d, 'settings.json');
+    fs.writeFileSync(p, JSON.stringify({ env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' } }));
+    const [, said] = quietly(() => wireClaudeEnv(p, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' }, {}));
+    assert.equal(said, '', 'the user\'s depth is theirs: nothing printed on a rebuild');
+    assert.equal(readEnv(p).CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH, '5');
   });
 });
