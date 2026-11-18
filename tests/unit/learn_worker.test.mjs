@@ -129,6 +129,11 @@ test('leanArgv: lean flags for claude, probed ones for openclaude, nothing for a
     ['openclaude', '-p', '--tools', '', '--no-session-persistence', '--system-prompt',
       got.at(-1)]);
   assert.deepEqual(leanArgv(['openclaude', '-p'], () => ''), ['openclaude', '-p']);
+  // R-F5: a flag is matched whole, never as the start of a longer one in the help text (`--tools` is not
+  // `--tools-extra`; a plain substring test took it for listed).
+  const longer = ['Options:', '  --tools-extra <t>', '  --append-system-prompt <p>', '  --system-prompt <p>', ''].join('\n');
+  assert.deepEqual(leanArgv(['openclaude', '-p'], () => longer), ['openclaude', '-p', '--system-prompt', got.at(-1)],
+    '--tools-extra is not --tools');
   // Any other command is used as given.
   assert.deepEqual(leanArgv(['ollama', 'run', 'x']), ['ollama', 'run', 'x']);
   assert.deepEqual(leanArgv(['node', FAKE_LLM]), ['node', FAKE_LLM]);
@@ -139,6 +144,7 @@ function rig(extra = {}) {
   const sb = makeSandbox();
   const inst = path.join(sb.path, 'inst');
   fs.mkdirSync(path.join(inst, 'memory'), { recursive: true });
+  fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');   // an install: its memory/ is a store a job may name
   const transcript = path.join(sb.path, 't.jsonl');
   fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows' } })}\n`
     + `${JSON.stringify({ message: { role: 'assistant', content: 'cp1252 is the console code page' } })}\n`);
@@ -203,7 +209,7 @@ test('learn-worker: the job round trip, and a file that is no job of ours is ign
     const { jobs } = r;
     fs.mkdirSync(jobs, { recursive: true });
     const job = { v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(r.inst, 'memory'),
-      llm: `node ${FAKE_LLM}`, transcript: r.transcript, agents: [] };
+      transcript: r.transcript, agents: [] };
     const good = path.join(jobs, 'job-1.json');
     fs.writeFileSync(good, JSON.stringify(job));
     assert.equal(spawnHook(['learn-worker', good], '', { env: r.env }).status, 0);
@@ -264,7 +270,7 @@ test('a failed model call is no reply: nothing is stored from its stdout', () =>
   try {
     fs.mkdirSync(r.jobs, { recursive: true });
     const job = { v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(r.inst, 'memory'),
-      llm: `node ${FAKE_LLM}`, transcript: r.transcript,
+      transcript: r.transcript,
       agents: [{ agent: 'explore', payload: { last_assistant_message: 'did the thing well enough' } }] };
     const file = path.join(r.jobs, 'job-9.json');
     fs.writeFileSync(file, JSON.stringify(job));

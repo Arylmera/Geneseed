@@ -16,13 +16,13 @@
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
-  appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync,
+  appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW, resolveCommand } from '../lib/proc.mjs';
 import {
-  globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
+  GLOBAL_MANIFEST, globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
@@ -286,6 +286,9 @@ function helpOf(cli) {
   return helpCache.get(cli);
 }
 
+/** Whether `--help` text lists `flag` as a flag of its own, not as the tail of a longer one (`--append-system-prompt`). */
+const listsFlag = (help, flag) => new RegExp(`(^|[\\s,\\[])${flag}(?=[\\s,=\\]<]|$)`, 'm').test(help);
+
 /** Exported for the unit tier: `help` is the probe, so a test names the `--help` text it reads. */
 export function leanArgv(argv, help = helpOf) {
   const bin = binName(argv[0] ?? '');
@@ -293,7 +296,7 @@ export function leanArgv(argv, help = helpOf) {
   const known = bin === 'openclaude' ? help(argv[0]) : null;
   const lean = [...argv];
   for (const [flag, ...value] of LEAN_FLAGS) {
-    if (argv.includes(flag) || (known !== null && !known.includes(flag))) continue;
+    if (argv.includes(flag) || (known !== null && !listsFlag(known, flag))) continue;
     lean.push(flag, ...value);
   }
   return lean;
@@ -313,8 +316,12 @@ export function leanArgv(argv, help = helpOf) {
  * backslash) refuses the call instead of being passed on.
  */
 export function spawnPlan(words, prompt, { platform = process.platform, env = process.env, exists = undefined } = {}) {
-  const direct = { file: words[0], args: [...words.slice(1), ...(prompt === null ? [] : [prompt])], input: undefined,
-    verbatim: false, refuse: null };
+  // The prompt goes over stdin for `claude` and `openclaude` on every path (`claude -p` reads it there; spec S1):
+  // a Windows command line holds 32 767 characters, and a long session's notes overran it (ENOENT/E2BIG, silently).
+  // Any other command keeps it as the last argument, which is what `$GENESEED_LLM="llm -m x"` and the CLI cells expect.
+  const viaStdin = prompt !== null && ['claude', 'openclaude'].includes(binName(words[0] ?? ''));
+  const direct = { file: words[0], args: [...words.slice(1), ...(prompt === null || viaStdin ? [] : [prompt])],
+    input: viaStdin ? prompt : undefined, verbatim: false, refuse: null };
   if (platform !== 'win32') return direct;
   const found = resolveCommand(words[0], env, exists, platform);
   if (!found) return direct;
@@ -662,6 +669,8 @@ const JOB_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
 /** The most sub-agents one run asks a lesson of: each is one model call, and a session pays once. */
 const MAX_LESSON_AGENTS = 3;
 const MAX_QUEUED_LESSONS = 40;
+const MAX_QUEUED_LINE_CHARS = 4000;
+const MAX_QUEUED_REPLY_CHARS = 3000;
 const sessionKey = (id) => (typeof id === 'string' && id ? id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) : 'nosession');
 
 function sweepJobs(dir) {
@@ -686,10 +695,15 @@ function queueAgentLesson(meta, args, install) {
     if (typeof meta[k] === 'string' && meta[k]) payload[k] = meta[k];
   }
   if (!payload.agent_transcript_path && !payload.transcript_path && !payload.last_assistant_message) return;
+  // One queued line stays small (the tail of the report is what a lesson is about); a line still over the
+  // cap, a path too long to be one, is dropped rather than written.
+  if (payload.last_assistant_message) payload.last_assistant_message = tail(payload.last_assistant_message, MAX_QUEUED_REPLY_CHARS);
+  const line = JSON.stringify({ agent, payload });
+  if (line.length > MAX_QUEUED_LINE_CHARS) return;
   try {
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `agents-${sessionKey(meta.session_id)}.jsonl`);
-      appendFileSync(file, `${JSON.stringify({ agent, payload })}\n`);
+    appendFileSync(file, `${line}\n`);
   } catch { /* a lesson is a favour, never a failed hook */ }
 }
 
@@ -722,11 +736,11 @@ function startDistil(meta, args, install, hookEvent, llm) {
   const agents = takeQueuedLessons(meta.session_id);
   if (!transcript && !agents.length) return 0;
   const job = {
-    v: 1, event: hookEvent, host: args.host || 'claude', memory: args.memory ?? null, llm, transcript, agents,
+    v: 1, event: hookEvent, host: args.host || 'claude', memory: args.memory ?? null, transcript, agents,
   };
   const dir = jobDir();
   if (!install || !dir || process.env.GENESEED_LEARN_INLINE) {
-    runJob(job);
+    runJob(job, llm);
     return 0;
   }
   try {
@@ -754,20 +768,20 @@ function spawnWorker(jobFile) {
 }
 
 /** The job's run: the transcript's distil, then each queued sub-agent's lesson. Always 0. */
-function runJob(job) {
-  if (!job || typeof job.llm !== 'string' || !job.llm.trim()) return 0;
+function runJob(job, llm) {
+  if (!job || typeof llm !== 'string' || !llm.trim()) return 0;
   const memDir = typeof job.memory === 'string' ? resolveMemoryDir(job.memory) : null;
   try {
     if (typeof job.transcript === 'string' && job.transcript) {
       const payload = { transcript_path: job.transcript };
       const notes = tail(readNotes(JSON.stringify(payload), payload), MAX_NOTES_CHARS);
-      if (notes.trim()) distil(notes, memDir, job.llm, job.event || 'SessionEnd');
+      if (notes.trim()) distil(notes, memDir, llm, job.event || 'SessionEnd');
     }
     for (const row of Array.isArray(job.agents) ? job.agents.slice(0, MAX_LESSON_AGENTS) : []) {
       const agent = resolveAgentName(row?.agent);
       if (!agent || !memDir || !row.payload) continue;
       const notes = tail(readNotes(JSON.stringify(row.payload), row.payload), MAX_NOTES_CHARS);
-      if (notes.trim()) learnAgentLesson(agent, notes, memDir, job.llm);
+      if (notes.trim()) learnAgentLesson(agent, notes, memDir, llm);
     }
   } catch (e) {
     err(`[learn] the distil stopped: ${e instanceof Error ? e.message : e}\n`);
@@ -775,17 +789,47 @@ function runJob(job) {
   return 0;
 }
 
+/** `a` and `b` name one folder, symlinks and Windows short names resolved; false when either cannot be resolved. */
+function sameDir(a, b) {
+  try { return realpathSync.native(a) === realpathSync.native(b); } catch { return false; }
+}
+
+/**
+ * Whether `memory` is a store a job may write: the machine tier's `memory/`, or the `memory/` of a Geneseed
+ * install (its folder holds the install's manifest). A job names a write target, so it never names an arbitrary one.
+ */
+function allowedMemory(memory) {
+  try {
+    const real = realpathSync.native(memory);
+    if (path.basename(real) !== 'memory') return false;
+    if (sameDir(real, sharedPaths().memory)) return true;
+    return existsSync(path.join(path.dirname(real), GLOBAL_MANIFEST));
+  } catch { return false; }
+}
+
 /**
  * `learn-worker <job>` — the detached process's verb: run the job file a hook wrote, then delete it.
  * Nothing it prints is read (stdio is ignored), and nothing here exits non-zero: no host waits on it.
+ *
+ * A JOB IS DATA, NEVER A COMMAND. The path arrives on an argv an agent could be talked into running, and a
+ * repository can ship a file of that name, so three things hold: the file sits in the machine cache's own
+ * learn-jobs folder (its real path equals `jobDir()`'s, so a folder merely NAMED learn-jobs does not count);
+ * the model command is this process's own `$GENESEED_LLM`, inherited from the hook that started it, and a job
+ * holds none; and the store it names is the machine tier's memory or an install's. A file outside that folder
+ * or not named job-*.json is left exactly as it is; a job inside it that names a foreign store is removed unread.
  */
 export function cmdLearnWorker(args) {
   if (process.env.GENESEED_LEARN_CHILD || !args.file) return 0;
   const file = path.resolve(args.file);
-  // Only a job a hook wrote: its own folder, its own name. The verb is no way to run any JSON file.
-  if (path.basename(path.dirname(file)) !== JOB_DIR || !/^job-[\w.-]+\.json$/.test(path.basename(file))) return 0;
+  const dir = jobDir();
+  if (!dir || !sameDir(path.dirname(file), dir) || !/^job-[\w.-]+\.json$/.test(path.basename(file))) return 0;
   try {
-    runJob(JSON.parse(readFileSync(file, 'utf8')));
+    const job = JSON.parse(readFileSync(file, 'utf8'));
+    if (!job || typeof job.memory !== 'string' || !allowedMemory(job.memory)) {
+      err('[learn] the job names no memory store of ours - refused.\n');
+    } else {
+      runJob(job, process.env.GENESEED_LLM);
+    }
   } catch { /* an unreadable job is no job */ } finally {
     try { if (existsSync(file)) unlinkSync(file); } catch { /* the sweep gets it */ }
   }

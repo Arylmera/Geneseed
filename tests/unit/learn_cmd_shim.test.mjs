@@ -48,8 +48,18 @@ test('spawnPlan: a word cmd.exe could still read inside quotes refuses the call'
 test('spawnPlan and doctor agree: a .ps1 is not runnable, nothing found is left to the spawn, other hosts unchanged', () => {
   assert.equal(resolveCommand('only', env, exists, 'win32'), null);
   assert.deepEqual(plan(['only'], 'p').args, ['p']);
+  // R-F4: `claude` and `openclaude` take the prompt over stdin on every path (a long one overran the Windows line);
+  // any other command keeps it as the last argument.
   assert.deepEqual(spawnPlan(['claude', '-p'], 'hi', { platform: 'linux' }),
-    { file: 'claude', args: ['-p', 'hi'], input: undefined, verbatim: false, refuse: null });
+    { file: 'claude', args: ['-p'], input: 'hi', verbatim: false, refuse: null });
+  assert.deepEqual(spawnPlan(['llm', '-m', 'x'], 'hi', { platform: 'linux' }),
+    { file: 'llm', args: ['-m', 'x', 'hi'], input: undefined, verbatim: false, refuse: null });
+  present.add(path.join(BIN, 'claude.exe'));
+  const exe = plan(['claude', '-p'], 'p'.repeat(100000));
+  assert.equal(exe.file, path.join(BIN, 'claude.exe'));
+  assert.deepEqual(exe.args, ['-p'], 'a long prompt is not on the command line');
+  assert.equal(exe.input.length, 100000);
+  present.delete(path.join(BIN, 'claude.exe'));
   // The doctor's PATH note: a .cmd counts, a .ps1 does not.
   assert.equal(commandOnPath('claude', env, exists, 'win32'), true);
   assert.equal(commandOnPath('only', env, exists, 'win32'), false);
@@ -61,6 +71,7 @@ test('a .cmd shim on PATH is actually run, with the prompt on stdin (Windows onl
   try {
     const inst = path.join(sb.path, 'inst');
     fs.mkdirSync(path.join(inst, 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');
     const bin = path.join(sb.path, 'shims');
     fs.mkdirSync(bin, { recursive: true });
     fs.writeFileSync(path.join(bin, 'fake-llm.cmd'), `@"${process.execPath}" "${FAKE_LLM}" %*\r\n`);
@@ -74,13 +85,45 @@ test('a .cmd shim on PATH is actually run, with the prompt on stdin (Windows onl
     fs.mkdirSync(jobs, { recursive: true });
     const file = path.join(jobs, 'job-4.json');
     fs.writeFileSync(file, JSON.stringify({ v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(inst, 'memory'),
-      llm: 'fake-llm', transcript, agents: [] }));
-    const childEnv = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), PATH: `${bin};${process.env.PATH}`,
+      transcript, agents: [] }));
+    const childEnv = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), PATH: `${bin};${process.env.PATH}`, GENESEED_LLM: 'fake-llm',
       FAKE_LLM_OUT: reply, FAKE_LLM_ECHO: echo };
     delete childEnv.GENESEED_LEARN_CHILD;
     spawnHook(['learn-worker', file], '', { env: childEnv });
     assert.ok(fs.existsSync(path.join(inst, 'memory', 'alpha-fact.md')), 'the shim ran and its reply was stored');
     assert.ok(fs.readFileSync(echo, 'utf8').includes('run & echo pwned'), 'the prompt arrived whole, over stdin');
     assert.ok(!fs.existsSync(pwned), 'cmd.exe never read the prompt');
+  } finally { sb.cleanup(); }
+});
+
+// R-F6: the lean flags cross a real cmd.exe line: the empty `--setting-sources ""` and `--tools ""`, and a long
+// `--system-prompt`, as a `claude.cmd` from npm receives them. The fake logs the argv it was started with.
+test('lean flags reach a claude.cmd shim intact through cmd.exe (Windows only)', { skip: process.platform !== 'win32' }, () => {
+  const sb = makeSandbox();
+  try {
+    const inst = path.join(sb.path, 'inst');
+    fs.mkdirSync(path.join(inst, 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');
+    const bin = path.join(sb.path, 'shims');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'claude.cmd'), `@"${process.execPath}" "${FAKE_LLM}" %*\r\n`);
+    const transcript = path.join(sb.path, 't.jsonl');
+    fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'a turn worth distilling' } })}\n`);
+    const log = path.join(sb.path, 'calls.log');
+    const echo = path.join(sb.path, 'echo.txt');
+    const jobs = path.join(sb.path, 'home', '.config', 'geneseed', 'cache', 'learn-jobs');
+    fs.mkdirSync(jobs, { recursive: true });
+    const file = path.join(jobs, 'job-5.json');
+    fs.writeFileSync(file, JSON.stringify({ v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(inst, 'memory'), transcript, agents: [] }));
+    const childEnv = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), PATH: `${bin};${process.env.PATH}`,
+      GENESEED_LLM: 'claude -p --model haiku', FAKE_LLM_LOG: log, FAKE_LLM_ECHO: echo, FAKE_LLM_STDIN: '1' };
+    delete childEnv.GENESEED_LEARN_CHILD;
+    spawnHook(['learn-worker', file], '', { env: childEnv });
+    const argv = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0]);
+    assert.deepEqual(argv.slice(0, 11), ['-p', '--model', 'haiku', '--setting-sources', '', '--strict-mcp-config', '--tools', '',
+      '--disable-slash-commands', '--no-session-persistence', '--system-prompt']);
+    assert.match(argv[11], /^You distil durable memories from notes[.] Follow the instructions/);
+    assert.equal(argv.length, 12, 'the prompt is not an argument');
+    assert.ok(fs.readFileSync(echo, 'utf8').includes('a turn worth distilling'), 'the prompt came over stdin');
   } finally { sb.cleanup(); }
 });

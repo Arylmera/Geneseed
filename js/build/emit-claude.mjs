@@ -337,9 +337,18 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     /** @type {Record<string, string>} */
     const want = host === 'claude' ? { ...CLAUDE_ENV } : {};
     const llm = learnEnvCommand(gates.learn, host, loadTierMap(cfgDir, () => {}), process.env);
-    // A shell that already names the command is the user's (D5): nothing is written unless an earlier
-    // build did, and then the value on file is still ours to change or remove.
-    if (llm && !(process.env.GENESEED_LLM && !Object.hasOwn(priorEnv, LEARN_ENV_KEY))) want[LEARN_ENV_KEY] = llm;
+    // A shell that names a command of its own is the user's (D5): the settings `env` would override it in a
+    // session, so Geneseed stops managing the key, and removes its own value if it is still on file. A shell
+    // that holds exactly the value an earlier build recorded is only a session that inherited ours, and ours
+    // stays ours (a rebuild run from inside such a session must not give the key up).
+    const shellLlm = process.env.GENESEED_LLM;
+    const recordedLlm = Object.hasOwn(priorEnv, LEARN_ENV_KEY) ? priorEnv[LEARN_ENV_KEY] : null;
+    const shellIsUsers = Boolean(shellLlm) && shellLlm !== recordedLlm;
+    if (llm && !shellIsUsers) want[LEARN_ENV_KEY] = llm;
+    if (shellIsUsers && recordedLlm !== null) {
+      process.stderr.write(`[geneseed] $GENESEED_LLM is set in your shell (${JSON.stringify(shellLlm)}): Geneseed stops managing `
+        + `env.GENESEED_LLM in ${settingsName} and removes its own value (${JSON.stringify(recordedLlm)}) if it is still there.\n`);
+    }
     const env = wireClaudeEnv(settingsPath, want, priorEnv);
     if (Object.keys(env).length) managed.settings_env = env;
   }

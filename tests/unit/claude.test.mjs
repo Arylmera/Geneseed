@@ -2825,3 +2825,50 @@ test('every host and scope drops an excluded rule\'s citations from its root fil
     }
   }
 });
+
+// R-F3 (D5): a `GENESEED_LLM` exported in the shell that differs from the value an earlier build recorded is the
+// user's, and the settings `env` would override it in a session. Geneseed stops managing the key, removes its own
+// value, and says so. A shell holding exactly the recorded value is a session that inherited ours: still ours.
+function withShellLlm(value, fn) {
+  const saved = process.env.GENESEED_LLM;
+  if (value === undefined) delete process.env.GENESEED_LLM; else process.env.GENESEED_LLM = value;
+  try { return fn(); } finally {
+    if (saved === undefined) delete process.env.GENESEED_LLM; else process.env.GENESEED_LLM = saved;
+  }
+}
+const HAIKU_CMD = 'claude -p --model haiku';
+
+test('the learn command and the shell: the user\'s value wins, ours is removed, an inherited one stays ours', () => {
+  const emit = (cfg, d, learn) => capturedOut(() => emitGlobalInto('claude', { theme: 'neutral', out: path.join(d, 'bundle'), cfgDir: cfg, footprint: 'full', learn }));
+  const llmOf = (cfg) => readJson(cfg, 'settings.json').env?.GENESEED_LLM;
+  const recorded = (cfg) => readJson(cfg, GLOBAL_MANIFEST).managed.settings_env?.GENESEED_LLM;
+  // No earlier build, a shell value: nothing is written, nothing recorded.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    withShellLlm('ollama run x', () => emit(cfg, d, 'light'));
+    assert.equal(llmOf(cfg), undefined);
+    assert.equal(recorded(cfg), undefined);
+  });
+  // An earlier build wrote ours; the user then exports their own: ours goes, the warning says why.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    withShellLlm(undefined, () => emit(cfg, d, 'light'));
+    assert.equal(llmOf(cfg), HAIKU_CMD);
+    const [, , err] = withShellLlm('ollama run x', () => emit(cfg, d, 'light'));
+    assert.equal(llmOf(cfg), undefined, 'our value is removed');
+    assert.equal(recorded(cfg), undefined, 'and no longer recorded');
+    assert.match(err, /GENESEED_LLM is set in your shell .*stops managing/);
+  });
+  // A rebuild run inside a session that inherited our own value, with the choice changed: still ours, replaced.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    withShellLlm(undefined, () => emit(cfg, d, 'light'));
+    const [, , err] = withShellLlm(HAIKU_CMD, () => emit(cfg, d, 'standard'));
+    assert.equal(llmOf(cfg), 'claude -p --model sonnet');
+    assert.equal(recorded(cfg), 'claude -p --model sonnet');
+    assert.doesNotMatch(err, /stops managing/);
+  });
+});

@@ -18,13 +18,20 @@ tool call of every agent session, where a spawn costs time and a console window 
   user's model CLI (`$GENESEED_LLM`) because that is the whole `learn` verb. No gate verb spawns.
 - **Amended 2026-11-18** (the learn model setting): the same module gains a **second spawn**, the detached
   worker. A `SessionEnd` hook is killed when its session ends, and a compaction must not wait 5 to 10 s for a
-  model, so on `SessionEnd` and `PreCompact` `learn` writes a job file (`<install>/learn-jobs/job-*.json`:
-  transcript path, memory dir, host, the model command, the sub-agents queued for a lesson) and starts the
-  worker, then returns. The shape is fixed and nothing else may be spawned this way:
+  model, so on `SessionEnd` and `PreCompact` `learn` writes a job file and starts the
+  worker, then returns. The job lives in the machine tier's cache, `<machine dir>/cache/learn-jobs/job-*.json`
+  (`~/.config/geneseed/cache/learn-jobs`), never in an install: a project install's folder is the user's repo. A job
+  is DATA: the transcript path, the memory dir, the host, the sub-agents queued for a lesson. It holds no model
+  command. The shape is fixed and nothing else may be spawned this way:
   `spawn(process.execPath, [<this checkout>/bin/geneseed-hook.mjs, 'learn-worker', <job file>],
   { detached: true, windowsHide: true, stdio: 'ignore' })`, then `unref()`. No shell, no `$GENESEED_LLM` word and
-  no payload text in its argv. The worker (`geneseed-hook learn-worker`) accepts only a file named `job-*.json`
-  inside a `learn-jobs` folder, runs the distil on it with the one model spawn above, and deletes it. Measured
+  no payload text in its argv. The worker (`geneseed-hook learn-worker`) is guarded three ways, because its argument is a path an agent
+  could be talked into running and a repository can ship a file of that name: the file is named `job-*.json` and the real
+  path of its folder equals the real path of the machine cache's `learn-jobs` (a folder merely named that does not
+  count; anything else is left untouched); the model command is the worker's own `$GENESEED_LLM`, inherited from
+  the hook that started it, so a job can name none; and the job's `memory` must be the machine tier's `memory/` or
+  the `memory/` of a folder holding a Geneseed install manifest, or the job is removed unread. It then runs the distil
+  with the one model spawn above, and deletes the job. Measured
   on Windows 11 (spec S1c): the hook returns in 26 ms and the worker finishes 9 s later, after the session is gone.
   The model CLI itself runs lean (`--setting-sources ""`, `--strict-mcp-config`, `--tools ""`,
   `--disable-slash-commands`, `--no-session-persistence`, a short `--system-prompt`; never `--bare`, which needs an
@@ -43,7 +50,8 @@ tool call of every agent session, where a spawn costs time and a console window 
   runs as `cmd.exe /d /s /c "<every word double-quoted>"` (no shell option; `windowsVerbatimArguments`), and
   **the prompt goes over stdin, never on that line**: what a session's notes hold is never read by cmd.exe. The
   words on the line are the user's own command and the fixed lean flags; a word holding a double quote, `%`, a line
-  break or a trailing backslash refuses the call. Elsewhere nothing changes.
+  break or a trailing backslash refuses the call. For `claude` and `openclaude` the prompt goes over stdin on every path, native `.exe` and non-Windows included (a long
+  prompt overran the 32 767-character Windows line and failed silently); any other command keeps it as its last argument.
 - `bin/geneseed-cli.mjs`, the user-facing CLI, spawns only from modules on a declared allow-list
   (`ALLOWED_SPAWNS`), each row naming the exact argv it may start — `git` for update, `node --check`
   for doctor, the web daemon relaunching this program, and so on. A new spawn is a new row with its

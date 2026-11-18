@@ -44,7 +44,7 @@ if (echo) {
   fs.mkdirSync(path.dirname(echo), { recursive: true });
   // The prompt is the last argument, or stdin when there is none (a `.cmd` shim is fed over stdin: F5).
   let prompt = process.argv[2] ?? '';
-  if (process.argv[2] === undefined) { try { prompt = fs.readFileSync(0, 'utf8'); } catch { /* no stdin */ } }
+  if (process.argv[2] === undefined || process.env.FAKE_LLM_STDIN) { try { prompt = fs.readFileSync(0, 'utf8'); } catch { /* no stdin */ } }
   fs.writeFileSync(echo, Buffer.from(os.EOL === '\n' ? prompt : prompt.replaceAll('\n', os.EOL),
     'utf8'));
 }
