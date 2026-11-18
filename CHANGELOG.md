@@ -8,9 +8,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.0.4] — 2026-11-18
+
 ### Added
 
-- `--learn off|light|standard|session`: the model memory learning distils with (default `light`). The build records it per install (`Learn model: <value>` in the carrier, written only off the default), `rebuild-all`, `upgrade`, profiles and the setup wizard keep it, `diff` reads it, and `status` shows it in an install's row when it is not `light`. It takes effect on hosts in later changes: nothing reads it yet, so `learn` behaves as before.
+- `--learn off|light|standard|session`: the model memory learning distils with (default `light`). The build records it per install (`Learn model: <value>` in the carrier, written only off the default), `rebuild-all`, `upgrade`, profiles and the setup wizard keep it, `diff` reads it, and `status` shows it in an install's row when it is not `light`. Claude Code and OpenClaude use it (see Changed); the OpenCode plugin does not yet.
 
 ### Changed
 
