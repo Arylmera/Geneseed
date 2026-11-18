@@ -34,8 +34,10 @@ whether they want a rule, ask; never file a rule as a fact because a fact needs 
 Then take exactly one branch.
 
 ### Branch A — a fact to remember
-1. If it is task residue — what this session did, a PR or ticket number, a count, a
-   status — write nothing ({{MEMORY}} convention, *Writing a fact*).
+1. If it is task residue (what this session did, a PR or ticket number, a session count
+   or status), write nothing ({{MEMORY}} convention, *Writing a fact*). The exception is
+   when the user explicitly asked to store it: then store the durable lesson in it, lean,
+   and say so.
 2. Search {{MEMORY}} for a file that already covers it. If one exists, merge into it —
    keep what is still true, add or correct the rest — never mint a twin. If the new
    fact proves the old one wrong, archive the old one (move it into `archive/`).

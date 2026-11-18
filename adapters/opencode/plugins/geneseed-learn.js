@@ -196,30 +196,32 @@ Markdown memory files in this exact format, separated by a line containing only
 
 ---
 name: <kebab-case-slug>
-description: <one-line summary>
+description: <one line under 90 characters that states the claim>
 type: user | feedback | project | reference
 topic: <kebab-case-slug; reuse a topic from TOPICS IN USE below when one fits>
 ---
-<the fact, stated plainly. For 'feedback' and 'project', add **Why:** and
-**How to apply:** lines.>
+<the fact in one or two sentences. For 'feedback' and 'project', add one-line
+**Why:** and **How to apply:** lines.>
 
 MERGE BEFORE YOU CREATE. The facts already stored are listed below as
 'slug — description'. Never create a fact under one of those slugs. Instead:
   - If your memory refines, extends or corrects a stored fact, add the line
     'action: update' to its frontmatter and use that fact's own name. Your text
     REPLACES the stored file, so write the merged fact: keep everything the old
-    one says that is still true, then add or correct what the notes show.
+    one says that is still true, then add or correct what the notes show. Then
+    write the merged fact to the same lean bar: drop what is no longer needed.
   - If the notes show a stored fact is now false or obsolete, output only
     frontmatter holding its 'name:' and the line 'action: archive'. It is moved
     out of the index, never deleted.
   - With no 'action:' line, the memory is a NEW fact under a NEW slug.
 
 WRITE IT LEAN. Every word is re-read in later sessions.
-  - description: one line under 90 characters that states the claim itself,
-    specific enough to tell it from the stored facts below; never a bare label.
+  - description: state the claim itself, specific enough to tell it from the
+    stored facts below; never a bare label.
   - body: the fact in one or two sentences; Why and How to apply, one line each.
-  - no narrative, no session history, no PR or ticket numbers, no counts; a date
-    only when the fact depends on it, written absolute.
+  - no narrative, no session history, no PR or ticket numbers, no
+    session-specific counts; a date only when the fact depends on it, written
+    absolute.
 
 DEFAULT TO 'NOTHING'. Writing a memory is the rare exception, not the norm — most
 sessions should yield zero. Emit AT MOST ONE, and only if it is a GENERAL, reusable

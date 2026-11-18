@@ -47,7 +47,7 @@ file, so each word costs on every recall.
 - **Durable only.** Store what stays true and useful at the start of an unrelated later
   task: a preference, a convention, a decision and its reason, a trap and its fix. Never
   store task residue: what this session did, fixed, merged or released, a PR or ticket
-  number, a count, a status such as "pending" or "next is…". The git history holds those.
+  number, a session-specific count or status such as "pending" or "next is…". The git history holds those.
 - **General, not the incident.** State the principle the incident taught. Name a file,
   function or command only when the fact is about it.
 - **Lean.** `description` is one line that states the claim itself, specific enough to
