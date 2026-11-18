@@ -12,7 +12,8 @@ import { pairOf } from '../lib/hosts.js'
 // arrives: the checks read as having been run one after another, which is what happened.
 function CheckCard({ group, i }) {
   const clean = group.problems.length === 0
-  const [open, setOpen] = useState(!clean)
+  const notes = group.notes ?? []
+  const [open, setOpen] = useState(!clean || notes.length > 0)
   return (
     <div
       className={`card check rise ${clean ? '' : 'bad'} ${open ? 'open' : ''}`}
@@ -21,8 +22,8 @@ function CheckCard({ group, i }) {
       <button
         className="check-head"
         onClick={() => setOpen((v) => !v)}
-        disabled={clean}
-        aria-expanded={clean ? undefined : open}
+        disabled={clean && !notes.length}
+        aria-expanded={clean && !notes.length ? undefined : open}
       >
         <span className={`feed-dot ${clean ? 'ok' : 'bad'}`} />
         <h3>{group.label}</h3>
@@ -32,14 +33,19 @@ function CheckCard({ group, i }) {
             ? 'clean'
             : `${group.problems.length} problem${group.problems.length === 1 ? '' : 's'}`}
         </span>
-        {!clean && <Icon name="chevron" className="chev glyph" />}
+        {(!clean || notes.length > 0) && <Icon name="chevron" className="chev glyph" />}
       </button>
-      {!clean && open && (
+      {(!clean || notes.length > 0) && open && (
         <div className="check-body">
           {group.problems.map((p) => (
             <div className="problem" key={p}>
               <span className="x">✕</span>
               <span>{p}</span>
+            </div>
+          ))}
+          {notes.map((n) => (
+            <div className="dim mono note" key={n}>
+              <span>{n}</span>
             </div>
           ))}
         </div>

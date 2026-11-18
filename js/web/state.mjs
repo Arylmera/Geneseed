@@ -16,6 +16,7 @@ import {
   postureOfDir, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
+import { isDoctorNote } from '../inspect/scan.mjs';
 import { emitOf, pickedInstall } from '../inspect/status.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { readText, isFile } from '../lib/fs.mjs';
@@ -191,8 +192,18 @@ export function webState(theme = null, target = null) {
   };
   st.stampDoctor = (problems, themes = [], groups = []) => {
     st._doctorJob = null; // a run still in flight started earlier: this verdict is the newer one
-    st._doctor = { ok: !problems.length, problems, checked_at: stampMinute(Date.now()) };
-    st._doctorRun = { themes, groups };
+    // `doctorCollect` hands back `[note] …` lines among the problems; the CLI keeps them apart
+    // and so does the console (a healthy machine is not "1 problem"). The ONE split, shared by
+    // the in-process run and the worker's message, since both end here.
+    const notes = problems.filter(isDoctorNote);
+    const real = problems.filter((p) => !isDoctorNote(p));
+    const split = groups.map((g) => ({
+      ...g,
+      problems: g.problems.filter((p) => !isDoctorNote(p)),
+      notes: [...(g.notes ?? []), ...g.problems.filter(isDoctorNote)],
+    }));
+    st._doctor = { ok: !real.length, problems: real, notes, checked_at: stampMinute(Date.now()) };
+    st._doctorRun = { themes, groups: split };
   };
   /**
    * The CURRENT install's mode, from its `.geneseed-emit` marker: the ROOT first (where
