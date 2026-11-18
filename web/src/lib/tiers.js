@@ -18,10 +18,12 @@ const group = (level, keys) => keys.map((k) => [k, level])
 
 // Surface key -> the lowest level that shows it. Every surface has a row, Essentials
 // included, so a test can demand one for each page, tab and section the console grows.
-// Keys: page:<id>, tab:<page>/<tab>, section:library/<kind>, section:settings/<id>.
+// Keys: page:<id>, tab:<page>/<tab>, section:library/<kind>, section:settings/<id>,
+// field:install/<pick> (a build choice on the install panel and the deploy form).
 export const TIER = Object.fromEntries([
   ...group('essentials', [
     'page:overview',
+    'page:laws',
     'page:library',
     'page:installs',
     'page:personal',
@@ -36,13 +38,18 @@ export const TIER = Object.fromEntries([
     'section:settings/machine',
     'section:settings/server',
     'section:settings/about',
+    'field:install/footprint',
+    'field:install/posture',
   ]),
   ...group('standard', [
     'page:kits',
     'page:activity',
-    'page:laws',
     'tab:personal/memory',
     'tab:installs/profiles',
+    'field:install/voice',
+    'field:install/mode',
+    'field:install/trust',
+    'field:install/context-window',
   ]),
   ...group('power', [
     'page:models',

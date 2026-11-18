@@ -3,6 +3,7 @@ import { hostInfo, installName } from '../../lib/hosts.js'
 import { PickSelects, Sel, Switch } from './controls.jsx'
 import ExclusionsCard from './ExclusionsCard.jsx'
 import { storeInstallPick } from '../../hooks/useInstalls.js'
+import { useViewLevel } from '../../hooks/useViewLevel.jsx'
 
 // The trade of letting a project read the machine tier. The wording is js/inspect/cost.mjs's
 // SHARED_TIER_BENEFIT and sharedTierCost() (tests/unit/shared_tier_option.test.mjs holds them equal).
@@ -190,6 +191,7 @@ export default function InstallPanel({
   profileMatches,
   onSaveProfile,
 }) {
+  const { canSee } = useViewLevel()
   const who = `${hostInfo(inst.host).label} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
   const active = inst.state === 'active'
@@ -236,7 +238,10 @@ export default function InstallPanel({
           </p>
         </div>
       ) : null}
-      {(active || absent) && canAct && inst.host === 'claude' ? (
+      {(active || absent) &&
+      canAct &&
+      inst.host === 'claude' &&
+      canSee('field:install/context-window') ? (
         <div className="ip-block">
           <label className="dp-field">
             <span>Context window</span>

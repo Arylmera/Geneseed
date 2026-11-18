@@ -4,6 +4,7 @@ import { TABS } from '../lib/router.js'
 import { LIBRARY_ORDER } from '../lib/sections.js'
 import { NAV, FOOT } from '../components/Sidebar.jsx'
 import { SECTIONS } from '../pages/Settings/index.jsx'
+import { PICKS } from '../pages/Installs/controls.jsx'
 
 describe('view-level table', () => {
   it('every surface has a row', () => {
@@ -12,6 +13,8 @@ describe('view-level table', () => {
       ...Object.entries(TABS).flatMap(([page, tabs]) => tabs.map((t) => `tab:${page}/${t}`)),
       ...LIBRARY_ORDER.map((k) => `section:library/${k}`),
       ...SECTIONS.map(([id]) => `section:settings/${id}`),
+      ...PICKS.map((p) => `field:install/${p.name}`),
+      'field:install/context-window',
     ]
     const missing = keys.filter((k) => !(k in TIER))
     expect(missing).toEqual([])
@@ -23,6 +26,7 @@ describe('view-level table', () => {
     const P = 'power'
     expect(TIER).toEqual({
       'page:overview': E,
+      'page:laws': E,
       'page:library': E,
       'page:installs': E,
       'page:personal': E,
@@ -37,11 +41,16 @@ describe('view-level table', () => {
       'section:settings/machine': E,
       'section:settings/server': E,
       'section:settings/about': E,
+      'field:install/footprint': E,
+      'field:install/posture': E,
       'page:kits': S,
       'page:activity': S,
-      'page:laws': S,
       'tab:personal/memory': S,
       'tab:installs/profiles': S,
+      'field:install/voice': S,
+      'field:install/mode': S,
+      'field:install/trust': S,
+      'field:install/context-window': S,
       'page:models': P,
       'page:loops': P,
       'page:factories': P,
@@ -76,7 +85,7 @@ describe('view-level table', () => {
     expect(requiredLevel({ page: 'personal', tab: 'notebook' })).toBe('power')
     expect(requiredLevel({ page: 'library', section: 'config', item: 'x' })).toBe('power')
     expect(requiredLevel({ page: 'library' })).toBe('essentials')
-    expect(requiredLevel({ page: 'laws', section: 'laws' })).toBe('standard')
+    expect(requiredLevel({ page: 'laws', section: 'laws' })).toBe('essentials')
   })
 
   it('levelOfHref resolves a hash first', () => {
