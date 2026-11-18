@@ -84,8 +84,9 @@ const AGENT_OVERRIDES_STUB = {
     + '"reviewer": {"model": "anthropic/claude-haiku-4-5", "temperature": 0.1, '
     + '"variant": "high", "steps": 20}. '
     + 'Tiers (build with --tiers auto): "tiers": {"standard": "<model>", "light": "<model>"} '
-    + 'names the model each tier runs on; a tier you leave out gets its host default (Claude Code: '
-    + 'sonnet and haiku; other hosts inherit), an empty value means inherit, strong is always the session model. A '
+    + 'names the model each tier runs on (OpenCode: provider/model); a tier you leave out gets its host default '
+    + '(Claude Code: sonnet and haiku; OpenCode and OpenClaude inherit), an empty value means inherit, strong is '
+    + 'always the session model. The console\'s Models page sets these. A '
     + 'per-agent entry in "agents" wins over its tier. '
     + 'Host-specific; git-ignored. A future TUI screen edits this — rebuild to apply.'
   ),

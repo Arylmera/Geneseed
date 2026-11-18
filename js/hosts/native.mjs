@@ -419,7 +419,7 @@ const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
  */
 function claudeAgentFrontmatter(stem, text, model = null) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
-  // `model` is `claudeAgentModel(...).model`: the one precedence, resolved by the caller.
+  // `model` is `agentModel(...).model`: the one precedence, resolved by the caller.
   if (model) fm.push(`model: ${model}`);
   if (isReadonly(text)) {
     const list = ['Write', 'Edit', 'NotebookEdit', 'Agent', 'Task'];
@@ -453,11 +453,18 @@ function bobAgentFrontmatter(stem, text) {
   return fm;
 }
 
-/** `_build_emit._opencode_agent_frontmatter`. */
-function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
+/**
+ * `_build_emit._opencode_agent_frontmatter`. With `tiers` (`--tiers auto`) an agent the user did
+ * not pin gets its tier's model, `provider/model` (V2 may carry a `#variant` suffix, written
+ * verbatim; V1's `variant` stays its own key, which `pushOverrideLines` already writes). Without
+ * `tiers`, or with a pin, the lines are exactly the override's own: byte-identical to before.
+ */
+function opencodeAgentFrontmatter(stem, text, overrides, theme = null, tier = 'standard', tiers = null) {
   const fm = [`description: ${jsonDumps(agentDescription(text))}`, 'mode: subagent'];
   fm.push(`color: ${agentColor(stem, theme)}`);
-  pushOverrideLines(fm, agentOverride(overrides, stem));
+  const ov = agentOverride(overrides, stem);
+  const tm = tiers && !isTruthy(ov.model) ? agentModel(tier, null, tiers).model : null;
+  pushOverrideLines(fm, tm ? { ...ov, model: tm } : ov);
   if (isReadonly(text)) {
     fm.push('permission:', '  edit: deny',
       `  webfetch: ${text.includes(WEBFETCH_MARKER) ? 'allow' : 'deny'}`);
@@ -535,8 +542,18 @@ const CLAUDE_ALIAS_ENV = Object.freeze({
   opus: 'ANTHROPIC_DEFAULT_OPUS_MODEL', sonnet: 'ANTHROPIC_DEFAULT_SONNET_MODEL',
   haiku: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
 });
-/** The model each non-strong tier gets on Claude Code when `tiers.<tier>` names none (spec D2). */
-export const CLAUDE_TIER_DEFAULTS = Object.freeze({ standard: 'sonnet', light: 'haiku' });
+/**
+ * The model each non-strong tier gets when `tiers.<tier>` names none, per host: THE ONE TABLE of
+ * the defaults (spec D2, 2026-11-18 D1). Claude Code has its two aliases. OpenCode and OpenClaude
+ * have NONE (O12): a tier routes only once the user picks a model for it, because OpenCode has no
+ * alias at all and, on an OpenClaude provider that is not Anthropic, `sonnet`/`haiku` resolve to the
+ * parent's model, so a default there would promise a saving it does not give.
+ */
+export const TIER_DEFAULTS = Object.freeze({
+  claude: Object.freeze({ standard: 'sonnet', light: 'haiku' }),
+  opencode: Object.freeze({}),
+  openclaude: Object.freeze({}),
+});
 /** The tier-map keys that take a model; `strong` is the parent's model and takes none (D9). */
 const TIER_MAP_KEYS = ['standard', 'light'];
 
@@ -547,13 +564,13 @@ function envOn(env, name) {
 }
 
 /**
- * The model a tier gets on Claude Code, or null (inherit) — pure, so the table in
- * `tests/unit/tiers.test.mjs` states every row. `map` is the user's `tiers` map
+ * The model a tier gets on `host` (`claude`, `opencode` or `openclaude`), or null (inherit) — pure,
+ * so the table in `tests/unit/tiers.test.mjs` states every row. `map` is the user's `tiers` map
  * (`loadTierMap`), `env` the environment.
  *
  * - `strong` never gets a line: it IS the parent's model.
- * - A tier the map does not name gets the alias default (`CLAUDE_TIER_DEFAULTS`); a tier the map
- *   names with an empty value is the user choosing inherit.
+ * - A tier the map does not name gets the host's default (`TIER_DEFAULTS`: Claude's two aliases,
+ *   none elsewhere); a tier the map names with an empty value is the user choosing inherit.
  * - D11 (revised 2026-11-17): the alias is ALWAYS written. On Bedrock or Vertex without
  *   `ANTHROPIC_DEFAULT_<ALIAS>_MODEL`, Claude Code resolves it to its built-in model id (seen on
  *   2.1.326, Vertex: `haiku` -> claude-haiku-4-5@20251001, and the sub-agent runs), which may not
@@ -561,14 +578,15 @@ function envOn(env, name) {
  *   pin it; the doctor prints it (`tierEnvNotes`), the build says nothing. Only the three aliases
  *   are checked: any other value is a model id the user wrote and owns.
  */
-export function claudeTierModel(tier, map = {}, env = {}) {
+export function tierModel(tier, map = {}, env = {}, host = 'claude') {
   if (!TIER_MAP_KEYS.includes(tier)) return { model: null, warning: null };
   const named = Object.hasOwn(map, tier);
-  const value = named ? map[tier] : CLAUDE_TIER_DEFAULTS[tier];
+  const value = named ? map[tier] : (Object.hasOwn(TIER_DEFAULTS, host) ? TIER_DEFAULTS[host][tier] : undefined);
   if (!isTruthy(value)) return { model: null, warning: null };
   const alias = String(value).trim().toLowerCase();
   const cloud = ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX'].find((n) => envOn(env, n));
-  const need = Object.hasOwn(CLAUDE_ALIAS_ENV, alias) ? CLAUDE_ALIAS_ENV[alias] : null;
+  // The cloud-alias advice is Claude Code's: no other host reads `ANTHROPIC_DEFAULT_*_MODEL` for a tier.
+  const need = host === 'claude' && Object.hasOwn(CLAUDE_ALIAS_ENV, alias) ? CLAUDE_ALIAS_ENV[alias] : null;
   const warning = cloud && need && !String(env[need] ?? '').trim()
     ? `--tiers auto: ${cloud} is set but ${need} is not, so the ${tier} tier's '${alias}' alias `
       + `resolves to Claude Code's built-in model id, which may not exist in your cloud project — `
@@ -578,19 +596,21 @@ export function claudeTierModel(tier, map = {}, env = {}) {
 }
 
 /**
- * The model one agent gets on Claude Code, and why — THE ONE HOME of the precedence (spec D5),
- * highest first: the user's pin (`agents.<name>.model`), then the `tiers` map, then the tier's
- * default alias, then inherit. The emit writes `model` into the agent's frontmatter
- * (`writeNativeLayer`) and the console shows the same answer (`js/web/agent-models-api.mjs`).
+ * The model one agent gets, and why — THE ONE HOME of the precedence (spec D5), on every host,
+ * highest first: the user's pin (`agents.<name>.model`), then the `tiers` map, then the host's
+ * default for the tier (`TIER_DEFAULTS`), then inherit. The emit writes `model` into the agent's
+ * frontmatter (`writeNativeLayer`) and the console shows the same answer
+ * (`js/web/agent-models-api.mjs`).
  *
- * `tiers` is `{ map, env }` while `--tiers auto` is on, else null (a pin still applies).
- * `from`: `pin`, `map` (the map names the tier, an empty value included), `default`, `inherit`.
- * `warning` is `claudeTierModel`'s, and only for a model the tier gave: a pinned agent has none.
+ * `tiers` is `{ map, env, host }` while `--tiers auto` is on, else null (a pin still applies);
+ * `host` defaults to `claude`. `from`: `pin`, `map` (the map names the tier, an empty value
+ * included), `default`, `inherit`.
+ * `warning` is `tierModel`'s, and only for a model the tier gave: a pinned agent has none.
  */
-export function claudeAgentModel(tier, pin, tiers = null) {
+export function agentModel(tier, pin, tiers = null) {
   if (isTruthy(pin)) return { model: formatValue(pin), from: 'pin', warning: null };
   if (!tiers) return { model: null, from: 'inherit', warning: null };
-  const { model, warning } = claudeTierModel(tier, tiers.map, tiers.env);
+  const { model, warning } = tierModel(tier, tiers.map, tiers.env, tiers.host);
   if (!model) return { model: null, from: 'inherit', warning: null };
   return { model: formatValue(model), from: Object.hasOwn(tiers.map, tier) ? 'map' : 'default', warning };
 }
@@ -801,14 +821,15 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   // choice. The caller (`emit-claude.mjs`) routes the suppressed names through
   // `writeAliasCommands(..., alsoUserOnly: true)` into `.bob/commands/*.md` instead (O2).
   bobDialect = false,
-  // `--tiers auto` on Claude Code: `{ map, env }` (`loadTierMap`, the build env), else null — no tier line.
+  // `--tiers auto`: `{ map, env, host }` (`loadTierMap`, the build env, the real host: Claude Code,
+  // OpenClaude or OpenCode), else null — no tier line. Bob's agents take no model at all.
   tiers = null,
 } = {}) {
   const ov = overrides || {};
   if (bobDialect) warnBobIgnored(ov);
   else if (host === 'claude') warnClaudeIgnored(ov);
   // D11: the build never withholds the alias; the doctor warns about a cloud provider (`tierEnvNotes`).
-  const tiersHere = tiers && host === 'claude' && !bobDialect ? tiers : null;
+  const tiersHere = tiers && !bobDialect ? tiers : null;
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
@@ -887,8 +908,8 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let userOnly = false;
     if (folder === 'agents') {
       if (bobDialect) fm = bobAgentFrontmatter(stem, text);
-      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, claudeAgentModel(tier, agentOverride(ov, stem).model, tiersHere).model);
-      else fm = opencodeAgentFrontmatter(stem, text, ov, theme);
+      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, agentModel(tier, agentOverride(ov, stem).model, tiersHere).model);
+      else fm = opencodeAgentFrontmatter(stem, text, ov, theme, tier, tiersHere);
       dest = path.join(agentsDir, `${stem}.md`);
       body = stripAgentSkillLinks(body);
       kind = 'agent';

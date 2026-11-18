@@ -3,7 +3,7 @@
 // Written out, not recorded. The rules this file holds:
 //   1. ONE PRECEDENCE, ONE HOME: an agent's model is the user's pin, else the `tiers` map (a key
 //      the map names, an empty value included, beats the default), else the tier's default alias,
-//      else inherit (`claudeAgentModel`). With the routing off only a pin counts. A pinned agent
+//      else inherit (`agentModel`). With the routing off only a pin counts. A pinned agent
 //      carries no Bedrock/Vertex warning: the tier gave it nothing.
 //   2. The page and the build agree: the model the API reports for an agent is the `model:` line
 //      the next emit writes into that agent (cross-checked against a real emit below).
@@ -13,7 +13,8 @@
 //      (`strong` takes no model), an agent the install lacks, or a `tiers`/`agents` that is not an
 //      object is refused, and then nothing is applied.
 //   4. A file that does not parse is never rewritten: the save is refused and the bytes stay.
-//   5. Models are Claude Code's: another host answers each agent's tier and no model, and refuses a save.
+//   5. Claude Code, OpenCode and OpenClaude take models (OpenCode's as `provider/model[#variant]`, with no
+//      default tier model); Bob answers each agent's tier and no model, and refuses a save.
 // If a rule below is wrong, change the row AND the sentence above it.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,7 +22,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 
 import { main as driverMain } from '../../js/build/driver.mjs';
-import { claudeAgentModel, loadTierMap } from '../../js/hosts/native.mjs';
+import { agentModel, loadTierMap } from '../../js/hosts/native.mjs';
 import { agentTiers, apiAgentModels, apiAgentModelsSave, editOverrides } from '../../js/web/agent-models-api.mjs';
 import { webState } from '../helpers/web_api_fixture.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -82,8 +83,8 @@ const PRECEDENCE = [
   ['light', 'opus', { map: {}, env: ENV.BEDROCK }, 'opus', 'pin', false],
 ];
 for (const [tier, pin, tiers, model, from, warns] of PRECEDENCE) {
-  test(`claudeAgentModel(${tier}, pin ${pin}, ${tiers ? JSON.stringify(tiers) : 'off'}) -> ${model ?? 'inherit'} (${from})`, () => {
-    const r = claudeAgentModel(tier, pin, tiers);
+  test(`agentModel(${tier}, pin ${pin}, ${tiers ? JSON.stringify(tiers) : 'off'}) -> ${model ?? 'inherit'} (${from})`, () => {
+    const r = agentModel(tier, pin, tiers);
     assert.equal(r.model, model);
     assert.equal(r.from, from);
     assert.equal(Boolean(r.warning), warns);
@@ -221,18 +222,56 @@ test('GET on an unparseable file reports the problem and sets nothing', () => {
   assert.deepEqual(res.map, {});
 });
 
-test('GET on another host: a tier per agent, no model', () => {
-  const d = sandbox('gam-oc-');
-  assert.equal(build('--emit', 'opencode', '--out', d, '--theme', 'neutral'), 0);
-  const cfg = path.join(d, '.opencode');
+test('GET on Bob: a tier per agent, no model, and a save is refused', () => {
+  const d = sandbox('gam-bob-');
+  assert.equal(build('--emit', 'bob', '--out', d, '--theme', 'neutral'), 0);
+  const cfg = path.join(d, '.bob');
   const st = webState('neutral', cfg);
-  st.selectView(cfg, d, 'opencode');
+  st.selectView(cfg, d, 'bob');
   const res = apiAgentModels(st);
   assert.equal(res.claude, false);
   assert.equal(rowOf(res, 'explorer').tier, 'light');
   assert.equal('model' in rowOf(res, 'explorer'), false);
   assert.equal(apiAgentModelsSave(st, { tiers: { light: 'x' } }).ok, false);
   assert.equal(fs.existsSync(path.join(cfg, 'agent-overrides.json')) && read(cfg, 'agent-overrides.json').includes('"x"'), false);
+});
+
+/** An OpenCode project install: the overrides file lives at the project root, beside the bundle. */
+function opencodeInstall(tiers, overrides = null) {
+  const d = sandbox('gam-oc-');
+  if (overrides !== null) fs.writeFileSync(path.join(d, 'agent-overrides.json'), overrides);
+  assert.equal(build('--emit', 'opencode', '--out', d, '--theme', 'neutral', '--tiers', tiers), 0);
+  const st = webState('neutral', d);
+  st.selectView(d, d, 'opencode');
+  return { d, st, file: path.join(d, 'agent-overrides.json') };
+}
+
+test('GET on OpenCode: no default model, a mapped tier gives provider/model, a pin wins', () => {
+  const { st } = opencodeInstall('auto', JSON.stringify({ agents: { skeptic: { model: 'corp/pin' } }, tiers: { light: 'corp/fast' } }));
+  const res = apiAgentModels(st);
+  assert.equal(res.claude, true);
+  assert.equal(res.host, 'opencode');
+  assert.deepEqual(res.defaults, {});
+  assert.deepEqual(rowOf(res, 'explorer'), { name: 'explorer', tier: 'light', pin: null, model: 'corp/fast', from: 'map' });
+  assert.deepEqual(rowOf(res, 'developer'), { name: 'developer', tier: 'standard', pin: null, model: null, from: 'inherit' });
+  assert.deepEqual(rowOf(res, 'skeptic'), { name: 'skeptic', tier: 'light', pin: 'corp/pin', model: 'corp/pin', from: 'pin' });
+});
+
+test('OpenCode: the API and the emitted file say the same, and a save is validated as provider/model', () => {
+  const { st, d, file } = opencodeInstall('auto');
+  const bad = apiAgentModelsSave(st, { tiers: { light: 'haiku' } });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /tiers\.light must look like provider\/model/);
+  assert.equal(apiAgentModelsSave(st, { agents: { reviewer: 'a b/c' } }).ok, false, 'whitespace is refused');
+  const ok = apiAgentModelsSave(st, { tiers: { light: 'corp/fast#high', standard: '' }, agents: { reviewer: 'corp/big' } });
+  assert.equal(ok.ok, true, ok.error);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).tiers, { light: 'corp/fast#high', standard: '' });
+  assert.equal(build('--emit', 'opencode', '--out', d, '--theme', 'neutral', '--tiers', 'auto'), 0);
+  const agents = path.join(d, '.opencode');
+  for (const name of ['explorer', 'developer', 'reviewer']) {
+    assert.equal(modelOf(agents, name), rowOf(apiAgentModels(st), name).model, name);
+  }
+  assert.equal(modelOf(agents, 'explorer'), 'corp/fast#high');
 });
 
 // ---- 4. the write ---------------------------------------------------------------------------------------

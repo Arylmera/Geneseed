@@ -138,8 +138,8 @@ export function emitClaudeRender(cfg, job) {
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
     loadAgentOverrides(cfgDir),
     { host: 'claude', bobDialect: isBob, oldOwned, cfg: cfgDir, src: cfg.src, skillDirOf, claim,
-      // Claude Code only: OpenClaude and Bob inherit (spec B6, D8).
-      tiers: cfg.tiers === 'auto' && host === 'claude' ? { map: loadTierMap(cfgDir), env: process.env } : null });
+      // Claude Code and OpenClaude route by tier (2026-11-18 D1); Bob's agents take no model.
+      tiers: cfg.tiers === 'auto' && !isBob ? { map: loadTierMap(cfgDir), env: process.env, host } : null });
   for (const p of written) owned.push(relPosix(cfgDir, p));
 
   // Bob host-compat O2/R1: an alias, or a genuinely user-only skill (unverified

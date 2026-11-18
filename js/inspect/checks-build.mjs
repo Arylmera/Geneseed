@@ -14,7 +14,7 @@ import { CLAUDE_STYLE, HOSTS, hostCatalogsNatively, resolvePath } from '../hosts
 import {
   EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, readMaybe, renderedTier, themeFiles, tiersOfDir,
 } from '../hosts/installs.mjs';
-import { claudeTierModel, isVendoredPath, loadAgentOverrides, loadTierMap } from '../hosts/native.mjs';
+import { isVendoredPath, tierModel, loadAgentOverrides, loadTierMap } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
@@ -262,7 +262,7 @@ export function tierEnvNotes(env = process.env) {
     }
     for (const tier of ['standard', 'light']) {
       if (agents[tier].every((stem) => Object.hasOwn(pins, stem) && pins[stem]?.model)) continue;
-      const { warning } = claudeTierModel(tier, map, env);
+      const { warning } = tierModel(tier, map, env, 'claude');
       const where = scope === 'global' ? host : `${host} (project ${root})`;
       if (warning) notes.push(`${NOTE}[tiers] ${where}: ${warning}`);
     }
