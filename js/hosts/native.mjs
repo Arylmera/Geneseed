@@ -490,7 +490,7 @@ export function overrideProblem(v) {
  * `_build_emit._load_agent_overrides`, with every value that would break the frontmatter
  * dropped and named on stderr — the user's file, so a bad entry is a warning, never an abort.
  */
-export function loadAgentOverrides(base) {
+export function loadAgentOverrides(base, report = warn) {
   const file = path.join(base, 'agent-overrides.json');
   let data;
   try {
@@ -512,7 +512,7 @@ export function loadAgentOverrides(base) {
   for (const [stem, entry] of Object.entries(agents)) {
     if (entry === null) continue;
     if (!isDict(entry)) {
-      warn(`[geneseed] WARN: ${file}: agents.${stem} is not an object — skipped`);
+      report(`[geneseed] WARN: ${file}: agents.${stem} is not an object — skipped`);
       delete agents[stem];
       continue;
     }
@@ -520,7 +520,7 @@ export function loadAgentOverrides(base) {
       if (!given(entry[key])) continue;
       const why = overrideProblem(entry[key]);
       if (!why) continue;
-      warn(`[geneseed] WARN: ${file}: agents.${stem}.${key} ${why} — skipped`);
+      report(`[geneseed] WARN: ${file}: agents.${stem}.${key} ${why} — skipped`);
       delete entry[key];
     }
   }

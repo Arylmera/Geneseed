@@ -195,6 +195,25 @@ test('GET names the Bedrock alias problem of the console\'s own environment, onc
   assert.match(res.warnings[0], /ANTHROPIC_DEFAULT_HAIKU_MODEL/);
 });
 
+test('GET names the alias problem even while the routing is still off (the editor shows on a picked auto)', () => {
+  const { st } = claudeInstall('off');
+  const res = apiAgentModels(st, { CLAUDE_CODE_USE_BEDROCK: '1' });
+  assert.equal(res.tiers, 'off');
+  assert.equal(res.warnings.length, 2, 'one for the standard alias, one for the light');
+  assert.equal(rowOf(res, 'explorer').model, null, 'the model itself is still off');
+});
+
+test('GET prints nothing on stderr for a bad entry in the user\'s file', () => {
+  const { st } = claudeInstall('auto', JSON.stringify({ agents: { developer: { model: 'a\nb' } }, tiers: { strong: 'x' } }));
+  const o = process.stderr.write;
+  let err = '';
+  process.stderr.write = (s) => { err += String(s); return true; };
+  let res;
+  try { res = apiAgentModels(st); } finally { process.stderr.write = o; }
+  assert.equal(err, '');
+  assert.equal(rowOf(res, 'developer').pin, null, 'the bad pin is dropped, as the build drops it');
+});
+
 test('GET on an unparseable file reports the problem and sets nothing', () => {
   const { st } = claudeInstall('auto', '{ "tiers": ');
   const res = apiAgentModels(st);

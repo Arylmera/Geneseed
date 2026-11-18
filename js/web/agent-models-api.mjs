@@ -28,7 +28,7 @@ import { EMIT_HOST_SCOPE, tiersOfDir } from '../hosts/installs.mjs';
 import {
   CLAUDE_TIER_DEFAULTS, claudeAgentModel, loadAgentOverrides, loadTierMap, overrideProblem,
 } from '../hosts/native.mjs';
-import { isFile, readText, withDiscardableStderr, writeTextAtomic } from '../lib/fs.mjs';
+import { isFile, readText, writeTextAtomic } from '../lib/fs.mjs';
 import { formatValue, isDict, isTruthy, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { bget } from './actions.mjs';
 
@@ -82,9 +82,10 @@ export function apiAgentModels(state, env = process.env) {
     return { host, claude, tiers, agents: names.map((name) => ({ name, tier: known.get(name) ?? null })) };
   }
   const { file, problem } = readOverrides(dir);
-  // The loaders warn on stderr about a bad entry; a console read says nothing, the page does.
-  const map = problem ? {} : withDiscardableStderr(() => loadTierMap(dir, () => {}));
-  const pins = problem ? {} : withDiscardableStderr(() => loadAgentOverrides(dir));
+  // The loaders take a no-op reporter: a console read prints nothing on stderr.
+  const quiet = () => {};
+  const map = problem ? {} : loadTierMap(dir, quiet);
+  const pins = problem ? {} : loadAgentOverrides(dir, quiet);
   const on = tiers === 'auto' ? { map, env } : null;
   const warnings = new Set();
   const agents = names.map((name) => {
@@ -92,7 +93,10 @@ export function apiAgentModels(state, env = process.env) {
     const pin = Object.hasOwn(pins, name) && isTruthy(pins[name]?.model) ? formatValue(pins[name].model) : null;
     // A personal agent (no shipped source) is not Geneseed's to tier: only its pin counts.
     const r = claudeAgentModel(tier ?? 'none', pin, tier ? on : null);
-    if (r.warning) warnings.add(r.warning);
+    // The alias warning is the tier map's, whether or not the routing is installed yet: the
+    // console's editor shows with a picked `auto`, before the rebuild that turns it on.
+    const w = tier ? claudeAgentModel(tier, pin, { map, env }).warning : null;
+    if (w) warnings.add(w);
     return { name, tier, pin, model: r.model, from: r.from };
   });
   return {
