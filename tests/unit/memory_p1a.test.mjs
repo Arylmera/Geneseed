@@ -1,7 +1,7 @@
 // P1a of the memory-at-scale work (docs/specs/2026-11-18-memory-scale.md): the tier's store gets the
 // topic index at emit (D1), a stem in capitals is a store document and never a fact (D2), the
 // migration loses no line (D4), a migrated store never nudges (D23), the standing rules a flat index
-// loaded become drafts with a bridge slot until decided (D31), and status says whether learn runs (D12).
+// loaded become drafts that load only once approved (D32), and status says whether learn runs (D12).
 //
 // Every test runs in a sandboxed home (`sandboxProcessHome`), because the code under test writes
 // `~/.config/geneseed`. Every expected value is written out, with the rule it follows above it.
@@ -12,7 +12,7 @@ import path from 'node:path';
 
 import { decideItem, draftItems } from '../../js/build/rule-decide.mjs';
 import { SESSION_SEEDS, ensureSharedTier } from '../../js/build/stubs.mjs';
-import { bridgeSlot, cmdContext, memoryNudge, sessionFiles, OUTPUT_BUDGET } from '../../js/hosts/hooks-context.mjs';
+import { cmdContext, memoryNudge, sessionFiles, OUTPUT_BUDGET } from '../../js/hosts/hooks-context.mjs';
 import {
   LEGACY_INJECT_CHARS, MAX_ALWAYS_ON, alwaysOnCandidates, existingSlugs, isReservedStem, learnState,
   migrateMemoryIndex, readFacts,
@@ -205,9 +205,8 @@ test('D23: a 500-fact store filed by type has a small map and no nudge', () => {
   assert.ok(map.length < 600, `the map is ${map.length} characters; it was 112 000 as a flat index`);
   const now = bytesOf(tier.memory);
   for (const [name, hex] of Object.entries(factBytes)) if (name !== 'MEMORY.md') assert.equal(now[name], hex);
-  // The session payload carries the map, then the bridge slot for the 30 rules the migration drafted
-  // (the feedback facts whose pointers sat in the first 3 072 characters of the flat index), and
-  // the memory part stays under a quarter of the host's cap: map under 600 + slot under 1 800.
+  // The session payload carries the map alone (the drafted rules wait for approval, D32), and
+  // the memory part stays under a quarter of the host's cap.
   const hookRoot = path.join(home, '.claude');
   fs.mkdirSync(hookRoot, { recursive: true });
   const [mem] = sessionFiles(hookRoot).filter((f) => f.rel === 'memory/MEMORY.md');
@@ -215,7 +214,7 @@ test('D23: a 500-fact store filed by type has a small map and no nudge', () => {
   assert.ok(mem.text.length < OUTPUT_BUDGET / 4, `${mem.text.length}`);
 });
 
-// ---- D31: always-on candidates become drafts, with a bridge until decided ------------------------
+// ---- D31: always-on candidates become drafts, not loaded until approved (D32) ------------------------
 
 test('D31: the candidate pick, in priority order, from a flat index', () => {
   const tier = freshTier();
@@ -319,99 +318,40 @@ test('D31: a draft that fails to write never takes the tier down, and the next e
   assert.equal(fs.existsSync(path.join(tier.memory, 'topics', 'feedback.md')), true);
 });
 
-test('D31: the bridge slot loads each pending candidate, and a decided one leaves it', () => {
+// D32: a drafted rule is not a rule until the user approves it. The D31 bridge slot loaded each
+// pending draft at every session; the user ruled that drafts load only once approved, so the payload
+// carries the one reminder line and no rule text. The expectations below are written out, not derived.
+test('D32: pending memory drafts add no rule text to the session, only the reminder; approving one loads it via user-rules.md', () => {
   const tier = freshTier();
   terraStore(tier.memory);
   ensureSharedTier();
-  const slot = bridgeSlot();
-  assert.ok(slot.startsWith('[memory] Standing rules from your old index'), slot);
-  for (const slug of ['hard-limit', 'commit-style', 'no-coauthor', 'late-never', 'late-toujours']) {
-    assert.ok(slot.includes(`- ${slug}: Body of ${slug}.`), `${slug} is not in the slot:\n${slot}`);
-  }
-  // It is a session entry of its own, labelled shared, right after the rules, and the map stays clean.
-  const hookRoot = path.join(home, '.claude');
-  fs.mkdirSync(hookRoot, { recursive: true });
-  const files = sessionFiles(hookRoot);
-  assert.deepEqual(files.map((f) => f.rel), ['user-rules.draft.md', 'memory/MEMORY.md']);
-  assert.equal(files[0].text, slot);
-  assert.equal(files[0].abs, tier.draft);
-  assert.equal(files[1].text.includes('Standing rules'), false);
-  assert.equal(slot.includes('late-quiet'), false);
-  // Approve one, reject one: both decided, both leave. The approved one is now a rule in user-rules.md.
-  const [first, second] = draftItems(tier);
-  assert.equal(decideItem(tier, first.key, 'approve').ok, true);
-  assert.equal(decideItem(tier, second.key, 'reject').ok, true);
-  const after = bridgeSlot();
-  assert.equal(after.includes('- hard-limit:'), false);
-  assert.equal(after.includes('- commit-style:'), false);
-  assert.ok(after.includes('- no-coauthor:'));
-  assert.ok(read(tier.rules).includes('## R1 — a hard limit\nBody of hard-limit.'));
-  // The last three decided: the slot is empty and says nothing at all.
-  for (const item of draftItems(tier)) decideItem(tier, item.key, 'reject');
-  assert.equal(bridgeSlot(), '');
-});
-
-// The slot is budgeted as a rule (it IS a standing rule awaiting a decision), so the profile and the
-// wiki, which come after the rules and spend the room memory used to get, cannot push it out. As a
-// tail of the memory map it was cut first, and left whole when the 4th file got no room at all.
-test('D31: the slot survives a payload whose rules, profile and wiki fill the budget', () => {
-  const tier = freshTier();
-  terraStore(tier.memory);
-  ensureSharedTier();
-  const slot = bridgeSlot();
-  // Rules at 4 000 characters, a 9 000-character profile (whole, cut by the budget) and a wiki entry.
-  const long = (n) => `${'x'.repeat(79)}\n`.repeat(n / 80);
-  fs.writeFileSync(tier.rules, `## R1 — big\n${long(4000)}`);
-  fs.writeFileSync(tier.profile, long(9000));
   const hookRoot = path.join(home, '.claude');
   fs.mkdirSync(hookRoot, { recursive: true });
   const empty = path.join(home, 'empty-repo');
   fs.mkdirSync(empty, { recursive: true });
   const prev = process.env.GENESEED_ROOT;
   process.env.GENESEED_ROOT = empty;
+  const payload = () => capturedOut(() => cmdContext({ root: hookRoot }))[1].replace(/\r\n/g, '\n');
   try {
-    const out = capturedOut(() => cmdContext({ root: hookRoot }))[1].replace(/\r\n/g, '\n');
-    assert.ok(out.includes('truncated (session budget)') || out.includes('not injected (session budget)'),
-      'the budget must bind in this fixture');
+    // No entry of its own: the files are the map and nothing drafted.
+    assert.equal(sessionFiles(hookRoot).some((f) => f.rel === 'user-rules.draft.md'), false);
+    const out = payload();
+    assert.ok(out.includes("[drafts] 5 drafted items in user-rules.draft.md wait for the user's decision"), out);
     for (const slug of ['hard-limit', 'commit-style', 'no-coauthor', 'late-never', 'late-toujours']) {
-      assert.ok(out.includes(`- ${slug}: Body of ${slug}.`), `${slug} was cut from the payload`);
+      assert.equal(out.includes(`Body of ${slug}.`), false, `${slug} loads before approval`);
     }
-    assert.ok(out.includes(slot));
-    assert.ok(out.length < 9000, `${out.length}`);
+    assert.equal(out.includes('Standing rules from your old index'), false);
+    // Approving one writes it into user-rules.md, which loads; the reminder counts the four left.
+    const [first] = draftItems(tier);
+    assert.equal(decideItem(tier, first.key, 'approve').ok, true);
+    assert.ok(read(tier.rules).includes('## R1 — a hard limit\nBody of hard-limit.'));
+    const after = payload();
+    assert.ok(after.includes('Body of hard-limit.'), 'the approved rule is not loaded');
+    assert.ok(after.includes('[drafts] 4 drafted items in'), after);
+    assert.equal(after.includes('Body of commit-style.'), false);
   } finally {
     if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
   }
-});
-
-test('D31: the slot is capped, and says how many rules it left out', () => {
-  const tier = freshTier();
-  const items = {};
-  for (let i = 0; i < 30; i += 1) {
-    const slug = `long-${String(i).padStart(2, '0')}`;
-    write(tier.memory, `${slug}.md`, `---\nname: ${slug}\ndescription: d\n---\n${'rule text '.repeat(60)}\n`);
-    items[`k${i}`] = { kind: 'rule', host: 'memory', state: 'pending', fact: slug };
-  }
-  write(tier.root, '.fold-state.json', JSON.stringify({ version: 1, items }));
-  const slot = bridgeSlot();
-  // 1 800 characters of room, a fact cut at 300: about five facts fit, and the rest are counted.
-  assert.ok(slot.length <= 1800, `${slot.length}`);
-  assert.match(slot, /\n- … (\d+) more drafted rules not shown \(read them in memory\/\)$/);
-  const shown = slot.split('\n').filter((l) => l.startsWith('- long-')).length;
-  assert.equal(shown + Number(/… (\d+) more/.exec(slot)[1]), 30);
-});
-
-test('D31: a ledger row is data: a path, a missing fact or a foreign host loads nothing', () => {
-  const tier = freshTier();
-  write(tier.root, 'secret.md', 'outside the store\n');
-  write(tier.memory, 'ok.md', fm('ok', 'feedback', 'fine'));
-  write(tier.root, '.fold-state.json', JSON.stringify({ version: 1, items: {
-    a: { kind: 'rule', host: 'memory', state: 'pending', fact: '../secret' },
-    b: { kind: 'rule', host: 'memory', state: 'pending', fact: 'absent' },
-    c: { kind: 'rule', host: 'claude', state: 'pending', fact: 'ok' },
-    d: { kind: 'rule', host: 'memory', state: 'approved', fact: 'ok' },
-    e: { kind: 'rule', host: 'memory', state: 'pending', fact: 7 },
-  } }));
-  assert.equal(bridgeSlot(), '');
 });
 
 // ---- D12: status says whether learn runs ---------------------------------------------------------

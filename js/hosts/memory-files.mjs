@@ -773,8 +773,8 @@ export function alwaysOnCandidates(memDir) {
 
 /**
  * Write each candidate as a draft through the fold's own path, one block and one ledger row, with
- * the fact's slug on the row: the session hook reads it for the bridge slot (D31), and the row
- * leaves the slot when the user decides. Idempotent: `draftItem` skips a key the ledger holds,
+ * the fact's slug on the row: the draft is not loaded until approved (D32), and the row
+ * is decided by the user. Idempotent: `draftItem` skips a key the ledger holds,
  * decided or not. Never touches `user-rules.md`; approval is the console's or the Rite's.
  */
 export function draftAlwaysOn(shared, candidates) {
