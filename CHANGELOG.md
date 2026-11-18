@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.0.3] — 2026-11-18
+
 ### Added
 
 - **View levels in the web console: Essentials, Standard and Power.** A new browser starts on Essentials: Overview, Library (Skills, Agents), Installs (Hosts, Doctor), Personal (Rules, Profile), Docs and Settings. Standard adds Kits, Activity, Constitution, Memory and install profiles; Power shows everything, Models, Loops, Factories, the Wiki and Setup files and the Danger zone included. Switch it in the Appearance popover or in *Settings › Machine*; the choice is this browser's alone. A hidden part keeps working: a link, a bookmark or a search result still opens it with a "This is a Power view" banner, search tags such results with their level, and the rail foot names running loops and factory runs the level hides. One table, `web/src/lib/tiers.js`, decides every level.
