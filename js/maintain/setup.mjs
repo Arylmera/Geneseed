@@ -53,7 +53,7 @@ import { loadProfile, profileBuildArgs, profileHosts } from './profiles.mjs';
 import { superpowersKitDefault } from './plugin-detect.mjs';
 import { checkProjectFolder, globalLayering, layeringText } from './profile-scope.mjs';
 import { playLine } from '../ui/anim.mjs';
-import { DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
@@ -61,7 +61,7 @@ import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../inspec
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults, installState,
-  contextWindowOfDir, readJsonMaybe, sharedTierOfDir, themeFiles, tiersOfDir,
+  contextWindowOfDir, readJsonMaybe, sharedTierOfDir, themeFiles, tiersOfDir, learnOfDir,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { inNpxCache, which } from '../lib/paths.mjs';
@@ -340,6 +340,23 @@ export function targetTiers(emit, out) {
   }
 }
 
+/**
+ * The learn model of the one install a setup answer re-runs, read off it: PRESERVED, NOT ASKED (the
+ * Models page owns the question), as `targetTiers` does, so the wizard's `--reset` cannot reset a
+ * recorded choice to the default. No install, or unreadable: the default.
+ */
+export function targetLearn(emit, out) {
+  const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? [];
+  try {
+    if (!host) return DEFAULT_LEARN;
+    const dir = scope === 'global'
+      ? HOSTS.find((h) => h.host === host).configDir() : resolveOut(out || '.');
+    return installState(dir, host, scope) === 'absent' ? DEFAULT_LEARN : learnOfDir(dir, host);
+  } catch {
+    return DEFAULT_LEARN;
+  }
+}
+
 export function collectSetupLines(kitMap = null) {
   printOut('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
   const inst = installedDefaults();
@@ -389,9 +406,10 @@ export function collectSetupLines(kitMap = null) {
   const gated = Object.values(gates).some((on) => on === false);
   const contextWindow = targetContextWindow(emit, out, inst.contextWindow);
   const tiers = targetTiers(emit, out);
+  const learn = targetLearn(emit, out);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills, gates, kits, sharedTier, contextWindow, tiers).join(' ')} --reset\n`);
+      excludeRules, undefined, excludeSkills, gates, kits, sharedTier, contextWindow, tiers, learn).join(' ')} --reset\n`);
   if (!confirm('Proceed?', true)) return null;
   // The key only when there is something to carry, so a selection that excludes no skill and
   // switches off no gate is the same object it was before either existed.
@@ -400,6 +418,7 @@ export function collectSetupLines(kitMap = null) {
     ...(gated ? { gates } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
     ...(contextWindow !== DEFAULT_CONTEXT_WINDOW ? { contextWindow } : {}),
     ...(tiers !== DEFAULT_TIERS ? { tiers } : {}),
+    ...(learn !== DEFAULT_LEARN ? { learn } : {}),
     emit, out, root, footprint,
   };
 }
@@ -595,7 +614,7 @@ export function setupLines() {
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
     doctrines = null, excludeRules = null, excludeSkills = null, gates = {}, kits = null,
-    sharedTier = false, contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS,
+    sharedTier = false, contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS, learn = DEFAULT_LEARN,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, which may carry hand edits (or
@@ -615,7 +634,7 @@ export function setupLines() {
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
     doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits, sharedTier,
-    contextWindow, tiers);
+    contextWindow, tiers, learn);
   // `--reset`: the wizard's answers are a WHOLE selection, and `setupBuildArgs` elides an axis at
   // its default, so answering one back to it (mode direct, posture peer) over an install would
   // otherwise trip the preserve guard (js/build/profile.mjs). The plan line above says the same.
@@ -852,8 +871,13 @@ export function profileBuilds(p, targets, { project = null, build, exportDrift, 
   for (const t of targets) {
     // The install's own tier routing rides along unless the profile names one (`profileBuildArgs`).
     let current = null;
-    try { current = tiersOfDir(project ? resolveOut(project) : configDir(t.host), t.host); } catch { /* unreadable: the default */ }
-    const argv = profileBuildArgs(p, t.host, project, current);
+    let currentLearn = null;
+    try {
+      const dir = project ? resolveOut(project) : configDir(t.host);
+      current = tiersOfDir(dir, t.host);
+      currentLearn = learnOfDir(dir, t.host);
+    } catch { /* unreadable: the default */ }
+    const argv = profileBuildArgs(p, t.host, project, current, {}, currentLearn);
     const moved = changes(argv);
     let saved = null;
     if (!project) {

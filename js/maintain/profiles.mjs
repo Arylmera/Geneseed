@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from 'node:path';
 
 import {
-  CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, TIERS_CHOICES, discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
+  CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, LEARN_CHOICES, TIERS_CHOICES, discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
 } from '../build/source.mjs';
 import { installProfile, setupBuildArgs } from '../build/profile.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -70,9 +70,11 @@ export const BASE_PROFILE = 'starter';
  * `tiers` (`--tiers`) is optional and means "the profile sets it" only when present: absent keeps the
  * install's own recorded value (`profileBuildArgs`' `current`), `off` on a fresh install. No shipped
  * profile turns it on.
+ * `learn` (`--learn`) is optional the same way: absent keeps the install's own recorded value
+ * (`profileBuildArgs`' `currentLearn`), `light` on a fresh install.
  */
 export const PROFILE_KEYS = ['description', 'hosts', 'theme', 'footprint', 'posture', 'mode', 'trust',
-  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'kitsByDetection', 'sharedTier', 'contextWindow', 'tiers', 'gates', 'login'];
+  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'kitsByDetection', 'sharedTier', 'contextWindow', 'tiers', 'learn', 'gates', 'login'];
 
 /** A profile name: a file stem, never a path. */
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -144,6 +146,7 @@ export function profileProblems(p) {
   choice('trust', Object.keys(PRESETS));
   choice('contextWindow', Object.keys(CONTEXT_WINDOWS));
   choice('tiers', [...TIERS_CHOICES]);
+  choice('learn', [...LEARN_CHOICES]);
   const packs = discoverNames('doctrines', PACK_ORDER[0]);
   if (p.doctrines !== undefined && p.doctrines !== 'all') {
     if (!stringList(p.doctrines)) errs.push(`'doctrines' must be 'all' or a list of: ${list(packs)}`);
@@ -258,7 +261,7 @@ export function profileKits(p, host, project = null, detectRoots = {}) {
  * here; posture and mode elide only at the value the driver would take anyway. `--reset` last,
  * as the wizard does: a profile is a whole selection and wins over the install it lands on (D14).
  */
-export function profileBuildArgs(p, host, project = null, current = null, detectRoots = {}) {
+export function profileBuildArgs(p, host, project = null, current = null, detectRoots = {}, currentLearn = null) {
   // A stated selection, never null: `'all'` resolves to the packs, a list is the list.
   const doctrines = PACK_ORDER.filter((d) => profileDoctrines(p).includes(d));
   // PROJECT SCOPE (spec D32, D37): `--emit <host> --out <dir> --root <dir>`, and only here the
@@ -269,7 +272,9 @@ export function profileBuildArgs(p, host, project = null, current = null, detect
     p.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
     // The profile's own value, else the install's recorded one (`current`), else off: a profile
     // without the key never turns a routed install back off by being applied over it.
-    p.tiers ?? current ?? DEFAULT_TIERS);
+    p.tiers ?? current ?? DEFAULT_TIERS,
+    // The same for the learn model: a profile without the key never resets a recorded choice.
+    p.learn ?? currentLearn ?? DEFAULT_LEARN);
   if (!p.excludeSkills?.length) argv.push('--exclude-skills', 'none');
   argv.push('--reset');
   return argv;
@@ -303,6 +308,7 @@ export function profileFromInstall(info, description = '') {
     contextWindow: info.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
     // Written only when on, so a saved profile of a default install is what it always was.
     ...(info.tiers && info.tiers !== DEFAULT_TIERS ? { tiers: info.tiers } : {}),
+    ...(info.learn && info.learn !== DEFAULT_LEARN ? { learn: info.learn } : {}),
     gates,
     login: true,
   };
@@ -340,6 +346,11 @@ export function profileDiff(p, base) {
     }
     if (key === 'tiers') {
       const w = (prof) => prof.tiers ?? DEFAULT_TIERS;
+      if (w(p) !== w(base)) out.push({ key, base: w(base), now: w(p) });
+      continue;
+    }
+    if (key === 'learn') {
+      const w = (prof) => prof.learn ?? DEFAULT_LEARN;
       if (w(p) !== w(base)) out.push({ key, base: w(base), now: w(p) });
       continue;
     }

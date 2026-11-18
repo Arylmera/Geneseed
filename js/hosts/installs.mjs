@@ -35,7 +35,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import {
-  CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER,
+  CONFIG, CONTEXT_WINDOWS, CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, GATE_SWITCHES, LEARN_CHOICES, LEARN_MARKER, PACK_ORDER,
   RETIRED_KIT_IDS, TIERS_CHOICES, TIERS_MARKER, THEMES, WORKFLOW_PROVIDER_HEADING, discoverNames, linkedSkillIds, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
@@ -557,6 +557,25 @@ export function tiersOfDir(d, host = null) {
   }, DEFAULT_TIERS, host);
 }
 
+const LEARN_RE = new RegExp(`^${LEARN_MARKER}:[ \\t]*(\\S+?)[ \\t]*\\r?$`, 'm');
+
+/**
+ * The learn model a DEPLOYED install was built with (`--learn`), read back so `rebuild-all`,
+ * `upgrade`, `diff` and the guard re-render it. A missing line is the default (`light`): the
+ * marker is only ever written off it, so an install older than the option is a default install.
+ * An unknown value reads as the default too, so a hand-edited line can never reach `--learn`
+ * and refuse a rebuild.
+ */
+export function learnOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    const m = LEARN_RE.exec(text);
+    if (!m) return undefined;
+    return LEARN_CHOICES.includes(m[1]) ? m[1] : DEFAULT_LEARN;
+  }, DEFAULT_LEARN, host);
+}
+
 /**
  * Whether a DEPLOYED install keeps one law's hook gate armed — `true` (armed) or `false` (its
  * `<marker>: off` line, written by a build with that gate's `--no-*-gate` flag; `GATE_SWITCHES`).
@@ -898,7 +917,7 @@ export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
     excludeRules: null, excludeSkills: null, kits: null, sharedTier: false,
-    contextWindow: DEFAULT_CONTEXT_WINDOW, tiers: DEFAULT_TIERS,
+    contextWindow: DEFAULT_CONTEXT_WINDOW, tiers: DEFAULT_TIERS, learn: DEFAULT_LEARN,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -952,6 +971,7 @@ export function installedDefaults() {
     // otherwise speaks.
     if (found.contextWindow === DEFAULT_CONTEXT_WINDOW) found.contextWindow = contextWindowOfDir(base);
     if (found.tiers === DEFAULT_TIERS) found.tiers = tiersOfDir(base);
+    if (found.learn === DEFAULT_LEARN) found.learn = learnOfDir(base);
   }
   return found;
 }

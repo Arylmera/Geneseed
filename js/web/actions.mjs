@@ -44,7 +44,7 @@ import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import { HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import {
-  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, sharedTierOfDir, contextWindowOfDir, tiersOfDir, renderedTier,
+  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, sharedTierOfDir, contextWindowOfDir, tiersOfDir, learnOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installedDefaults, installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -697,6 +697,8 @@ export function apiRestore(state, files) {
       contextWindow: contextWindowOfDir(target),
       // The tier routing, or a restored AGENT.md drops its `Model tiers: auto` line and the agents their model lines.
       tiers: tiersOfDir(target),
+      // The learn model, or a restored AGENT.md drops its `Learn model:` line.
+      learn: learnOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));
@@ -812,7 +814,7 @@ export function apiInstallCmd(state, body) {
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
     kits ?? migratedKitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope),
-    bodyTiers(body, root, host));
+    bodyTiers(body, root, host), learnOfDir(root, host));
   // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
   // and `setupBuildArgs` elides an axis at its default, so returning one to it (a mode back to
   // direct, a gate re-armed) would otherwise trip the preserve guard (js/build/profile.mjs).
@@ -937,7 +939,7 @@ export function apiDeployCmd(state, body) {
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, migratedKitsOfDir(root, host),
     bodySharedTier(body, root, host), bodyContextWindow(body, root, host, 'project'),
-    bodyTiers(body, root, host));
+    bodyTiers(body, root, host), learnOfDir(root, host));
   // `--reset`, as in `apiInstallCmd`: the form's answers plus the folder's own are a whole selection.
   argv.push('--reset');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };

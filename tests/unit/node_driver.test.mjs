@@ -95,6 +95,8 @@ const VALUED_FLAGS = [
   ['--context-window', 'contextWindow', '1m'],
   // The sub-agent tier routing: `auto`/`off`, bound as typed (the emit compares the string).
   ['--tiers', 'tiers', 'auto'],
+  // The memory-learning model: `off|light|standard|session`, bound as typed.
+  ['--learn', 'learn', 'off'],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],

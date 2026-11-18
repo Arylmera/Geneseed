@@ -32,7 +32,7 @@ import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { aliasesOf, skillDescriptions } from '../build/source.mjs';
+import { DEFAULT_LEARN, LEARN_CHOICES, aliasesOf, skillDescriptions } from '../build/source.mjs';
 import { resolvePath } from './hosts.mjs';
 import { claimLeaf, ownedState } from './owned.mjs';
 // `lstripNewlines` on spec bodies is a no-op on every input the generator produces today
@@ -593,6 +593,28 @@ export function tierModel(tier, map = {}, env = {}, host = 'claude') {
       + `pin it: set ${need}`
     : null;
   return { model: String(value), warning };
+}
+
+/**
+ * The model memory learning distils with on `host`, and where it came from (spec
+ * `2026-11-18-learn-model-row.md`, D3) — pure, so `tests/unit/learn_model.test.mjs` states every row.
+ * `learn` is the `--learn` value (`off`, `light`, `standard`, `session`); an unknown value is the
+ * default. `map`, `env` and `host` are `tierModel`'s: the tier resolves THERE, so the precedence
+ * has one home.
+ *
+ * - `off`: `{ model: null, from: 'off' }`: nothing distils.
+ * - `session`: `{ model: null, from: 'session' }`: the chat's own model, no override.
+ * - `light` / `standard`: that tier's model, `from: 'tier'`, with `tierModel`'s warning. A tier that
+ *   gives none (OpenCode and OpenClaude with no map value) falls back to `from: 'session'`.
+ * - Bob: `{ model: null, from: 'n/a' }`: its Stop payload carries no transcript, so nothing learns.
+ */
+export function learnModel(learn, map = {}, env = {}, host = 'claude') {
+  if (host === 'bob') return { model: null, from: 'n/a', warning: null };
+  const mode = LEARN_CHOICES.includes(learn) ? learn : DEFAULT_LEARN;
+  if (mode === 'off') return { model: null, from: 'off', warning: null };
+  if (mode === 'session') return { model: null, from: 'session', warning: null };
+  const { model, warning } = tierModel(mode, map, env, host);
+  return model ? { model, from: 'tier', warning } : { model: null, from: 'session', warning: null };
 }
 
 /**
