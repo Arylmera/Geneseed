@@ -116,8 +116,8 @@ export function apiDoctor(state, fresh = false) {
   const answer = () => {
     if (state._doctor === null && state._doctorJob !== null) return state._doctorJob.then(answer);
     if (state._doctor === null) state.runDoctor();
-    const { ok, problems, checked_at } = state._doctor;
-    return { ...state._doctorRun, ok, problems, checked_at };
+    const { ok, problems, notes, checked_at } = state._doctor;
+    return { ...state._doctorRun, ok, problems, notes, checked_at };
   };
   // A cold cache on a daemon (a view switch dropped it) is filled on the thread, as the overview's is.
   if (state.warm && state._doctor === null) warmDoctor(state);

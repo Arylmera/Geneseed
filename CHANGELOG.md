@@ -11,6 +11,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Fixed
 
 - `status` and `doctor` called memory learning dormant on installs that learn. The `learn` line read only the shell's `$GENESEED_LLM`. It now judges each installed host: OpenCode distils with the session model (active), Bob sends no transcript (n/a), and a Claude Code or OpenClaude hook also counts `GENESEED_LLM` set in the `"env"` of its settings files.
+- The web console's Doctor counted `[note]` lines as problems, so a healthy machine read "1 problem". Notes are now split out as the CLI does and shown as muted lines.
 
 ## [6.0.3] — 2026-11-18
 

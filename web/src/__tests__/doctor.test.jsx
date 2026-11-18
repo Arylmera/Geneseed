@@ -233,4 +233,31 @@ describe('Doctor', () => {
     expect(filled).toHaveLength(1)
     expect(filled[0].textContent).toMatch(/Run doctor/)
   })
+
+  // A `[note]` line is informational: the daemon splits it out of `problems`, so a group holding
+  // only a note reads clean (no "1 problem"), and the note still shows, as a muted line.
+  it('a note-only group reads clean and still shows its note', async () => {
+    api.doctor.mockImplementationOnce(() =>
+      Promise.resolve({
+        themes: ['neutral'],
+        ok: true,
+        problems: [],
+        notes: ['[note] learn: nothing to learn yet'],
+        groups: [
+          {
+            check: 'learn',
+            label: 'Learn state',
+            problems: [],
+            notes: ['[note] learn: nothing to learn yet'],
+          },
+        ],
+      }),
+    )
+    const { container } = render(<Doctor />)
+    await waitFor(() => expect(screen.getByText('all clean')).toBeTruthy())
+    expect(screen.queryByText(/\d+ problems?/)).toBeNull()
+    expect(container.querySelector('.check .badge.ok')).toBeTruthy()
+    expect(container.querySelector('.problem')).toBeNull()
+    expect(container.querySelector('.note').textContent).toBe('[note] learn: nothing to learn yet')
+  })
 })
