@@ -8,9 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.0.1] — 2026-11-18
+
 ### Added
 
 - **The console sets the sub-agent model tiers.** On a Claude Code install, the Installs panel has a *Model tiers* switch (off or auto) beside the context window, kept by the same rebuild. With auto on, an editor shows the models of the standard and light tiers (an empty field means inherit; strong is always your session model) and saves them into `agent-overrides.json` key by key: your other keys are kept, and a file that does not parse is refused, never rewritten. It says a rebuild applies the change and offers it, and shows the Bedrock/Vertex alias warning when the console's own environment has it. In the Library, each agent shows its tier, the model it resolves to on that install and why, and a field to pin a model (an empty pin removes only `model`). New `GET` and `POST /api/agent-models`. The precedence (pin, then the map, then the tier default, then inherit) now lives in one function, `claudeAgentModel`, which the emit and the console both use.
+
+### Fixed
+
+- **Console text fields follow the theme.** A text input with no page-specific style (the new tier and pin fields, the profile and onboarding fields) showed the browser's white box in the dark theme. It now has the select's look and keeps its focus outline.
 
 ## [6.0.0] — 2026-11-17
 
