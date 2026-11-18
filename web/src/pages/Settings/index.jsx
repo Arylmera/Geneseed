@@ -4,6 +4,7 @@ import { api } from '../../api/index.js'
 import { RestartServer, StopServer } from './ServerControl.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { installName } from '../../lib/hosts.js'
+import LevelSeg from '../../components/LevelSeg.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import { useViewLevel } from '../../hooks/useViewLevel.jsx'
 import { relTime } from '../../lib/format.js'
@@ -338,6 +339,11 @@ export default function Settings({ overview, onAction }) {
             >
               <span className="mono">{overview?.version || 'unknown'}</span>
             </Row>
+            <Row
+              k="View level"
+              help="How much of the console to show. Hidden parts keep working."
+              control={<LevelSeg />}
+            />
             <Row
               k="Command on PATH"
               help="Run geneseed from any folder"
