@@ -360,6 +360,12 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   min-width: 180px; cursor: pointer; }
 .sel:focus { border-color: var(--accent-line); }
 .sel option { background: var(--surface-2); }
+/* text input: the .sel look, so a bare .inp never falls back to the browser's white field */
+.inp { background: var(--surface); color: var(--text); border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); padding: 7px var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-sm); /* off-scale: 7px + 1px border = a .btn.sm height */
+  min-width: 0; }
+.inp::placeholder { color: var(--text-3); }
+.inp:focus { border-color: var(--accent-line); }
 /* The per-entry install picker (InstallPicker.jsx): its label, then the select, on one line. */
 .install-pick { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 .install-pick .sel { min-width: 0; max-width: 240px; }
@@ -4177,3 +4183,5 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .tiers-row { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); align-items: center; gap: var(--sp-2); }
 .tiers-warn { color: var(--warn-text); }
 .agent-model { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+/* Wide enough for the placeholder ("none: follows the tier") and a full model id; shrinks on a phone. */
+.agent-model .inp { flex: 0 1 28ch; width: 28ch; }
