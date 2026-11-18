@@ -223,6 +223,31 @@ output**. **Full log** shows the raw output unchanged, for the picked run only. 
 `web/src/lib/runPhases.js`, and the prefixes it knows are listed at its top. On a narrow
 screen the run list stacks above the detail.
 
+## View levels
+
+The console shows three view levels. A level shows every part at or below its own, so each level holds the one before it.
+
+- **Essentials** — the default. The pages most readers need to see and fix their harness.
+- **Standard** — adds the pages and tabs for kits, activity, laws, memory and profiles.
+- **Power** — adds everything else: models, loops, factories, the notebook, local edits, the wiki, the config files and the danger zone.
+
+| Part | Level |
+| --- | --- |
+| Pages: Overview, Library, Installs, Personal, Docs, Settings | Essentials |
+| Tabs: Personal / Rules and Profile; Installs / Hosts and Doctor | Essentials |
+| Library sections: Skills and Agents | Essentials |
+| Settings sections: Machine, Server and About | Essentials |
+| Pages: Kits, Activity, Constitution | Standard |
+| Tabs: Personal / Memory; Installs / Profiles | Standard |
+| Pages: Models, Loops, Factories | Power |
+| Tabs: Loops (all three); Factories (both); Personal / Notebook; Installs / Local edits | Power |
+| Library sections: Wiki and Config | Power |
+| Settings section: Danger zone | Power |
+
+Change the level in the **Appearance** popover in the topbar, or in **Settings › Machine**. The choice is kept in this browser.
+
+A hidden part is not off. It keeps working, and a link, a bookmark or a search result still opens it. A page above your level opens with a banner that names the level it needs. The search results mark such a page with that level. A running loop or factory that your level hides is named at the foot of the rail, so you do not lose track of it. The Overview "New here?" card also says which view is on, until you choose Power.
+
 ## Views
 
 ### Dashboard

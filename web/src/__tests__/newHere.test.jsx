@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../api/index.js', () => ({ api: { docs: vi.fn() } }))
 
 import { NewHere } from '../pages/Overview/index.jsx'
+import { ViewLevelProvider } from '../hooks/useViewLevel.jsx'
 import { api } from '../api/index.js'
 
 // The Overview's "New here?" card: progress over the understand pages read so far, a
@@ -63,5 +64,29 @@ describe('NewHere', () => {
     await waitFor(() => expect(api.docs).toHaveBeenCalled())
     await new Promise((r) => setTimeout(r, 0))
     expect(container.innerHTML).toBe('')
+  })
+
+  it.each([
+    ['essentials', 'Essentials'],
+    ['standard', 'Standard'],
+  ])('names the %s view below Power', async (id, label) => {
+    localStorage.setItem('geneseed-view-level', id)
+    render(
+      <ViewLevelProvider>
+        <NewHere harness="claude" />
+      </ViewLevelProvider>,
+    )
+    expect(await screen.findByText(`Showing the ${label} view — more in Appearance.`)).toBeTruthy()
+  })
+
+  it('says nothing about the view at Power', async () => {
+    localStorage.setItem('geneseed-view-level', 'power')
+    render(
+      <ViewLevelProvider>
+        <NewHere harness="claude" />
+      </ViewLevelProvider>,
+    )
+    await screen.findByText('Start')
+    expect(screen.queryByText(/Showing the/)).toBeNull()
   })
 })

@@ -233,6 +233,7 @@ button { font-family: inherit; }
 .spot-row { padding: var(--sp-2) 14px; cursor: pointer; } /* off-scale: between steps */
 .spot-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .spot-title { font-size: var(--fs-sm); color: var(--text); }
+.spot-level { margin-left: var(--sp-2); font-size: var(--fs-2xs); }
 .spot-desc { font-size: var(--fs-xs); color: var(--text-3); margin-top: 2px; /* off-scale: 2px hairline */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
