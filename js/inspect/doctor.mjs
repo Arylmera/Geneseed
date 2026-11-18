@@ -41,6 +41,7 @@ import { installProfile } from '../build/profile.mjs';
 import { providerWarning } from '../maintain/kit-migration.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { learnState } from '../hosts/memory-files.mjs';
+import { learnInstalls } from './status.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
 import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
@@ -291,7 +292,7 @@ export function doctorCollect({
   problems = problems.concat(ran('shared_paths', 'Rendered shared paths', renderedPathNotes()));
   problems = problems.concat(ran('providers', 'Workflow provider', providerNotes()));
   problems = problems.concat(ran('tier_env', 'Model tier aliases', tierEnvNotes()));
-  problems = problems.concat(ran('learn', 'Memory learning', [`${NOTE}learn: ${learnState()}`]));
+  problems = problems.concat(ran('learn', 'Memory learning', [`${NOTE}learn: ${learnState(process.env, learnInstalls())}`]));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
   problems = problems.concat(ran('host_claims', 'Host claims',

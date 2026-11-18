@@ -692,12 +692,33 @@ const DRAFT_BODY_MAX = 1500;
 const DRAFT_TITLE_MAX = 100;
 export const MEMORY_DRAFT_HOST = 'memory';
 
+const LEARN_UNSET = 'dormant ($GENESEED_LLM unset)';
+
 /**
- * Whether `learn` can run here (D12): it needs `$GENESEED_LLM`, and with it unset the Stop hook
- * returns early and no fact is ever distilled, which nothing used to say. One wording for `status`
- * and `doctor`.
+ * Whether `learn` can run (D12), per host of the installs present. One wording for `status` and
+ * `doctor`. Pure: the caller reads the files.
+ *
+ * Only the Claude-shaped hook needs `$GENESEED_LLM`, and it reads the HOOK's env — which Claude
+ * Code builds from the shell AND from the `"env"` object of the settings files. This verb runs in a
+ * terminal or in the web daemon, which see neither, so `settingsEnv` carries those objects in.
+ * Reading only `process.env` called a learning install dormant (6.0.3, on an install that learned).
+ * OpenCode's learn plugin distils with the session's own model and reads no `$GENESEED_LLM` at all.
+ * Bob's Stop payload carries no transcript, so learn returns at once there: not dormant, n/a.
+ *
+ * `installs` is `[{ host, settingsEnv?: object[] }]`; with none, the env alone answers, as before.
  */
-export const learnState = (env = process.env) => (env.GENESEED_LLM ? 'active' : 'dormant ($GENESEED_LLM unset)');
+export function learnState(env = process.env, installs = []) {
+  if (!installs.length) return env.GENESEED_LLM ? 'active' : LEARN_UNSET;
+  const byHost = new Map();
+  for (const { host, settingsEnv = [] } of installs) {
+    const state = host === 'opencode' ? 'active (session model)'
+      : host === 'bob' ? 'n/a (Bob sends no transcript)'
+        : env.GENESEED_LLM || settingsEnv.some((e) => isDict(e) && e.GENESEED_LLM) ? 'active' : LEARN_UNSET;
+    if (!byHost.has(host)) byHost.set(host, new Set());
+    byHost.get(host).add(state);
+  }
+  return [...byHost].map(([host, states]) => `${host}: ${[...states].join(' / ')}`).join(' · ');
+}
 
 const oneLine = (text, max) => {
   const t = text.replace(/\s+/g, ' ').trim();

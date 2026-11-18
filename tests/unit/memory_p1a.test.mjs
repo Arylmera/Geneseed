@@ -426,3 +426,21 @@ test('D12: learn is dormant without $GENESEED_LLM and active with it, and status
   assert.match(row({ ...base, learn: 'active' }), /^learn\s+active$/);
   assert.equal(row(base), undefined, 'a payload without the key renders the panel it always did');
 });
+
+// Per install: only the Claude-shaped hook needs `$GENESEED_LLM`, and it also takes it from the
+// settings files' `"env"`, which the shell running `status` never sees. OpenCode distils with the
+// session model; Bob sends no transcript. 6.0.3 read the shell alone and called a learning install dormant.
+test('D12: learn is judged per installed host, and reads the settings env a Claude hook runs under', () => {
+  assert.equal(learnState({}, [{ host: 'opencode' }]), 'opencode: active (session model)');
+  assert.equal(learnState({}, [{ host: 'bob' }]), 'bob: n/a (Bob sends no transcript)');
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{ GENESEED_LLM: 'claude -p' }] }]), 'claude: active');
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [null, { OTHER: '1' }] }]),
+    'claude: dormant ($GENESEED_LLM unset)');
+  assert.equal(learnState({ GENESEED_LLM: 'claude -p' }, [{ host: 'openclaude', settingsEnv: [] }]), 'openclaude: active');
+  // Two installs of one host that disagree show both states; hosts keep their order.
+  assert.equal(learnState({}, [
+    { host: 'opencode' },
+    { host: 'claude', settingsEnv: [{ GENESEED_LLM: 'x' }] },
+    { host: 'claude', settingsEnv: [] },
+  ]), 'opencode: active (session model) · claude: active / dormant ($GENESEED_LLM unset)');
+});
