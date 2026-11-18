@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.0.2] — 2026-11-18
+
 ### Added
 
 - **A Models page, and tier routing on OpenCode and OpenClaude.** *Build → Models* sets which model each sub-agent runs on, for every Claude Code, OpenCode and OpenClaude install: the routing switch, the standard and light tier models, and a pin per agent, picked from the models that install can use (your own providers first, then the models.dev ones you have a key for, then local Ollama or LM Studio). A company setup with a private URL and in-house model names works without any catalogue, and an OpenClaude install on the same endpoint offers the same names. The page never reads or sends an API key. `--tiers auto` now writes `model: provider/model` on OpenCode and `model:` on OpenClaude for the tiers your `tiers` map names; neither has a default model, so nothing changes until you pick one. With `--tiers off` every agent file is byte-identical.
