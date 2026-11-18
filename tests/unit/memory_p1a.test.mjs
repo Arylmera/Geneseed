@@ -12,7 +12,7 @@ import path from 'node:path';
 
 import { decideItem, draftItems } from '../../js/build/rule-decide.mjs';
 import { SESSION_SEEDS, ensureSharedTier } from '../../js/build/stubs.mjs';
-import { bridgeSlot, memoryNudge, sessionFiles, OUTPUT_BUDGET } from '../../js/hosts/hooks-context.mjs';
+import { bridgeSlot, cmdContext, memoryNudge, sessionFiles, OUTPUT_BUDGET } from '../../js/hosts/hooks-context.mjs';
 import {
   LEGACY_INJECT_CHARS, MAX_ALWAYS_ON, alwaysOnCandidates, existingSlugs, isReservedStem, learnState,
   migrateMemoryIndex, readFacts,
@@ -51,6 +51,14 @@ function bytesOf(dir) {
     if (e.isFile()) out[path.relative(dir, path.join(e.parentPath, e.name)).replaceAll('\\', '/')] = fs.readFileSync(path.join(e.parentPath, e.name), 'hex');
   }
   return out;
+}
+
+/** What `fn` writes to stdout, with its return value: `[result, out]`. */
+function capturedOut(fn) {
+  const w = process.stdout.write.bind(process.stdout);
+  let out = '';
+  process.stdout.write = (c) => { out += c; return true; };
+  try { return [fn(), out]; } finally { process.stdout.write = w; }
 }
 
 // ---- D2: a stem in capitals is a store document ---------------------------------------------------
@@ -320,11 +328,14 @@ test('D31: the bridge slot loads each pending candidate, and a decided one leave
   for (const slug of ['hard-limit', 'commit-style', 'no-coauthor', 'late-never', 'late-toujours']) {
     assert.ok(slot.includes(`- ${slug}: Body of ${slug}.`), `${slug} is not in the slot:\n${slot}`);
   }
-  // It sits under the map in the session payload, labelled shared, and nowhere for a non-candidate.
+  // It is a session entry of its own, labelled shared, right after the rules, and the map stays clean.
   const hookRoot = path.join(home, '.claude');
   fs.mkdirSync(hookRoot, { recursive: true });
-  const [mem] = sessionFiles(hookRoot).filter((f) => f.rel === 'memory/MEMORY.md');
-  assert.ok(mem.text.includes(slot) && mem.text.indexOf('topics/') < mem.text.indexOf(slot));
+  const files = sessionFiles(hookRoot);
+  assert.deepEqual(files.map((f) => f.rel), ['user-rules.draft.md', 'memory/MEMORY.md']);
+  assert.equal(files[0].text, slot);
+  assert.equal(files[0].abs, tier.draft);
+  assert.equal(files[1].text.includes('Standing rules'), false);
   assert.equal(slot.includes('late-quiet'), false);
   // Approve one, reject one: both decided, both leave. The approved one is now a rule in user-rules.md.
   const [first, second] = draftItems(tier);
@@ -338,6 +349,38 @@ test('D31: the bridge slot loads each pending candidate, and a decided one leave
   // The last three decided: the slot is empty and says nothing at all.
   for (const item of draftItems(tier)) decideItem(tier, item.key, 'reject');
   assert.equal(bridgeSlot(), '');
+});
+
+// The slot is budgeted as a rule (it IS a standing rule awaiting a decision), so the profile and the
+// wiki, which come after the rules and spend the room memory used to get, cannot push it out. As a
+// tail of the memory map it was cut first, and left whole when the 4th file got no room at all.
+test('D31: the slot survives a payload whose rules, profile and wiki fill the budget', () => {
+  const tier = freshTier();
+  terraStore(tier.memory);
+  ensureSharedTier();
+  const slot = bridgeSlot();
+  // Rules at 4 000 characters, a 9 000-character profile (whole, cut by the budget) and a wiki entry.
+  const long = (n) => `${'x'.repeat(79)}\n`.repeat(n / 80);
+  fs.writeFileSync(tier.rules, `## R1 — big\n${long(4000)}`);
+  fs.writeFileSync(tier.profile, long(9000));
+  const hookRoot = path.join(home, '.claude');
+  fs.mkdirSync(hookRoot, { recursive: true });
+  const empty = path.join(home, 'empty-repo');
+  fs.mkdirSync(empty, { recursive: true });
+  const prev = process.env.GENESEED_ROOT;
+  process.env.GENESEED_ROOT = empty;
+  try {
+    const out = capturedOut(() => cmdContext({ root: hookRoot }))[1].replace(/\r\n/g, '\n');
+    assert.ok(out.includes('truncated (session budget)') || out.includes('not injected (session budget)'),
+      'the budget must bind in this fixture');
+    for (const slug of ['hard-limit', 'commit-style', 'no-coauthor', 'late-never', 'late-toujours']) {
+      assert.ok(out.includes(`- ${slug}: Body of ${slug}.`), `${slug} was cut from the payload`);
+    }
+    assert.ok(out.includes(slot));
+    assert.ok(out.length < 9000, `${out.length}`);
+  } finally {
+    if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
+  }
 });
 
 test('D31: the slot is capped, and says how many rules it left out', () => {

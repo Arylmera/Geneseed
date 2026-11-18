@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- Memory: a top-level file whose name is all capitals (`ARCHIVE-INDEX.md`, `README.md`, `MEMORY.md`) is a store document, not a fact: it leaves the index, `learn`'s list and the curation count. The next emit also moves the machine tier's flat `MEMORY.md` to the topic map, drafts the standing rules that index loaded (`user-rules.draft.md`, loaded until you decide them), and the curation nudge no longer fires on topic size.
+
 ## [6.0.2] — 2026-11-18
 
 ### Added

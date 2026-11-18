@@ -340,9 +340,14 @@ async function sessionFiles(dir) {
     const sharedAbs = tier && rel !== "notebook/NOTEBOOK.md" ? path.join(machineDir(), rel) : null
     const shared = sharedAbs ? await sessionText(sharedAbs) : null
     if (shared !== null && !(host !== null && rel === "PROFILE.md")) {
-      entry(rel, sharedAbs, shared, "shared", rel === "memory/MEMORY.md" ? await bridgeSlot() : "")
+      entry(rel, sharedAbs, shared, "shared")
     }
     if (host !== null) entry(rel, abs, host, shared === null ? "" : "host: opencode")
+    // The bridge slot is its own entry right after the rules, as in the hook (BRIDGE_REL there).
+    if (rel === "user-rules.md" && tier) {
+      const slot = await bridgeSlot()
+      if (slot) found.push({ rel: "user-rules.draft.md", abs: path.join(machineDir(), "user-rules.draft.md"), label: "shared", text: slot })
+    }
   }
   return found
 }
@@ -363,7 +368,7 @@ function memoryNudge(map) {
 
 // The bridge slot (D31), a hand twin of bridgeSlot in js/hosts/hooks-context.mjs (same constants,
 // same text; tests/unit/claude.test.mjs holds the two equal on one store): the facts a migration
-// drafted as standing rules keep loading under the map until their draft is decided.
+// drafted as standing rules keep loading, as an entry of their own after user-rules.md, until their draft is decided.
 const BRIDGE_CAP = 1800
 const BRIDGE_FACT_MAX = 300
 const BRIDGE_HEAD = "[memory] Standing rules from your old index, drafted in user-rules.draft.md and "

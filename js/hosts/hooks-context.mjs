@@ -201,8 +201,9 @@ export function memoryNudge(map) {
 }
 
 // The bridge slot (D31): the facts a migration drafted as standing rules keep loading, in this much
-// room under the map, until their draft is decided. 1 800 is about the 3 072 characters memory used
-// to get, less what the map now takes; a fact is cut at BRIDGE_FACT_MAX and the rest are counted.
+// room, until their draft is decided (an entry of its own after user-rules.md: see BRIDGE_REL).
+// 1 800 is about the 3 072 characters memory used to get, less what the map now takes; a fact is cut
+// at BRIDGE_FACT_MAX and the rest are counted.
 // The OpenCode context plugin carries the same constants (parity gated in tests/unit/claude.test.mjs).
 const BRIDGE_CAP = 1800;
 const BRIDGE_FACT_MAX = 300;
@@ -210,6 +211,17 @@ const BRIDGE_HEAD = '[memory] Standing rules from your old index, drafted in use
   + 'loaded until you decide them:';
 // A slug is a file name the ledger holds: data, so no path may ride in it.
 const BRIDGE_SLUG_RE = /^[^/\\.\u0000-\u001f][^/\\\u0000-\u001f]*$/;
+
+// THE SLOT IS ITS OWN SESSION ENTRY, right after `user-rules.md`, and `renderPayload` budgets it as a
+// rule. As a tail of the memory map it was the first thing the budget cut, or went whole with the map
+// when the rules, profile and wiki left the 4th file no room: an undecided standing rule would then
+// stop loading silently, which is what the bridge exists to prevent. As a rule it answers only to the
+// rules' own size, so the profile and the wiki cannot push it out. Its rel names the draft it comes
+// from; `rel === 'user-rules.md'` consumers (a sub-agent's rules, the console) do not see it.
+export const BRIDGE_REL = 'user-rules.draft.md';
+function bridgeAbs() {
+  try { return sharedPaths().draft; } catch { return BRIDGE_REL; }
+}
 
 /**
  * The slot's text for the tier's pending memory drafts, or ''. A draft the user has decided is not
@@ -464,9 +476,8 @@ function sessionEntry(rel, abs, text, label) {
     } catch { /* reported below, as a manifest that does not parse */ }
     return { rel, abs, label, text: `[context] ${abs} is not valid JSONC \u2014 no wiki loaded.` };
   }
-  const map = rel === 'memory/MEMORY.md';
-  const extra = map ? [memoryNudge(text), label === 'shared' ? bridgeSlot() : ''].filter(Boolean) : [];
-  return { rel, abs, label, text: [text, ...extra].join('\n') };
+  const nudge = rel === 'memory/MEMORY.md' ? memoryNudge(text) : '';
+  return { rel, abs, label, text: nudge ? `${text}\n${nudge}` : text };
 }
 
 /**
@@ -492,6 +503,10 @@ export function sessionFiles(hookRoot, host = null, carrier = installCarrier(hoo
       found.push(sessionEntry(rel, sharedAbs, shared, 'shared'));
     }
     if (own !== null) found.push(sessionEntry(rel, hostAbs, own, shared === null ? '' : `host: ${host || 'claude'}`));
+    if (rel === 'user-rules.md' && tier && rels.includes('memory/MEMORY.md')) {
+      const slot = bridgeSlot();
+      if (slot) found.push({ rel: BRIDGE_REL, abs: bridgeAbs(), label: 'shared', text: slot });
+    }
   }
   return found.filter(Boolean);
 }
@@ -763,7 +778,7 @@ function renderPayload({ heads, session, eager, lazy, source, root, title = SESS
     const left = [];
     for (const s of session) {
       const head = `----- ${s.rel}${s.label ? ` (${s.label})` : ''} -----`;
-      const rules = s.rel === 'user-rules.md';
+      const rules = s.rel === 'user-rules.md' || s.rel === BRIDGE_REL;
       const room = budget - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
       const where = `${s.abs} on demand`;
       if (room <= 0) {
