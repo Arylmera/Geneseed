@@ -158,7 +158,7 @@ const DOC_OF = {
 }
 
 // The route's own kind stays even when hidden; a bare #/library opens the first kind on offer.
-const resolveSec = (s, lock, shown = LIBRARY_ORDER) =>
+export const resolveSec = (s, lock, shown = LIBRARY_ORDER) =>
   lock || (s && LIBRARY_ORDER.includes(s) ? s : (shown[0] ?? LIBRARY_ORDER[0]))
 const enc = encodeURIComponent
 

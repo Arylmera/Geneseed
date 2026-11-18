@@ -14,7 +14,7 @@ vi.mock('../api/index.js', () => ({
 
 import Sidebar, { TabBar } from '../components/Sidebar.jsx'
 import Tabs from '../components/Tabs.jsx'
-import Library from '../pages/Library.jsx'
+import Library, { resolveSec } from '../pages/Library.jsx'
 import Settings from '../pages/Settings/index.jsx'
 import { ViewLevelProvider } from '../hooks/useViewLevel.jsx'
 
@@ -89,6 +89,27 @@ describe('view level filters the surfaces', () => {
       'Agents',
     ])
     expect(kinds.querySelector('a.on').textContent).toMatch(/^Skills/)
+  })
+
+  it('Library keeps the route kind when it is hidden', () => {
+    at('essentials', <Library section="wiki" overview={{ counts: {} }} />)
+    const kinds = screen.getByRole('navigation', { name: 'Kinds' })
+    expect([...kinds.querySelectorAll('a')].map((a) => a.textContent.replace(/\d+$/, ''))).toEqual([
+      'Skills',
+      'Agents',
+      'Wiki',
+    ])
+  })
+
+  it('resolveSec defaults to the first visible kind, not the first kind', () => {
+    expect(resolveSec(undefined, undefined, ['agents', 'wiki'])).toBe('agents')
+    expect(resolveSec('config', undefined, ['agents', 'wiki'])).toBe('config')
+  })
+
+  it('TabBar keeps the lit page when it is hidden', () => {
+    at('essentials', <TabBar route={{ page: 'laws' }} />)
+    const bar = screen.getByRole('navigation', { name: 'Console pages' })
+    expect(within(bar).getByText('Constitution')).toBeTruthy()
   })
 
   it('Settings hides the Danger zone below Power', () => {
