@@ -4172,3 +4172,8 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .prof-changes { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
 .prof-changes .warn-text { color: var(--warn-text); font-weight: 600; }
 .prof-changes .dim { color: var(--text-3); }
+
+/* The agent model block (Library) and the tiers editor (Installs panel). */
+.tiers-row { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); align-items: center; gap: var(--sp-2); }
+.tiers-warn { color: var(--warn-text); }
+.agent-model { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }

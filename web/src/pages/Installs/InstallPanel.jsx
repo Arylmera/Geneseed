@@ -2,6 +2,7 @@ import React from 'react'
 import { hostInfo, installName } from '../../lib/hosts.js'
 import { PickSelects, Sel, Switch } from './controls.jsx'
 import ExclusionsCard from './ExclusionsCard.jsx'
+import TiersEditor from './TiersEditor.jsx'
 
 // The trade of letting a project read the machine tier. The wording is js/inspect/cost.mjs's
 // SHARED_TIER_BENEFIT and sharedTierCost() (tests/unit/shared_tier_option.test.mjs holds them equal).
@@ -17,6 +18,15 @@ const CONTEXT_WINDOW_NOTE = {
   '200k':
     'For a 200k-token model: each skill description is cut to 80 characters and the listing budget is 1.3% of the window, so every skill keeps its description.',
   '1m': 'For a 1M-token model: each skill description is cut to 120 characters, at the default budget of 1% of the window.',
+}
+
+// `--tiers`: whether sub-agents run on cheaper models by their tier (js/build/source.mjs TIERS_CHOICES).
+// Offered on Claude Code only: OpenCode records the choice but its agents inherit, so a picker there
+// would promise what no build writes.
+const TIERS_OPTIONS = ['off', 'auto']
+const TIERS_NOTE = {
+  off: 'Every agent runs on your session model, unless you pin one.',
+  auto: 'Standard agents run on sonnet, light ones on haiku; strong ones (architect, reviewer, security, performance) keep your session model. Your pins in agent-overrides.json win.',
 }
 
 // The MCP servers an active install's config already holds, read-only. Which servers to wire
@@ -183,6 +193,7 @@ export default function InstallPanel({
   onPrune,
   profileMatches,
   onSaveProfile,
+  onRebuild,
 }) {
   const who = `${hostInfo(inst.host).label} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
@@ -242,6 +253,23 @@ export default function InstallPanel({
             />
           </label>
           <p className="sub">{CONTEXT_WINDOW_NOTE[choice.contextWindow || '200k']}</p>
+        </div>
+      ) : null}
+      {(active || absent) && canAct && inst.host === 'claude' ? (
+        <div className="ip-block">
+          <label className="dp-field">
+            <span>Model tiers</span>
+            <Sel
+              label={`model tiers for ${who}`}
+              value={choice.tiers || 'off'}
+              options={TIERS_OPTIONS}
+              onChange={(v) => onPick('tiers', v)}
+            />
+          </label>
+          <p className="sub">{TIERS_NOTE[choice.tiers || 'off']}</p>
+          {active && choice.tiers === 'auto' ? (
+            <TiersEditor inst={inst} who={who} onRebuild={onRebuild} />
+          ) : null}
         </div>
       ) : null}
       {(active || absent) && canAct && inst.scope !== 'global' ? (

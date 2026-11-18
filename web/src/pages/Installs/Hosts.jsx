@@ -359,6 +359,8 @@ export default function Hosts({
       // The model context the install is built for (`--context-window`); the panel offers it on
       // Claude Code, the one host where it writes settings, and every row keeps its own.
       contextWindow: p.contextWindow || inst.contextWindow || '200k',
+      // The sub-agent model tiers (`--tiers`); the panel offers them on Claude Code, and every row keeps its own.
+      tiers: p.tiers || inst.tiers || 'off',
     }
   }
   const setPick = (inst, key, v) =>
@@ -372,7 +374,8 @@ export default function Hosts({
       c.mode === (inst.mode || 'direct') &&
       c.trust === (inst.trust || 'balanced') &&
       (inst.scope === 'global' || c.sharedTier === !!inst.sharedTier) &&
-      c.contextWindow === (inst.contextWindow || '200k')
+      c.contextWindow === (inst.contextWindow || '200k') &&
+      c.tiers === (inst.tiers || 'off')
     )
   }
   const options = {
@@ -386,9 +389,15 @@ export default function Hosts({
   // Install a not-installed location, or rebuild an active one with its picks. Both go
   // through the 'install' action (a non-destructive in-place emit), streamed to the console.
   const applyVoice = async (inst) => {
-    const { theme, footprint, posture, mode, trust, sharedTier, contextWindow } = choiceFor(inst)
+    const { theme, footprint, posture, mode, trust, sharedTier, contextWindow, tiers } =
+      choiceFor(inst)
     const tool = hostInfo(inst.host).label
-    const axes = `${footprint} footprint, ${posture} posture, ${mode} mode, ${trust} loop trust`
+    // The model tiers are named where they are on, or being switched off: off is the default.
+    const tiersAxis =
+      inst.host === 'claude' && (tiers === 'auto' || inst.tiers === 'auto')
+        ? `, model tiers ${tiers}`
+        : ''
+    const axes = `${footprint} footprint, ${posture} posture, ${mode} mode, ${trust} loop trust${tiersAxis}`
     const msg =
       inst.state === 'absent'
         ? `Install Geneseed for ${tool} into ${inst.path} with the “${theme}” voice (${axes})? ` +
@@ -409,6 +418,7 @@ export default function Hosts({
         mode,
         trust,
         contextWindow,
+        tiers,
         // A global install never sends it: the server refuses a global `true`.
         ...(inst.scope === 'global' ? {} : { sharedTier }),
       })
@@ -417,7 +427,8 @@ export default function Hosts({
   // A rebuild of an active install with its own choices, plus one build's instruction
   // (`force`, `pruneGates`). Neither is recorded, so the next plain rebuild is plain again.
   const rebuildWith = (inst, extra) => {
-    const { theme, footprint, posture, mode, trust, sharedTier, contextWindow } = choiceFor(inst)
+    const { theme, footprint, posture, mode, trust, sharedTier, contextWindow, tiers } =
+      choiceFor(inst)
     onAction?.('install', {
       host: inst.host,
       scope: inst.scope,
@@ -428,6 +439,7 @@ export default function Hosts({
       mode,
       trust,
       contextWindow,
+      tiers,
       ...(inst.scope === 'global' ? {} : { sharedTier }),
       ...extra,
     })
@@ -747,6 +759,7 @@ export default function Hosts({
           onRevealMcp={revealMcp}
           onForce={() => forceRebuild(current)}
           onPrune={() => pruneRebuild(current)}
+          onRebuild={() => applyVoice(current)}
           profileMatches={
             profData?.installs?.find((i) => i.host === current.host && i.path === current.path)
               ?.matches

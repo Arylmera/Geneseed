@@ -72,6 +72,9 @@ vi.mock('../api/index.js', () => ({
       Promise.resolve({ excludes: [], installs: [{ host: 'claude', cfg: '/x' }] }),
     ),
     excludeMutate: vi.fn(() => Promise.resolve({ ok: true, path: '/y', messages: [] })),
+    // The tiers editor's read and write (GET/POST /api/agent-models); the cases below hand in their own.
+    agentModels: vi.fn(() => Promise.reject(new Error('no model tiers in this test'))),
+    agentModelsSave: vi.fn(),
   },
 }))
 
@@ -401,6 +404,7 @@ describe('Installs / Hosts', () => {
       mode: 'direct',
       trust: 'balanced',
       contextWindow: '200k',
+      tiers: 'off',
     })
   })
 
@@ -573,6 +577,143 @@ describe('Installs / Hosts', () => {
       'install',
       expect.objectContaining({ host: 'claude', scope: 'global', contextWindow: '1m' }),
     )
+  })
+
+  // `--tiers`: the sub-agent model routing, offered on Claude Code only. The editor of the tiers
+  // map appears under the switch only while the choice is `auto` on an active install.
+  const claudeRow = (over) => ({
+    id: 'claude:global',
+    host: 'claude',
+    scope: 'global',
+    path: '/home/u/.claude',
+    state: 'active',
+    default: true,
+    theme: 'neutral',
+    footprint: 'lean',
+    posture: 'peer',
+    mode: 'direct',
+    trust: 'balanced',
+    contextWindow: '200k',
+    tiers: 'off',
+    ...over,
+  })
+  const listing = (rows) => ({
+    installs: rows,
+    postures: ['peer'],
+    modes: ['direct'],
+    trusts: ['balanced'],
+  })
+  const MODELS = {
+    claude: true,
+    tiers: 'auto',
+    file: { path: '/home/u/.claude/agent-overrides.json', problem: null },
+    map: { light: 'claude-haiku-4-5' },
+    defaults: { standard: 'sonnet', light: 'haiku' },
+    warnings: [],
+    agents: [],
+  }
+
+  it('a Claude Code install offers the model tiers, and rebuilds with the pick', async () => {
+    vi.mocked(api.agentModels).mockClear()
+    vi.mocked(api.installs).mockResolvedValueOnce(listing([claudeRow()]))
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const apply = await screen.findByRole('button', { name: 'Apply and rebuild' })
+    const sel = screen.getByRole('combobox', { name: 'model tiers for Claude Code · global' })
+    expect(sel.value).toBe('off')
+    expect([...sel.options].map((o) => o.value)).toEqual(['off', 'auto'])
+    expect(screen.getByText(/Every agent runs on your session model/)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+    // Off: no editor, and nothing was read for it.
+    expect(screen.queryByRole('group', { name: /Model tiers for/ })).toBeNull()
+    expect(api.agentModels).not.toHaveBeenCalled()
+    fireEvent.change(sel, { target: { value: 'auto' } })
+    expect(screen.getByText(/Standard agents run on sonnet, light ones on haiku/)).toBeTruthy()
+    expect(apply.disabled).toBe(false)
+    fireEvent.click(apply)
+    await answered()
+    expect(askConfirm.mock.calls.at(-1)[0]).toMatch(/model tiers auto/)
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'claude', scope: 'global', tiers: 'auto' }),
+    )
+  })
+
+  it('no other host offers the model tiers', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(
+      listing([claudeRow({ id: 'opencode:global', host: 'opencode', path: '/home/u/.config/oc' })]),
+    )
+    render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    await screen.findByRole('button', { name: 'Apply and rebuild' })
+    expect(screen.queryByRole('combobox', { name: /model tiers/ })).toBeNull()
+  })
+
+  it('the tiers editor shows the map, saves only what changed, and offers the rebuild', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(listing([claudeRow({ tiers: 'auto' })]))
+    vi.mocked(api.agentModels).mockResolvedValueOnce({
+      ...MODELS,
+      warnings: [
+        '--tiers auto: CLAUDE_CODE_USE_BEDROCK is set but ANTHROPIC_DEFAULT_SONNET_MODEL is not',
+      ],
+    })
+    vi.mocked(api.agentModelsSave).mockResolvedValueOnce({ ...MODELS, ok: true, rebuild: true })
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const std = await screen.findByLabelText('standard tier model for Claude Code · global')
+    // The file names `light`; `standard` shows the default alias, which is not a key.
+    expect(std.value).toBe('sonnet')
+    expect(screen.getByLabelText('light tier model for Claude Code · global').value).toBe(
+      'claude-haiku-4-5',
+    )
+    expect(screen.getByText('your session model')).toBeTruthy()
+    expect(screen.getByRole('note').textContent).toMatch(/ANTHROPIC_DEFAULT_SONNET_MODEL/)
+    const save = screen.getByRole('button', { name: 'Save models' })
+    expect(save.disabled).toBe(true)
+    // An empty field is inherit; naming the default alias again removes the key (null).
+    fireEvent.change(std, { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('light tier model for Claude Code · global'), {
+      target: { value: 'haiku' },
+    })
+    fireEvent.click(save)
+    await answered()
+    expect(api.agentModelsSave).toHaveBeenCalledWith(
+      { tiers: { standard: '', light: null } },
+      { host: 'claude', path: '/home/u/.claude' },
+    )
+    // Saved: the page says the agent files change at the next rebuild, and offers it.
+    expect(await screen.findByText(/change at the next rebuild/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Rebuild…' }))
+    await answered()
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'claude', tiers: 'auto' }),
+    )
+  })
+
+  it('the tiers editor shows a refusal from the server and keeps the draft', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(listing([claudeRow({ tiers: 'auto' })]))
+    vi.mocked(api.agentModels).mockResolvedValueOnce(MODELS)
+    vi.mocked(api.agentModelsSave).mockRejectedValueOnce(
+      new Error('tiers.light contains a line break'),
+    )
+    render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    const light = await screen.findByLabelText('light tier model for Claude Code · global')
+    fireEvent.change(light, { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save models' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/line break/)
+    expect(light.value).toBe('x')
+  })
+
+  it('the tiers editor stays shut on a file that does not parse', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(listing([claudeRow({ tiers: 'auto' })]))
+    vi.mocked(api.agentModels).mockResolvedValueOnce({
+      ...MODELS,
+      file: { path: '/x', problem: 'agent-overrides.json is not valid JSON — fix it by hand' },
+    })
+    render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    const std = await screen.findByLabelText('standard tier model for Claude Code · global')
+    expect(std.disabled).toBe(true)
+    expect(screen.getByRole('alert').textContent).toMatch(/not valid JSON/)
   })
 
   it('no other host offers the context window', async () => {
