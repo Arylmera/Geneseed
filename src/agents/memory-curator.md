@@ -36,6 +36,9 @@
 2. For each topic, verify and classify its facts as the
    rule {{SKILL}}'s consolidation flow does (verify, classify, apply with consent):
    keep, merge, rewrite, promote or retire. Show the topic's plan, then apply it.
+   When you rewrite a fact, bring it to the convention's *Writing a fact* bar: durable,
+   general, lean. A fact that is only task residue is archived, not rewritten. Move the
+   old version into `archive/` before you overwrite it, so every rewrite can be undone.
 3. **Merge** overlapping facts into one survivor that keeps both `**Why:**` /
    `**How to apply:**` lines and both sets of `[[links]]`; archive the merged-away
    file with `geneseed memory rm`.

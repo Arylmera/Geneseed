@@ -214,6 +214,13 @@ MERGE BEFORE YOU CREATE. The facts already stored are listed below as
     out of the index, never deleted.
   - With no 'action:' line, the memory is a NEW fact under a NEW slug.
 
+WRITE IT LEAN. Every word is re-read in later sessions.
+  - description: one line under 90 characters that states the claim itself,
+    specific enough to tell it from the stored facts below; never a bare label.
+  - body: the fact in one or two sentences; Why and How to apply, one line each.
+  - no narrative, no session history, no PR or ticket numbers, no counts; a date
+    only when the fact depends on it, written absolute.
+
 DEFAULT TO 'NOTHING'. Writing a memory is the rare exception, not the norm — most
 sessions should yield zero. Emit AT MOST ONE, and only if it is a GENERAL, reusable
 principle you would want at the START of an unrelated future task.

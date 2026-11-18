@@ -34,16 +34,18 @@ whether they want a rule, ask; never file a rule as a fact because a fact needs 
 Then take exactly one branch.
 
 ### Branch A — a fact to remember
-1. Search {{MEMORY}} for a file that already covers it. If one exists, merge into it —
+1. If it is task residue — what this session did, a PR or ticket number, a count, a
+   status — write nothing ({{MEMORY}} convention, *Writing a fact*).
+2. Search {{MEMORY}} for a file that already covers it. If one exists, merge into it —
    keep what is still true, add or correct the rest — never mint a twin. If the new
    fact proves the old one wrong, archive the old one (move it into `archive/`).
-2. Add a **binding force** only when the conversation shows one: *a choice taken among
+3. Add a **binding force** only when the conversation shows one: *a choice taken among
    real alternatives* (`choice`) · *a stance held until evidence overturns it*
    (`conviction`) · *a constraint the user deliberately relaxed* (`tempered`). A plain
    fact carries none. A fact that needs `constraint` is a rule: back to the fork, Branch B.
-3. Infer the `type` (`user` | `feedback` | `project` | `reference`) and draft the file
-   per the {{MEMORY}} convention.
-4. Write the file, with no prompt, and rebuild the index
+4. Infer the `type` (`user` | `feedback` | `project` | `reference`) and draft the file
+   per the {{MEMORY}} convention's *Writing a fact*: durable, general, lean.
+5. Write the file, with no prompt, and rebuild the index
    (`geneseed memory consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`) so its line
    lands in `topics/<topic>.md` and the `MEMORY.md` map recounts. Then say in one line
    what you wrote and where, so a wrong inference is visible at once; the web console

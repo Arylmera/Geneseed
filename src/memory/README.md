@@ -31,13 +31,33 @@ topic: <kebab-case-slug>                               # optional; index group, 
 force: constraint | choice | conviction | tempered   # optional
 ---
 
-The fact, stated plainly. For `feedback` and `project`, follow with
+The fact in one or two sentences (see *Writing a fact*). For `feedback` and `project`, follow with
 **Why:** and **How to apply:** lines. Link related memories with [[their-name]].
 ```
 
 `type` says what a memory *is about*; the optional `force` says how *firmly it
 binds* — the two are independent axes. Leave `force` off for a plain fact; add it
 when a memory is a decision or stance the agent must weigh before overriding.
+
+## Writing a fact
+
+Every fact is read again in later sessions, and its `description` loads with its topic
+file, so each word costs on every recall.
+
+- **Durable only.** Store what stays true and useful at the start of an unrelated later
+  task: a preference, a convention, a decision and its reason, a trap and its fix. Never
+  store task residue: what this session did, fixed, merged or released, a PR or ticket
+  number, a count, a status such as "pending" or "next is…". The git history holds those.
+- **General, not the incident.** State the principle the incident taught. Name a file,
+  function or command only when the fact is about it.
+- **Lean.** `description` is one line that states the claim itself, specific enough to
+  tell it from its neighbours: it is the index hook, and the only field `learn` reads to
+  choose between update and create. A bare label ("Plugin panels") is too vague. The body
+  holds the fact in one or two sentences; **Why:** and **How to apply:** take one line
+  each. No narrative, no story of how it was found, no repeat of the description. Keep a
+  date only when the fact depends on it, and write it absolute.
+- **Too long for this is documentation.** Put it in the project's docs and store a
+  one-line `reference` pointer to it.
 
 ## Types
 
