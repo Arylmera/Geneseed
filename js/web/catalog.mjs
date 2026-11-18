@@ -30,7 +30,7 @@ import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
 import { SRC, loadKits, makeCfg, ruleCanon, ruleSummaries } from '../build/source.mjs';
-import { RESERVED_STEMS } from '../hosts/memory-files.mjs';
+import { RESERVED_STEMS, isReservedStem } from '../hosts/memory-files.mjs';
 import { loadTheme } from '../build/render.mjs';
 
 /** A requested catalog section or item that does not exist. */
@@ -213,8 +213,10 @@ export const stemOf = (name) => name.slice(0, name.length - path.extname(name).l
  * map) but no list holds them, so a list and its count cannot disagree.
  */
 export const isFurniture = (file, index) => {
-  const stem = stemOf(file).toLowerCase();
-  return stem === index || (stem !== 'memory' && RESERVED_STEMS.has(stem));
+  const raw = stemOf(file);
+  const stem = raw.toLowerCase();
+  // The memory store also treats a stem in capitals alone as a document (`ARCHIVE-INDEX`, D2).
+  return stem === index || (index === 'memory' ? isReservedStem(raw) : stem !== 'memory' && RESERVED_STEMS.has(stem));
 };
 
 /**

@@ -900,9 +900,11 @@ function envModel() {
 // Stems that name the store's own files, never a fact: `MEMORY` is the index, so a model
 // that emitted `name: MEMORY` would overwrite it.
 const RESERVED_STEMS = new Set(["memory", "readme"])
+// A twin of isReservedStem in js/hosts/memory-files.mjs (D2): a stem written wholly in capitals is a store document too.
+const isReservedStem = (stem) => RESERVED_STEMS.has(stem.toLowerCase()) || (stem === stem.toUpperCase() && stem !== stem.toLowerCase())
 
 async function existingSlugs(memDir) {
-  return new Set((await listMd(memDir)).map((f) => f.slice(0, -3)).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())))
+  return new Set((await listMd(memDir)).map((f) => f.slice(0, -3)).filter((s) => !isReservedStem(s)))
 }
 
 // The stored facts' lines are capped at MAX_STORED_CHARS, a twin of buildLearnPrompt in
@@ -988,7 +990,7 @@ async function writeMemories(output, memDir, existing) {
     const name = (fm.name || "").trim()
     const key = name.toLowerCase()
     const action = (fm.action || "").trim().toLowerCase() || "create"
-    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || done.has(key)) continue
+    if (!MEMORY_SLUG_RE.test(name) || isReservedStem(name) || done.has(key)) continue
     const slug = stored.get(key)
     if (slug && action !== "create" && (await hasForce(memDir, slug))) continue
     const body = stripAction(chunk).replace(/\n+$/, "") + "\n"
@@ -1053,7 +1055,7 @@ async function readFacts(memDir) {
   const facts = new Map()
   for (const f of await listMd(memDir)) {
     const slug = f.slice(0, -3)
-    if (RESERVED_STEMS.has(slug.toLowerCase())) continue
+    if (isReservedStem(slug)) continue
     let fm
     try { fm = parseFrontmatter((await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")) } catch { continue }
     facts.set(slug, { desc: (fm.description || "").trim(), topic: topicOf(fm) })
@@ -1072,7 +1074,9 @@ async function rebuildIndex(memDir, fresh = new Set()) {
     }
   }
   const byTopic = new Map()
+  const known = new Set()
   for (const [slug, { desc, topic }] of await readFacts(memDir)) {
+    known.add(slug.toLowerCase())
     const o = fresh.has(slug) ? null : old.get(slug)
     const line = o ? `- [${o.title}](../${slug}.md)${o.rest}` : `- [${slug}](../${slug}.md)` + (desc ? ` — ${desc}` : "")
     if (!byTopic.has(topic)) byTopic.set(topic, [])
@@ -1090,9 +1094,12 @@ async function rebuildIndex(memDir, fresh = new Set()) {
     mapLines.push(`- [${topic}](topics/${topic}.md) — ${lines.length} fact${lines.length === 1 ? "" : "s"}`)
   }
   const index = path.join(memDir, "MEMORY.md")
+  // A flat pointer is dropped unless it names a store document (D4): a fact's has moved into its topic file.
+  const documents = new Set((await listMd(memDir)).map((f) => f.slice(0, -3).toLowerCase()).filter((s) => !known.has(s)))
   const carried = ((await readLines(index)) ?? []).filter((l) => {
     const t = l.trim()
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t) && !FACT_LINE_RE.test(t)
+    const flat = FACT_LINE_RE.exec(t)
+    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t) && !(flat && !documents.has(flat[2].toLowerCase()))
   })
   const body = [...(mapLines.length ? ["", MAP_HINT, "", ...mapLines] : []), ...(carried.length ? ["", ...carried] : [])]
   await writeIfChanged(index, body.length ? MEMORY_SEED + body.join("\n") + "\n" : MEMORY_SEED)

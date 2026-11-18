@@ -55,7 +55,7 @@ import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { providerWarning } from '../maintain/kit-migration.mjs';
 import { isDoctorNote } from './scan.mjs';
 import { pendingDrafts } from '../hosts/hooks-context.mjs';
-import { factCount } from '../hosts/memory-files.mjs';
+import { factCount, learnState } from '../hosts/memory-files.mjs';
 import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
@@ -365,6 +365,7 @@ export function statusData() {
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
     drafts_pending: pendingDrafts(),
+    learn: learnState(),
     store_report: lastStoreReport(),
     opencode_shadow: opencodeShadowedInstall(),
     openclaude_dual_harness: openclaudeDualHarnessRoots(),
@@ -477,6 +478,8 @@ export function statusLines(d, color = false, boxed = true) {
     rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
       + (byRule ? ` (${byRule})` : '')]);
   }
+  // Conditional for the recording reason again; says why no fact is ever distilled on a machine without a model (D12).
+  if (d.learn) rows.push(['learn', d.learn]);
   if (d.drafts_pending) {
     rows.push(['drafts', `${d.drafts_pending} in user-rules.draft.md wait${d.drafts_pending === 1 ? 's' : ''} for your decision`]);
   }

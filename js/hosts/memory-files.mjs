@@ -15,10 +15,11 @@
  * import `js/web` (spec C20).
  */
 import { isUtf8 } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
-import { isDict } from '../lib/json.mjs';
+import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
@@ -116,11 +117,24 @@ function globMd(dir) {
 export const RESERVED_STEMS = new Set(['memory', 'readme']);
 
 /**
+ * IS THIS TOP-LEVEL STEM A STORE DOCUMENT RATHER THAN A FACT? (D2) `memory` and `readme` in any case,
+ * and any stem written wholly in capitals: `MEMORY`, `README`, `ARCHIVE-INDEX`. A person names the
+ * documents that describe a store in capitals, and a fact is a lower-case slug. Without
+ * this a hand-written `ARCHIVE-INDEX.md` was indexed as a fact under `misc`, listed to `learn`, and
+ * counted by the curation nudge. A stem with no letter in it (`2026`) is no document: it has no case.
+ *
+ * ONE PREDICATE, EVERY READER: the plugins carry a twin (`geneseed-learn.js`), the console's
+ * `isFurniture` and `geneseed memory rm` call this one, so a list and its count cannot disagree.
+ */
+export const isReservedStem = (stem) => RESERVED_STEMS.has(stem.toLowerCase())
+  || (stem === stem.toUpperCase() && stem !== stem.toLowerCase());
+
+/**
  * `_existing_slugs` — slugs already stored. learn never CREATES one of these; it may only
  * update or archive it by name (`writeMemories`).
  */
 export function existingSlugs(memDir) {
-  return new Set(globMd(memDir).map(stem).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())));
+  return new Set(globMd(memDir).map(stem).filter((s) => !isReservedStem(s)));
 }
 
 /**
@@ -169,7 +183,7 @@ export function readFacts(memDir) {
   const facts = new Map();
   for (const name of sortPaths(globMd(memDir))) {
     const s = stem(name);
-    if (RESERVED_STEMS.has(s.toLowerCase())) continue;
+    if (isReservedStem(s)) continue;
     try {
       const [fm] = frontmatter(readText(path.join(memDir, name)));
       facts.set(s, { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm) });
@@ -212,13 +226,14 @@ export function indexNotes(memDir, generated) {
  * Rewrite MEMORY.md as the map: one line per topic file with its fact count.
  *
  * LINES THE MAP DID NOT GENERATE ARE CARRIED, so a note the user wrote into the index
- * survives. `dropFlat` also drops legacy flat fact pointers; a rebuild passes it because it
- * has just moved them into topic files. With no topic and nothing carried, the file goes
- * back to the seed.
+ * survives. `generated(slug)` says which legacy flat fact pointers a rebuild has just moved into
+ * topic files, and only those are dropped (D4): a pointer to a store document (`ARCHIVE-INDEX`) or
+ * to a fact that is not on disk is no fact line, so it stays like any other line a person wrote.
+ * With no topic and nothing carried, the file goes back to the seed.
  */
-function writeMap(memDir, dropFlat) {
+function writeMap(memDir, generated) {
   const idx = path.join(memDir, 'MEMORY.md');
-  const carried = indexNotes(memDir, () => dropFlat);
+  const carried = indexNotes(memDir, generated);
   const tdir = path.join(memDir, TOPICS);
   const topics = globMd(tdir).map(stem).sort().map((t) => {
     const n = (readLines(path.join(tdir, `${t}.md`)) ?? [])
@@ -264,7 +279,12 @@ function rebuildIndex(memDir, refresh, fresh = new Set()) {
     writeIfChanged(path.join(tdir, `${topic}.md`), `# ${topic}\n\n${lines.join('\n')}\n`);
   }
   if (!byTopic.size) pruneTopicsDir(memDir);
-  writeMap(memDir, true);
+  // A flat pointer is generated, and so dropped, unless it names a STORE DOCUMENT (`ARCHIVE-INDEX.md`):
+  // a fact's pointer has moved into a topic file, a dead one (no such file) is the old rule's, and
+  // a document is no fact, so its line is one a person wrote and stays (D4).
+  const known = new Set([...facts.keys()].map((slug) => slug.toLowerCase()));
+  const documents = new Set(globMd(memDir).map((n) => stem(n).toLowerCase()).filter((s) => !known.has(s)));
+  writeMap(memDir, (slug) => !documents.has(slug.toLowerCase()));
   return { facts, old };
 }
 
@@ -276,10 +296,25 @@ function rebuildIndex(memDir, refresh, fresh = new Set()) {
  * `topics/*.md` only, never a fact file, and it keeps each pointer's own title and hook.
  */
 export function migrateMemoryIndex(memDir) {
-  const lines = readLines(path.join(memDir, 'MEMORY.md'));
-  if (!lines?.some((l) => FACT_LINE_RE.test(l.trim())) || !existingSlugs(memDir).size) return false;
+  if (!holdsFlatFacts(memDir)) return false;
   rebuildIndex(memDir, false);
   return true;
+}
+
+/**
+ * Does MEMORY.md still hold a flat pointer to a STORED fact? The one test of "this index is flat",
+ * for the migration and for the pick of always-on candidates (`alwaysOnCandidates`). A pointer to a
+ * store document or to a fact that is gone is carried by the migration (D4) and is no fact to move,
+ * so a migrated index that carries one is not flat, and the next emit finds nothing to do.
+ */
+function holdsFlatFacts(memDir) {
+  const lines = readLines(path.join(memDir, 'MEMORY.md'));
+  if (!lines) return false;
+  const slugs = new Set([...existingSlugs(memDir)].map((s) => s.toLowerCase()));
+  return lines.some((l) => {
+    const m = FACT_LINE_RE.exec(l.trim());
+    return m !== null && slugs.has(m[2].toLowerCase());
+  });
 }
 
 /** The chunk without its frontmatter `action:` line, which is an instruction, not the fact. */
@@ -350,7 +385,7 @@ export function writeMemories(modelOutput, memDir, existing) {
     const name = fmGet(fm, 'name').trim();
     const key = name.toLowerCase();
     const action = fmGet(fm, 'action').trim().toLowerCase() || 'create';
-    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || done.has(key)) continue;
+    if (!MEMORY_SLUG_RE.test(name) || isReservedStem(name) || done.has(key)) continue;
     const slug = stored.get(key);
     if (slug && action !== 'create' && hasForce(memDir, slug)) continue;
     const body = `${stripAction(chunk).replace(/\n+$/, '')}\n`;
@@ -414,7 +449,7 @@ export function memoryDropIndex(memDir, name) {
   }
   if (!touched) return;
   pruneTopicsDir(memDir);
-  try { writeMap(memDir, false); } catch { /* best-effort */ }
+  try { writeMap(memDir, () => false); } catch { /* best-effort */ }
 }
 
 /** Drop every line holding `needle`; the kept lines when something went, else null. */
@@ -617,4 +652,122 @@ export function readFoldState(shared) {
   }
   if (blank(state.items)) state.items = {};
   return state;
+}
+
+export const itemKey = (kind, host, bytes) => createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
+
+const DRAFT_HEAD = '# User rules — draft\n\nNot active. The rule Rite or the console applies decisions.\n';
+
+/**
+ * A block in the draft and a C7 record. The key names the host too, so two hosts holding the same
+ * text are two decisions. Draft first: a stop between the writes leaves a block the next run
+ * recognises, not a lost one. `extra` rides on the ledger row (`fact`, for a memory candidate).
+ *
+ * HERE, NOT IN THE FOLD, since D31: the tier's memory step (`ensureSharedTier`, `stubs.mjs`) drafts too,
+ * and `fold.mjs` imports `stubs.mjs` for its seeds, so the fold's home for this would be a cycle.
+ */
+export function draftItem(kind, key, block, tally, { host, shared, dryRun, report }, extra = {}) {
+  const state = readFoldState(shared);
+  if (state.items[key]) return;
+  report[tally] += 1;
+  if (dryRun) return;
+  const text = existsSync(shared.draft) ? readText(shared.draft) : DRAFT_HEAD;
+  if (!text.includes(`sha256: ${key}`)) writeTextAtomic(shared.draft, `${text}\n${block}`);
+  state.items[key] = { kind, host, state: 'pending', ...extra };
+  writeTextAtomic(shared.foldState, `${jsonDumpsIndent(state)}\n`);
+}
+
+/**
+ * The part of a flat MEMORY.md the session hook used to inject, in characters. Memory was the 4th
+ * of 5 session files, and what the 9 000-character payload left after the rules, profile and
+ * wiki was cut by position (`capToRoom`): 3 072 of 8 509 characters on the machine this was
+ * measured on (2026-11-18). A rule whose pointer sat inside that part was in force by ACCIDENT of
+ * its line number, which is exactly what a draft asks the user to turn into a decision.
+ */
+export const LEGACY_INJECT_CHARS = 3072;
+/** At most this many candidates are drafted at one migration: a console of 100 drafts is noise. */
+export const MAX_ALWAYS_ON = 30;
+const ALWAYS_WORDS_RE = /\b(?:always|never|toujours|jamais)\b/i;
+const DRAFT_BODY_MAX = 1500;
+const DRAFT_TITLE_MAX = 100;
+export const MEMORY_DRAFT_HOST = 'memory';
+
+/**
+ * Whether `learn` can run here (D12): it needs `$GENESEED_LLM`, and with it unset the Stop hook
+ * returns early and no fact is ever distilled, which nothing used to say. One wording for `status`
+ * and `doctor`.
+ */
+export const learnState = (env = process.env) => (env.GENESEED_LLM ? 'active' : 'dormant ($GENESEED_LLM unset)');
+
+const oneLine = (text, max) => {
+  const t = text.replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
+
+/**
+ * A fact's text as a rule body. A `## ` line would end the draft's block and open another, so it
+ * is demoted to `### `; a long fact is cut and says where the rest is. The description stands in
+ * for an empty body.
+ */
+function draftBody(body, desc) {
+  const text = stripWhitespace(body.replace(/^## /gm, '### ')) || desc;
+  return text.length > DRAFT_BODY_MAX ? `${text.slice(0, DRAFT_BODY_MAX)}…\n(cut: the whole fact is in memory/)` : text;
+}
+
+/**
+ * The facts a FLAT index would have loaded at every session and that read as standing rules (D31),
+ * picked without a model: `force: constraint`, or a `feedback` fact whose pointer sat in the
+ * injected part (`LEGACY_INJECT_CHARS`), or a `feedback` fact whose description says always,
+ * never (or toujours, jamais). Priority in that order, then slug; `[]` for a store that is
+ * not flat, so a second emit picks nothing. Read BEFORE `migrateMemoryIndex`, which erases the
+ * flat index. Each is `{ slug, title, body, reason }`.
+ */
+export function alwaysOnCandidates(memDir) {
+  if (!holdsFlatFacts(memDir)) return [];
+  const lines = readLines(path.join(memDir, 'MEMORY.md'));
+  const injected = new Set();
+  let at = 0;
+  for (const line of lines) {
+    at += line.length + 1;
+    const m = FACT_LINE_RE.exec(line.trim());
+    if (m && at <= LEGACY_INJECT_CHARS) injected.add(m[2].toLowerCase());
+  }
+  const rank = { constraint: 0, injected: 1, described: 2 };
+  const found = [];
+  for (const slug of [...existingSlugs(memDir)].sort()) {
+    let fm; let body;
+    try { [fm, body] = frontmatter(readText(path.join(memDir, `${slug}.md`))); } catch { continue; }
+    const desc = fmGet(fm, 'description').trim();
+    // The TYPE, not the topic: `topic:` only files the fact, and a `type: feedback` fact filed under
+    // `topic: git` is still a rule about how to work. (A nested `metadata: type:` reads as `type`.)
+    const feedback = topicSlug(fmGet(fm, 'type')) === 'feedback';
+    const reason = fmGet(fm, 'force').trim().toLowerCase() === 'constraint' ? 'constraint'
+      : feedback && injected.has(slug.toLowerCase()) ? 'injected'
+        : feedback && ALWAYS_WORDS_RE.test(desc) ? 'described' : null;
+    if (!reason) continue;
+    found.push({ slug, reason, title: oneLine(desc || slug, DRAFT_TITLE_MAX), body: draftBody(body, desc) });
+  }
+  return found.sort((a, b) => rank[a.reason] - rank[b.reason]).slice(0, MAX_ALWAYS_ON);
+}
+
+/**
+ * Write each candidate as a draft through the fold's own path, one block and one ledger row, with
+ * the fact's slug on the row: the session hook reads it for the bridge slot (D31), and the row
+ * leaves the slot when the user decides. Idempotent: `draftItem` skips a key the ledger holds,
+ * decided or not. Never touches `user-rules.md`; approval is the console's or the Rite's.
+ */
+export function draftAlwaysOn(shared, candidates) {
+  const ctx = { host: MEMORY_DRAFT_HOST, shared, dryRun: false, report: { rules: 0 } };
+  let n = 0;
+  for (const c of candidates) {
+    // The key is the text the way `rule-decide.mjs` re-reads it, so the block can be decided.
+    const [rules] = parseRules(`## R0 — ${c.title}\n${c.body}\n`);
+    if (rules.length !== 1) continue;
+    n += 1;
+    const key = itemKey('rule', MEMORY_DRAFT_HOST, `${rules[0].title}\n${rules[0].body}`);
+    draftItem('rule', key, `${draftRuleHead(MEMORY_DRAFT_HOST, c.title)}\n`
+      + `(source: ${path.join(shared.memory, `${c.slug}.md`)} | old: R${n} | sha256: ${key})\n`
+      + `${c.body}\n`, 'rules', ctx, { fact: c.slug });
+  }
+  return ctx.report.rules;
 }

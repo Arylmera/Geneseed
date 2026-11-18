@@ -52,7 +52,9 @@ The lines under the pointer are the rule as it stands, with its own metadata lin
      blocks after it. This line is a record: leave every `R<n>` citation in the facts as it is.
   6. Delete the block.
 
-  Leave the host file alone. The next fold of that host removes the rule from it.
+  Leave the host file alone. The next fold of that host removes the rule from it. A block from host
+  `memory` is a fact of the store the build migrated: its `source` is the fact file, and nothing
+  removes the fact. Either decision ends the fact's loading under the memory map at session start.
 - **Reject** means "keep it on this host only". Set the row's `state` to `rejected`, and delete
   the block. The rule stays in the host file, and the fold never drafts it again.
 

@@ -4,7 +4,7 @@
 
 ## When to dispatch
 - The {{MEMORY}} store needs tidying in bulk. The session context says so in one
-  line when a topic holds over 40 facts or a `misc` topic exists; or the user asks
+  line when a `misc` topic exists; or the user asks
   to tidy, dedupe or re-topic their memory.
 - `geneseed memory consolidate` reported duplicate descriptions that need a merge.
 

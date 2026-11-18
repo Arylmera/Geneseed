@@ -13,13 +13,12 @@
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { BUNDLE_FILES_KEY, bundleFiles, ownedWithin } from '../hosts/owned.mjs';
-import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { copyFile, isFile, readText, writeText } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatReprAscii, isTruthy } from '../lib/json.mjs';
 import { OWNED_SRC_DIRS, SRC_DIRS_MARKER, TMPL_SPEC_RE } from './emit-common.mjs';
 import { SRC_DIR_TOKENS, renderAll } from './render.mjs';
 import {
-  ensureBundleGitignore, ensureContextStub, ensureMemoryIndex, ensureNotebookIndex,
+  ensureBundleGitignore, ensureContextStub, ensureMemoryStore, ensureNotebookIndex,
   ensureProfileStub, ensureRulesStub, ensureWikiStub,
 } from './stubs.mjs';
 import { retiredSkillNames, skillLabels } from './retired-skills.mjs';
@@ -29,15 +28,7 @@ import {
   existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync,
 } from 'node:fs';
 
-/**
- * Seed the memory index, then move a flat one to topics — the pair every emit runs on its
- * memory store, in that order. Here and not in `js/hosts/memory-files.mjs`: `stubs.mjs`
- * imports that module, so the reverse import would be a cycle.
- */
-export function ensureMemoryStore(memDir) {
-  ensureMemoryIndex(memDir);
-  migrateMemoryIndex(memDir);
-}
+export { ensureMemoryStore };
 
 // ---------------------------------------------------------------------------
 // Source completeness

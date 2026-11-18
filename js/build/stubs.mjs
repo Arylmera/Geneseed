@@ -5,9 +5,10 @@
  * Every stub is a literal here and an `ensure*` beside it, and the pairing is the contract:
  * the writer checks first and returns without writing when the file exists, because these are
  * the USER's files from the moment they exist. One exception: an emit also calls
- * `migrateMemoryIndex` on the memory store, which rewrites a FLAT MEMORY.md (and its
- * `topics/` files) into the two-level index once, losslessly, because a flat index overruns
- * the session-start budget. Fact files are never touched. A stub body is bytes a recorded
+ * `migrateMemoryIndex` on the memory store (an install's, and the machine tier's since D1), which
+ * rewrites a FLAT MEMORY.md (and its `topics/` files) into the two-level index once, losslessly,
+ * because a flat index overruns the session-start budget. On the tier it first drafts the standing
+ * rules that index loaded (D31, `ensureTierMemory`). Fact files are never touched. A stub body is bytes a recorded
  * corpus compares — changing one is a product change, not a tidy-up.
  */
 import path from 'node:path';
@@ -16,7 +17,8 @@ import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
 import { NOTES_DIRS, WIKI_NAMES, renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
-import { MEMORY_SEED } from '../hosts/memory-files.mjs';
+import { recordOwnWrites } from '../hosts/store-watch.mjs';
+import { MEMORY_SEED, alwaysOnCandidates, draftAlwaysOn, migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
@@ -325,7 +327,7 @@ export function ensureSharedTier() {
     const tier = sharedPaths();
     mkdirSync(tier.memory, { recursive: true });
     for (const sub of NOTES_DIRS) mkdirSync(path.join(tier.notes, sub), { recursive: true });
-    ensureMemoryIndex(tier.memory);
+    ensureTierMemory(tier);
     ensureRulesStub(tier.root);
     ensureProfileStub(tier.root);
     ensureWikiStub(tier.root);
@@ -335,6 +337,28 @@ export function ensureSharedTier() {
     process.stderr.write(`[geneseed] WARN could not create the shared tier: ${e.message}; `
       + 'this emit renders relative paths\n');
     return false;
+  }
+}
+
+/**
+ * The tier's memory store, brought to the shape an install store gets (D1): the seed, then a flat
+ * index moved to the topic map. The tier's was only seeded, so a hand-written flat index stayed flat
+ * and overran the session budget (F17). The standing rules a flat index loaded at every session are
+ * drafted FIRST (D31): the migration erases the index they were found in, and a draft written twice
+ * is a no-op, so a stop between the two steps is finished by the next emit. A failure here is
+ * a warning and never the tier's: the files stay as they are, and the next emit retries. The writes
+ * are logged as Geneseed's own, as the fold's are, so an open session's change report does not name
+ * the index and the draft this emit rewrote as changes nobody approved.
+ */
+function ensureTierMemory(tier) {
+  try {
+    recordOwnWrites(tier.root, () => {
+      draftAlwaysOn(tier, alwaysOnCandidates(tier.memory));
+      ensureMemoryStore(tier.memory);
+    });
+  } catch (e) {
+    process.stderr.write(`[geneseed] WARN could not migrate the shared memory index: ${e.message}; `
+      + 'the next emit retries\n');
   }
 }
 
@@ -366,6 +390,16 @@ export const ensureMemoryIndex = storeIndexWriter('MEMORY.md', MEMORY_INDEX);
 
 /** `_build_render.ensure_notebook_index`. */
 export const ensureNotebookIndex = storeIndexWriter('NOTEBOOK.md', NOTEBOOK_INDEX);
+
+/**
+ * Seed the memory index, then move a flat one to topics — the pair every emit runs on its memory
+ * store, in that order, on an install's and on the tier's alike. Here, beside the seed it calls:
+ * `bundle.mjs` re-exports it for the emitters, and `memory-files.mjs` cannot import this file.
+ */
+export function ensureMemoryStore(memDir) {
+  ensureMemoryIndex(memDir);
+  migrateMemoryIndex(memDir);
+}
 
 /**
  * The seeds of the files the session-start injection reads (`SESSION_FILES` in
