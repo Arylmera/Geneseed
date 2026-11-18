@@ -78,11 +78,27 @@ export function writeText(path, text) {
  * memory index, which two hosts can rebuild together). A reader sees the old file or the new one,
  * never half of one. A crash leaves a `.tmp` beside it, which no `*.md` glob lists and the next
  * write by the same pid overwrites.
+ *
+ * WINDOWS REFUSES THE RENAME while any process has the target open (EPERM; EACCES or EBUSY while an
+ * antivirus scans it), and a reader holds it open for each read. So the rename is retried, with a
+ * growing sync wait, for about 2 s before the error is thrown. Without it, a poller of
+ * `learn-last.json` (`status`, a test) made the learn worker's final verdict vanish: the rename threw,
+ * the verdict writer swallowed it, and a run that had succeeded read as `running` until it read as stuck.
+ * The wait buffer is made only on a refusal: the hook path pays nothing for it.
  */
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_RETRY_MS = 2000;
 export function writeTextAtomic(path, text) {
   const tmp = `${path}.${process.pid}.tmp`;
   writeText(tmp, text);
-  renameSync(tmp, path);
+  const end = Date.now() + RENAME_RETRY_MS;
+  for (let wait = 5, sleeper = null; ; wait = Math.min(wait * 2, 100)) {
+    try { renameSync(tmp, path); return; } catch (e) {
+      if (process.platform !== 'win32' || !RENAME_RETRY_CODES.has(e?.code) || Date.now() >= end) throw e;
+    }
+    sleeper ??= new Int32Array(new SharedArrayBuffer(4));
+    Atomics.wait(sleeper, 0, 0, wait);
+  }
 }
 
 /**
