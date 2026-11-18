@@ -158,15 +158,15 @@ test('each install-reading write acts on the install its body names', async () =
     const restored = await ok(await post('/api/actions/restore', { ...clPair, files: [] }));
     assert.deepEqual(restored.errors, ['no deployed harness'], 'restore ran on the daemon install');
 
-    // The model tiers are Claude Code's: named at claude the file lands there; unnamed, the
-    // daemon's opencode install refuses (409), so a dropped `VIEW_POSTS` row cannot pass.
+    // The model tiers are per install: named at claude the file lands there; unnamed, the
+    // daemon's opencode install gets it and refuses 'x' (409, not provider/model), so a dropped VIEW_POSTS row cannot pass.
     await ok(await post('/api/agent-models', { ...clPair, tiers: { light: 'claude-haiku-4-5' } }));
     assert.match(readLf(path.join(cl, 'agent-overrides.json')), /claude-haiku-4-5/);
     assert.equal(fs.existsSync(path.join(oc, 'agent-overrides.json'))
       && /claude-haiku-4-5/.test(readLf(path.join(oc, 'agent-overrides.json'))), false,
     'agent-models: wrong install');
     assert.equal((await post('/api/agent-models', { tiers: { light: 'x' } })).status, 409,
-      'an unnamed save must act on the daemon install (opencode), which refuses');
+      'an unnamed save must act on the daemon install (opencode), whose provider/model check refuses x');
 
     assert.equal((await post('/api/actions/build', { ...clPair })).status, 202);
     assert.equal((await post('/api/actions/build', {})).status, 202);

@@ -580,7 +580,7 @@ export const ALIASES_RE = /^<!--[ \t]*aliases:[ \t]*(.+?)[ \t]*-->[ \t]*\r?$/m;
  * `--tiers auto|off`: the sub-agent model tiers (spec `2026-11-17-subagent-model-tiers.md`).
  * An agent source names its tier on a line of its own, `<!-- tier: strong|light -->`; no marker
  * is `standard`, the default. `strong` runs on the parent's model, `light` on a cheaper one,
- * and what each tier means on a host is that host's emit (Claude: `claudeTierModel`).
+ * and what each tier means on a host is that host's emit (`tierModel`, with the per-host defaults in `TIER_DEFAULTS`).
  *
  * THE LINE IS STRIPPED FROM EVERY OUTPUT, WHOLE (`splitTier`): it sits directly above
  * `## When to dispatch`, so removing the line leaves the text a build rendered before the marker

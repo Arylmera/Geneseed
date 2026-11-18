@@ -514,6 +514,28 @@ test('diff reports no drift for a --tiers auto install with a tiers map and a pi
   assert.deepEqual(drift(), []);
 });
 
+for (const [emitName, model] of [['opencode-global', 'corp/fast'], ['openclaude-global', 'corp-fast']]) {
+  test(`diff reports no drift for a ${emitName} --tiers auto install with a tiers map and a pin, and restore keeps them`, () => {
+    const cfg = sandbox('gst-diff-');
+    fs.writeFileSync(path.join(cfg, 'agent-overrides.json'),
+      JSON.stringify({ agents: { skeptic: { model: `${model}-pin` } }, tiers: { light: model } }));
+    assert.equal(build('--emit', emitName, '--theme', 'neutral', '--config-dir', cfg, '--tiers', 'auto').value, 0);
+    const agents = path.join(cfg, 'agents');
+    assert.equal(modelOf(agents, 'explorer'), model, 'the fixture did not route through the map');
+    assert.equal(modelOf(agents, 'skeptic'), `${model}-pin`);
+    const drift = () => diffCollect({ target: cfg }).files.map((f) => f.rel).filter((r) => r !== 'agent-overrides.json');
+    assert.deepEqual(drift(), [], 'a routed model line was reported as drift');
+    const explorer = path.join(agents, 'explorer.md');
+    fs.writeFileSync(explorer, `${read(explorer)}\nLOCAL EDIT\n`);
+    assert.deepEqual(drift(), ['agents/explorer.md']);
+    const st = webState('neutral', cfg);
+    st.selectView(cfg, null, emitName);
+    assert.deepEqual(apiRestore(st, ['agents/explorer.md']).errors, []);
+    assert.equal(modelOf(agents, 'explorer'), model, 'a restore dropped the routed model');
+    assert.deepEqual(drift(), []);
+  });
+}
+
 test('restore keeps the carrier\'s routing line (an OpenCode install built --tiers auto)', () => {
   const sb = makeSandbox();
   try {

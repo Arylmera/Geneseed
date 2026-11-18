@@ -542,9 +542,9 @@ test('the declared surface is the one the dispatcher uses', async () => {
       'a table GET must answer — the control, without which every refusal below is vacuous');
     assert.equal(await hit('GET', '/api/jobs'), 200, 'an inline GET must answer too');
     assert.equal(await hit('GET', '/api/agent-models'), 200, 'GET /api/agent-models must answer on the default install');
-    // The probe's default install is not Claude Code, so the save is refused (409) before any file is read.
+    // The probe's default install is OpenCode, where 'x' is no provider/model: refused (409) by the value check, nothing written.
     assert.equal(await hit('POST', '/api/agent-models', 'tok', '{"tiers": {"light": "x"}}'), 409,
-      'POST /api/agent-models must reach apiAgentModelsSave and refuse a host that is not Claude Code');
+      'POST /api/agent-models must reach apiAgentModelsSave and refuse a value OpenCode cannot take');
     // A 200 means the declaration and the table agree; anything else — an HTML 200 from the
     // SPA fallback included — means the route is declared and not dispatched. (The SPA fallback
     // cannot answer 200 here: this probe's dist root is 'nowhere', so a fall-through is a 404.)
