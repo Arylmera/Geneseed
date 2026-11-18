@@ -58,6 +58,10 @@ const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/;
  * best-effort, any tool whose name contains "skill" (Bob's skill tool name is unverified, no Bob
  * runs here). A subtask's `title` is never read: it is free text the agent wrote, and this
  * ledger records no prompt. Its mode is the nearest thing Bob has to an agent's name.
+ *
+ * A Claude `Agent`/`Task` call with no `subagent_type` runs `general-purpose`, the host's own
+ * default, so it counts under that name: left out, 121 of ~5 000 real calls (2026-11 transcripts)
+ * were never counted. Claude shape only (`tool_name`): OpenCode's `task` requires the field.
  */
 export function usageOf(payload) {
   if (!payload || typeof payload !== 'object') return null;
@@ -71,6 +75,7 @@ export function usageOf(payload) {
   } else if (tool === 'agent' || tool === 'task' || tool === 'subagent') {
     kind = 'agent';
     name = ti.subagent_type ?? ti.agent;
+    if (name == null && payload.tool_name && (tool === 'agent' || tool === 'task')) name = 'general-purpose';
   } else if (tool === 'spawn_subagent' || tool === 'start_subtask') {
     kind = 'agent';
     name = tool === 'spawn_subagent' ? ti.name : ti.mode;
