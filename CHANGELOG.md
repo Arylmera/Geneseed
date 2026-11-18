@@ -14,7 +14,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 
-- Rules a tier migration drafted from the memory index no longer load at every session. They load only once approved: the 1 800-character bridge slot is gone, on the Claude Code hook and the OpenCode plugin alike. The one-line `[drafts] N drafted items … wait for the user's decision` reminder stays, and an approved draft moves into `user-rules.md`, which loads. The web console's Rules page now labels such a draft "not loaded until approved" instead of "binds on memory".
+- Rules a tier migration drafted from the memory index no longer load at every session (6.0.3 loaded them until decided). They load only once approved: the 1 800-character bridge slot is gone, on the Claude Code hook and the OpenCode plugin alike. The one-line `[drafts] N drafted items … wait for the user's decision` reminder stays, and an approved draft moves into `user-rules.md`, which loads. The web console's Rules page now labels such a draft "not loaded until approved" instead of "binds on memory".
 
 ### Fixed
 

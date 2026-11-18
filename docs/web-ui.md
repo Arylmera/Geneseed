@@ -286,8 +286,8 @@ A hidden part is not off. It keeps working, and a link, a bookmark or a search r
   (code points / 4 of its own block), and each list's head shows the one rule count and total, such
   as `4 rules · ≈1,055 tokens every turn · scope global unless marked`, which counts the file's
   header too. A row shows a scope only when it differs from that. There is no ceiling.
-  A **Pending** section lists what waits undecided in `user-rules.draft.md`, and a pending rule still
-  binds on its host. *Approve* and *Reject* decide a rule; a profile or wiki pointer shows both files,
+  A **Pending** section lists what waits undecided in `user-rules.draft.md`, and a pending rule for a host file
+  still binds on its host; one drafted from the memory index is not loaded until approved. *Approve* and *Reject* decide a rule; a profile or wiki pointer shows both files,
   with *Use the host file*, *Use the shared file* and *Keep both*. These apply the rule skill's own
   steps (`js/build/rule-decide.mjs`), and a decision that moves a file offers *Rebuild all*. No decision
   applies while a job runs. The [change report](concepts/hooks.md#the-change-report) lists a decision like

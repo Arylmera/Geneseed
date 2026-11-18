@@ -132,9 +132,9 @@ session start, so what sat in its first 3 072 characters loaded by accident. At 
 `feedback` fact whose line sat there, any fact with `force: constraint`, and a `feedback` fact whose
 description says *always* or *never* (*toujours*, *jamais*) are written to `user-rules.draft.md`
 (at most 30), exactly as the fold drafts a rule; `user-rules.md` is never written without your
-decision. Until you approve or reject a draft in the console or with the rule {{SKILL}}, its fact
-keeps loading at session start, in a slot of at most 1 800 characters under the map; a decided
-draft leaves it. A second build drafts nothing new.
+decision. A draft does not load until you approve it, in the console or with the rule {{SKILL}}:
+an approved draft moves into `user-rules.md`, which loads; a rejected one is dropped. Until then
+a one-line reminder at session start says how many wait. A second build drafts nothing new.
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)
 
