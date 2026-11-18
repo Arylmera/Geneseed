@@ -28,7 +28,7 @@ import { apiUsage } from './usage-api.mjs';
 import { apiProfiles } from './profiles-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
-import { apiAgentModelsFull, apiAgentModelsSave } from './agent-models-api.mjs';
+import { apiAgentModels, apiAgentModelsFull, apiAgentModelsSave } from './agent-models-api.mjs';
 import { migratePreview } from '../maintain/migrate.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesDecide, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
 
@@ -232,7 +232,9 @@ export const STATE_ROUTES = {
   // answers — a daemon whose POST worked and whose GET 501'd would have no way to obtain one.
   '/api/rules': apiRules,
   '/api/loadout': (state) => apiLoadout(state),
-  '/api/agent-models': (state) => apiAgentModelsFull(state),
+  // `?models=0`: the per-agent view alone, for a page that does not list models (no probe of a runtime).
+  '/api/agent-models': (state, url = '') => (/[?&]models=0(&|$)/.test(String(url))
+    ? apiAgentModels(state) : apiAgentModelsFull(state)),
   '/api/mcp': apiMcp,
   '/api/loops': apiLoops,
   '/api/loops/active': apiLoopsActive,

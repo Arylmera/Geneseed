@@ -24,8 +24,14 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { isFile, readText } from '../lib/fs.mjs';
-import { isDict } from '../lib/json.mjs';
+import { isDict, isTruthy } from '../lib/json.mjs';
 import { loadJsonObject } from '../hosts/settings.mjs';
+import { loadAgentOverrides } from '../hosts/native.mjs';
+
+/** How many agents of the install at `dir` carry a model pin: the Installs panel's one-line summary. */
+export function pinCountOf(dir) {
+  return Object.values(loadAgentOverrides(dir, () => {})).filter((e) => isDict(e) && isTruthy(e.model)).length;
+}
 
 const PROBE_MS = 1000;
 /** The aliases a Claude Code sub-agent accepts; `default`/`best`/`opusplan` are not agent values. */
@@ -216,7 +222,7 @@ function openclaudeActive({ env, home }) {
 }
 
 async function openclaudeModels(ctx, add, group) {
-  const { env, home, fetchFn, dir } = ctx;
+  const { fetchFn, dir } = ctx;
   const a = openclaudeActive(ctx);
   // The company's own names: the OpenCode custom provider on the same endpoint (never called).
   const want = normalizeUrl(a.baseUrl);

@@ -8,6 +8,7 @@ export const PAGES = {
   overview: 'Overview',
   laws: 'Constitution',
   library: 'Library',
+  models: 'Models',
   kits: 'Kits',
   loops: 'Loops',
   factories: 'Factories',

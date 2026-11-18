@@ -26,6 +26,8 @@ const NAV = [
     icon: 'library',
     count: (o) => (o?.counts ? libraryCount(o.counts) : null),
   },
+  // No badge: the models are per install and per host, so no single count is honest.
+  { group: 'build', hash: '#/models', page: 'models', label: 'Models', icon: 'agent' },
   {
     group: 'build',
     hash: '#/kits',

@@ -359,7 +359,7 @@ export default function Hosts({
       // The model context the install is built for (`--context-window`); the panel offers it on
       // Claude Code, the one host where it writes settings, and every row keeps its own.
       contextWindow: p.contextWindow || inst.contextWindow || '200k',
-      // The sub-agent model tiers (`--tiers`); the panel offers them on Claude Code, and every row keeps its own.
+      // The sub-agent model routing (`--tiers`): no picker here (the Models page sets it); every row keeps its recorded one.
       tiers: p.tiers || inst.tiers || 'off',
     }
   }
@@ -393,10 +393,7 @@ export default function Hosts({
       choiceFor(inst)
     const tool = hostInfo(inst.host).label
     // The model tiers are named where they are on, or being switched off: off is the default.
-    const tiersAxis =
-      inst.host === 'claude' && (tiers === 'auto' || inst.tiers === 'auto')
-        ? `, model tiers ${tiers}`
-        : ''
+    const tiersAxis = tiers === 'auto' || inst.tiers === 'auto' ? `, model tiers ${tiers}` : ''
     const axes = `${footprint} footprint, ${posture} posture, ${mode} mode, ${trust} loop trust${tiersAxis}`
     const msg =
       inst.state === 'absent'
@@ -759,7 +756,6 @@ export default function Hosts({
           onRevealMcp={revealMcp}
           onForce={() => forceRebuild(current)}
           onPrune={() => pruneRebuild(current)}
-          onRebuild={() => applyVoice(current)}
           profileMatches={
             profData?.installs?.find((i) => i.host === current.host && i.path === current.path)
               ?.matches
