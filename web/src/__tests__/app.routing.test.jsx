@@ -45,6 +45,7 @@ vi.mock('../api/index.js', () => ({
 }))
 
 import App from '../App.jsx'
+import { ViewLevelProvider } from '../hooks/useViewLevel.jsx'
 
 const navigate = async (hash) => {
   await act(async () => {
@@ -128,6 +129,21 @@ describe('App routing', () => {
       expect(crumb()).toBe(here)
     },
   )
+})
+
+describe('view level banner', () => {
+  it('at Essentials, a Power route renders its page and the banner', async () => {
+    localStorage.setItem('geneseed-view-level', 'essentials')
+    window.location.hash = '#/loops'
+    render(
+      <ViewLevelProvider>
+        <App />
+      </ViewLevelProvider>,
+    )
+    expect(await page()).toBe('Loops tab=templates')
+    expect(document.querySelector('.level-banner')?.textContent).toContain('This is a Power view.')
+    localStorage.clear()
+  })
 })
 
 // ⚠ App.jsx: a page reachable from several routes must keep ONE slot in the tree, or

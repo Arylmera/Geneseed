@@ -320,6 +320,9 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
   flex-wrap: wrap; margin-bottom: var(--sp-4); padding: 10px 14px; border-radius: 8px; color: var(--warn-text); /* off-scale: between steps */
   border: 1px solid color-mix(in srgb, var(--warn) 36%, transparent);
   background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.level-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  flex-wrap: wrap; margin-bottom: var(--sp-4); padding: 10px 14px; border-radius: 8px; /* off-scale: between steps */
+  border: 1px solid var(--line); background: var(--surface-2); }
 .btn .glyph { width: 15px; height: 15px; }
 
 /* Disabled primary buttons must read as inert, not lit/pressable. Matrix layers an
