@@ -48,7 +48,7 @@ test('spawnPlan: a word cmd.exe could still read inside quotes refuses the call'
 test('spawnPlan and doctor agree: a .ps1 is not runnable, nothing found is left to the spawn, other hosts unchanged', () => {
   assert.equal(resolveCommand('only', env, exists, 'win32'), null);
   // S-F4: nothing on PATH refuses, because CreateProcess would look in the current folder first.
-  assert.match(plan(['only'], 'p').refuse ?? '', /is not on PATH - nothing learned/);
+  assert.match(plan(['only'], 'p').refuse ?? '', /^could not run only: not found on PATH - nothing learned/);
   // R-F4: `claude` and `openclaude` take the prompt over stdin on every path (a long one overran the Windows line);
   // any other command keeps it as the last argument.
   assert.deepEqual(spawnPlan(['claude', '-p'], 'hi', { platform: 'linux' }),

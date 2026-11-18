@@ -326,7 +326,7 @@ export function spawnPlan(words, prompt, { platform = process.platform, env = pr
   const found = resolveCommand(words[0], env, exists, platform);
   // Nothing on PATH: the bare word would be handed to CreateProcess, which looks in the CURRENT folder first, and a
   // `claude.exe` planted in a repository would then run at every session end. So nothing runs.
-  if (!found) return { ...direct, refuse: `${JSON.stringify(words[0])} is not on PATH - nothing learned` };
+  if (!found) return { ...direct, refuse: `could not run ${words[0]}: not found on PATH - nothing learned` };
   if (!/[.](?:cmd|bat)$/i.test(found)) return { ...direct, file: found };
   const parts = [found, ...words.slice(1)];
   const bad = parts.find((a) => /["%\r\n\0]|[\\]$/.test(a));
