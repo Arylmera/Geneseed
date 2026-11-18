@@ -18,10 +18,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseJson, jsonDumpsIndent, jsonDumpsCompact, isDict } from '../../js/lib/json.mjs';
-import { isDir, isFile } from '../../js/lib/fs.mjs';
+import { isDir, isFile, writeTextAtomic } from '../../js/lib/fs.mjs';
 import { which, within } from '../../js/lib/paths.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 // `isDict` over parsed JSON: an object is a dict; a NUMBER is not, although `parseJson` hands it
@@ -223,3 +224,31 @@ for (const [child, parent, want] of WITHIN_ROWS) {
     assert.equal(within(child, parent), want);
   });
 }
+
+// Windows refuses a rename over a file another process holds open (EPERM), and a reader that polls a file holds it
+// open for the length of each read. The learn worker's final verdict went through here and was lost that way: the
+// rename threw, `writeLearnLast` swallowed it, and `learn-last.json` said `running` forever after a run that had
+// succeeded (the flake in learn_worker.test.mjs; a copy of it with a busy poller failed 3 runs of 3). A thread holds
+// the file open for 300 ms while the main thread writes: the write must wait the hold out and land, not throw. POSIX
+// renames over an open file freely, so there this test cannot go red.
+test('writeTextAtomic waits out a reader holding the target open, instead of throwing (Windows only)',
+  { skip: process.platform !== 'win32' }, async () => {
+    const sb = makeSandbox('atomic-');
+    try {
+      const f = path.join(sb.path, 'last.json');
+      fs.writeFileSync(f, 'old\n');
+      const holder = new Worker([
+        "const { parentPort, workerData } = require('node:worker_threads');",
+        "const fs = require('node:fs');",
+        "const fd = fs.openSync(workerData, 'r');",
+        "parentPort.postMessage('open');",
+        'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);',
+        'fs.closeSync(fd);',
+      ].join('\n'), { eval: true, workerData: f });
+      await new Promise((ok, no) => { holder.once('message', ok); holder.once('error', no); });
+      writeTextAtomic(f, 'new\n');
+      await new Promise((ok) => holder.once('exit', ok));
+      assert.equal(fs.readFileSync(f, 'utf8'), 'new\r\n', 'the new text replaced the old (text mode: CRLF on Windows)');
+      assert.deepEqual(fs.readdirSync(sb.path).filter((n) => n.endsWith('.tmp')), [], 'no temp file is left beside it');
+    } finally { sb.cleanup(); }
+  });
