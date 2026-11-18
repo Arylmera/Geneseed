@@ -343,11 +343,6 @@ async function sessionFiles(dir) {
       entry(rel, sharedAbs, shared, "shared")
     }
     if (host !== null) entry(rel, abs, host, shared === null ? "" : "host: opencode")
-    // The bridge slot is its own entry right after the rules, as in the hook (BRIDGE_REL there).
-    if (rel === "user-rules.md" && tier) {
-      const slot = await bridgeSlot()
-      if (slot) found.push({ rel: "user-rules.draft.md", abs: path.join(machineDir(), "user-rules.draft.md"), label: "shared", text: slot })
-    }
   }
   return found
 }
@@ -364,43 +359,6 @@ function memoryNudge(map) {
     if (m && m[1] === "misc") return CURATE_NUDGE
   }
   return ""
-}
-
-// The bridge slot (D31), a hand twin of bridgeSlot in js/hosts/hooks-context.mjs (same constants,
-// same text; tests/unit/claude.test.mjs holds the two equal on one store): the facts a migration
-// drafted as standing rules keep loading, as an entry of their own after user-rules.md, until their draft is decided.
-const BRIDGE_CAP = 1800
-const BRIDGE_FACT_MAX = 300
-const BRIDGE_HEAD = "[memory] Standing rules from your old index, drafted in user-rules.draft.md and "
-  + "loaded until you decide them:"
-const BRIDGE_SLUG_RE = /^[^/\\.\u0000-\u001f][^/\\\u0000-\u001f]*$/
-async function bridgeSlot() {
-  let items
-  try { ({ items } = JSON.parse(await fs.readFile(path.join(machineDir(), ".fold-state.json"), "utf8"))) } catch { return "" }
-  // The hook counts a line as its characters plus a terminator of two (+1 per inner break).
-  const cost = (s) => s.length + (s.match(/\n/g) || []).length + 2
-  const lines = []
-  for (const row of Object.values(items ?? {})) {
-    if (row?.state !== "pending" || row.host !== "memory" || typeof row.fact !== "string" || !BRIDGE_SLUG_RE.test(row.fact)) continue
-    let text
-    try { text = (await fs.readFile(path.join(machineDir(), "memory", `${row.fact}.md`), "utf8")).replace(/\r\n/g, "\n") } catch { continue }
-    const m = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/.exec(text)
-    const desc = m ? (m[1].split("\n").map((l) => /^\s*description\s*:(.*)$/.exec(l)).find(Boolean)?.[1] ?? "").trim().replace(/^"+|"+$/g, "") : ""
-    const rule = ((m ? m[2] : text).trim() || desc).replace(/\s+/g, " ")
-    lines.push(`- ${row.fact}: ${rule.length > BRIDGE_FACT_MAX ? `${rule.slice(0, BRIDGE_FACT_MAX)}…` : rule}`)
-  }
-  if (!lines.length) return ""
-  const tail = (n) => `- … ${n} more drafted rule${n === 1 ? "" : "s"} not shown (read them in memory/)`
-  const room = BRIDGE_CAP - cost(BRIDGE_HEAD)
-  const kept = []
-  let used = 0
-  for (const [i, l] of lines.entries()) {
-    const t = tail(lines.length - i)
-    if (used + cost(l) + (i < lines.length - 1 ? cost(t) : 0) > room) { kept.push(t); break }
-    kept.push(l)
-    used += cost(l)
-  }
-  return [BRIDGE_HEAD, ...kept].join("\n")
 }
 
 async function readJson(p) {

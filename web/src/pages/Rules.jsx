@@ -228,15 +228,20 @@ function PendingRules({ drafts, deciding, onDecide }) {
         <span className="mono dim">{drafts.length}</span>
       </div>
       <p className="sub sub-wide">
-        Waiting in <code className="mono">user-rules.draft.md</code>. A pending rule still binds on
-        its host, and only there. Decide each one here, or ask the agent to run its rule Rite.
+        Waiting in <code className="mono">user-rules.draft.md</code>. A pending rule for a host file
+        still binds on its host, and only there. One drafted from your memory index is not loaded
+        until you approve it. Decide each one here, or ask the agent to run its rule Rite.
       </p>
       <div className="card rules-list">
         {drafts.map((d, i) => (
           <div className="rule-row" key={d.key ?? i}>
             <div className="rule-head static">
               <span className="rule-title">{d.title}</span>
-              {d.host ? <span className="rule-chip mono">binds on {d.host}</span> : null}
+              {d.host ? (
+                <span className="rule-chip mono">
+                  {d.host === 'memory' ? 'not loaded until approved' : `binds on ${d.host}`}
+                </span>
+              ) : null}
             </div>
             <div className="rule-expand">
               {d.body ? <p>{d.body}</p> : null}

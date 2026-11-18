@@ -1,5 +1,5 @@
 // P1a of the memory-at-scale work, on the OpenCode side: the plugins carry hand twins of the hook's
-// store-document rule (D2), its index rebuild (D4), its misc-only nudge (D23) and its bridge slot
+// store-document rule (D2), its index rebuild (D4), its misc-only nudge (D23) and its drafts
 // (D31), and each is held equal to the original here, on one store, by comparing what they write or
 // print. The code is not shared (a plugin ships alone), so the comparison is the only gate.
 //   node --test tests/plugins/memory_p1a.test.mjs
@@ -10,7 +10,6 @@ import * as path from "node:path"
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from "../helpers/sandbox.mjs"
 import { GeneseedLearn } from "../../adapters/opencode/plugins/geneseed-learn.js"
 import { writeMemories as coreWriteMemories } from "../../js/hosts/memory-files.mjs"
-import { bridgeSlot } from "../../js/hosts/hooks-context.mjs"
 
 // The compaction hook only re-pushes under visible delivery.
 process.env.GENESEED_CONTEXT_VISIBLE = "1"
@@ -71,7 +70,7 @@ test("learn plugin: a store document is no fact, and the index rebuild matches t
 })
 
 // A global OpenCode install reads the tier. Its harness dir is the host's config dir, `<XDG>/opencode`.
-test("context plugin: the bridge slot and the misc-only nudge are the hook's, byte for byte", async () => {
+test("context plugin: pending memory drafts add no rule text, and a 300-fact topic does not nudge", async () => {
   const tier = path.join(home, ".config", "geneseed")
   const harness = path.join(home, ".config", "opencode")
   await fs.mkdir(path.join(tier, "memory"), { recursive: true })
@@ -87,9 +86,6 @@ test("context plugin: the bridge slot and the misc-only nudge are the hook's, by
     items[`k${i}`] = { kind: "rule", host: "memory", state: i === 3 ? "approved" : "pending", fact: slug }
   }
   await fs.writeFile(path.join(tier, ".fold-state.json"), JSON.stringify({ version: 1, items }))
-  const expected = bridgeSlot()
-  assert.ok(expected.includes("- rule-0:") && !expected.includes("- rule-3:"), expected)
-  assert.match(expected, /more drafted rules not shown/, "the fixture must reach the cap")
   process.env.GENESEED_HARNESS = harness
   try {
     const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?case=p1a")
@@ -97,7 +93,11 @@ test("context plugin: the bridge slot and the misc-only nudge are the hook's, by
     const output = { context: [] }
     await plugin["experimental.session.compacting"]({}, output)
     const text = output.context[0] ?? ""
-    assert.ok(text.includes(expected), `the plugin's slot differs from the hook's:\n${text}`)
+    // D32: no drafted rule text rides in; the reminder line does, counting the 11 pending drafts.
+    assert.equal(text.includes("never do the thing"), false, `a pending draft loads:
+${text}`)
+    assert.equal(text.includes("Standing rules from your old index"), false)
+    assert.ok(text.includes("[drafts] 11 drafted items in user-rules.draft.md wait for the user's decision"), text)
     assert.ok(text.includes("- [feedback](topics/feedback.md) — 300 facts"))
     assert.equal(text.includes("Facts sit in misc"), false, "a 300-fact topic must not nudge (D23)")
   } finally { delete process.env.GENESEED_HARNESS }

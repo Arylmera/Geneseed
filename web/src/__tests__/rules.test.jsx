@@ -181,6 +181,18 @@ describe('Rules', () => {
     expect(within(pending).queryByRole('button')).toBeNull()
   })
 
+  // D32: a draft migrated from the memory index loads nowhere until approved, so the chip must not
+  // say it binds on a host. A host-file draft keeps its wording: it does bind through its host file.
+  it('labels a memory draft as not loaded until approved, and a host draft as binding', async () => {
+    withDrafts({ ...RULE_DRAFT, title: 'From memory', host: 'memory', key: 'cc' }, RULE_DRAFT)
+    renderPage()
+    const pending = await pendingRegion()
+    expect(within(pending).getByText('not loaded until approved')).toBeTruthy()
+    expect(within(pending).queryByText('binds on memory')).toBeNull()
+    expect(within(pending).getByText('binds on claude')).toBeTruthy()
+    expect(pending.textContent).toMatch(/drafted from your memory index is not loaded/)
+  })
+
   it('shows no Pending section when nothing waits', async () => {
     render(<Rules />)
     await screen.findByText('No emoji in commits')
