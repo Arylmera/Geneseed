@@ -400,7 +400,7 @@ const LEDE = {
 }
 
 // Every run `geneseed factory init` registered, polled (the rail counts them on both tabs).
-function useActiveFactories() {
+export function useActiveFactories() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   usePoll(

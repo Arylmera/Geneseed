@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
   api: {
+    activeLoops: vi.fn(() => Promise.resolve({ loops: [] })),
+    activeFactories: vi.fn(() => Promise.resolve({ factories: [] })),
     catalog: vi.fn(() => Promise.resolve({ items: [] })),
     item: vi.fn(),
     usage: vi.fn(() => Promise.resolve(null)),

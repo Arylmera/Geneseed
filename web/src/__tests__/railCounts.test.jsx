@@ -18,7 +18,7 @@ vi.mock('../api/index.js', () => ({
     loadout: vi.fn(async () => null),
   },
 }))
-vi.mock('../lib/router.js', () => ({ go: vi.fn() }))
+vi.mock('../lib/router.js', async (orig) => ({ ...(await orig()), go: vi.fn() }))
 
 import { api } from '../api/index.js'
 import Sidebar from '../components/Sidebar.jsx'

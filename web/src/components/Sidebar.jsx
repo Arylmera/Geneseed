@@ -4,6 +4,7 @@ import { libraryCount, ruleCount } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 import { useLocalStorage } from '../hooks/useLocalStorage.js'
 import { useViewLevel } from '../hooks/useViewLevel.jsx'
+import HiddenLive from './HiddenLive.jsx'
 
 // The pages, in the order a visit reads them. The rail groups them (GROUPS below): the Overview
 // alone, then what governs, what is built, what runs, and help. A badge is what
@@ -187,6 +188,7 @@ export default function Sidebar({ route, overview, installs, onNavigate }) {
           </ul>
         </div>
       ))}
+      <HiddenLive />
     </nav>
   )
 }
