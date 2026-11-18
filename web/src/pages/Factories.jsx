@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
-import { sameOr, usePoll } from '../hooks/usePoll.js'
+import { useActiveFactories } from '../hooks/useActiveFactories.js'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import CopyButton from '../components/CopyButton.jsx'
@@ -17,7 +17,6 @@ import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
 import { installTag, pairOf } from '../lib/hosts.js'
 
 const enc = encodeURIComponent
-const POLL_MS = 5000
 
 // The rail's sections, in order: the router's `#/factories/<id>` tabs, under their tab labels.
 const SECTIONS = TABS.factories.map((k) => [k, TAB_LABELS[k]])
@@ -397,22 +396,6 @@ const LEDE = {
       you first. A card opens its timeline. <a href="#/docs/run-a-factory">Run a factory →</a>
     </>
   ),
-}
-
-// Every run `geneseed factory init` registered, polled (the rail counts them on both tabs).
-export function useActiveFactories() {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  usePoll(
-    (alive) =>
-      api.activeFactories().then(
-        (d) => alive() && (setData(sameOr(d)), setError(null)),
-        (e) => alive() && setError(e.message),
-      ),
-    POLL_MS,
-    [],
-  )
-  return { runs: data ? data.factories || [] : null, error }
 }
 
 // The Factories page, in the Loops page's three panes: a rail of sections (Templates, Active),

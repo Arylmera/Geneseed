@@ -49,6 +49,15 @@ describe('HiddenLive', () => {
     expect(a.getAttribute('href')).toBe('#/factories/active')
   })
 
+  it('names both kinds when both are live', async () => {
+    api.activeLoops.mockResolvedValue({ loops: [{ status: 'running' }] })
+    api.activeFactories.mockResolvedValue({ factories: [{ status: 'running' }] })
+    at('essentials')
+    await flush()
+    expect(screen.getByText('1 loop running · Power')).toBeTruthy()
+    expect(screen.getByText('1 factory run running · Power')).toBeTruthy()
+  })
+
   it('says nothing when nothing is live', async () => {
     api.activeLoops.mockResolvedValue({ loops: [{ status: 'stopped' }] })
     at('essentials')

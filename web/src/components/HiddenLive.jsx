@@ -1,8 +1,8 @@
 import React from 'react'
 import { useViewLevel } from '../hooks/useViewLevel.jsx'
 import { LEVELS, requiredLevel } from '../lib/tiers.js'
-import { useActiveLoops } from './ActiveLoops.jsx'
-import { useActiveFactories } from '../pages/Factories.jsx'
+import { useActiveLoops } from '../hooks/useActiveLoops.js'
+import { useActiveFactories } from '../hooks/useActiveFactories.js'
 
 // A loop or factory run keeps working when its page leaves the rail, so the rail foot says so
 // instead of letting a lowered level hide live work. Both kinds count `running` and `awaiting`

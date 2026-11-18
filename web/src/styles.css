@@ -3379,7 +3379,7 @@ a.kit-name:hover { color: var(--accent-text); }
   .sidebar { padding: 18px 8px; align-items: stretch; }
   .sb-head .sb-brand { justify-content: center; padding: 4px 0; }
   .sb-brand-text, .sb-collapse { display: none; }
-  .sb-label, .sb-count, .sb-group-title { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  .sb-label, .sb-count, .sb-group-title, .sb-live-foot { position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; }
   .sb-group + .sb-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
   .sb-group { margin-top: var(--sp-3); }
