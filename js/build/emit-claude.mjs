@@ -17,6 +17,7 @@ import {
 import { CONTEXT_WINDOWS } from './source.mjs';
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
+import { claudeCfg, claudeReadManifest, installTargets } from '../hosts/installs.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
 import { foldOnEmit } from './fold.mjs';
 import { migrateProjectNotes } from './notes-migrate.mjs';
@@ -221,6 +222,19 @@ export function emitClaudeRender(cfg, job) {
   };
 }
 
+/** Every `GENESEED_LLM` an install of a Claude-family host recorded (its manifest's `settings_env`), as a set. */
+function recordedByAnyInstall() {
+  const found = new Set();
+  try {
+    for (const [host, scope, root] of installTargets()) {
+      if (host !== 'claude' && host !== 'openclaude') continue;
+      const cmd = claudeReadManifest(claudeCfg(root, scope, host)).managed?.settings_env?.[LEARN_ENV_KEY];
+      if (typeof cmd === 'string') found.add(cmd);
+    }
+  } catch { /* an unreadable machine registry: only this install's record counts */ }
+  return found;
+}
+
 /** The `env` key the hook's learn reads its model command from (`js/hosts/hooks-learn.mjs`). */
 export const LEARN_ENV_KEY = 'GENESEED_LLM';
 
@@ -339,11 +353,15 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     const llm = learnEnvCommand(gates.learn, host, loadTierMap(cfgDir, () => {}), process.env);
     // A shell that names a command of its own is the user's (D5): the settings `env` would override it in a
     // session, so Geneseed stops managing the key, and removes its own value if it is still on file. A shell
-    // that holds exactly the value an earlier build recorded is only a session that inherited ours, and ours
-    // stays ours (a rebuild run from inside such a session must not give the key up).
+    // that holds a value some build recorded is only a session that inherited ours (the session's settings `env`
+    // reached it), and ours stays ours: a rebuild run from inside a session (the console, an agent, `rebuild-all`)
+    // must not give the key up, and a session of install A holds A's value while a rebuild reaches install B. The
+    // same for an install that has a record while the process runs inside Claude Code (`CLAUDECODE`, set by the app
+    // in every session: seen in a real session's environment), whatever the inherited value was.
     const shellLlm = process.env.GENESEED_LLM;
     const recordedLlm = Object.hasOwn(priorEnv, LEARN_ENV_KEY) ? priorEnv[LEARN_ENV_KEY] : null;
-    const shellIsUsers = Boolean(shellLlm) && shellLlm !== recordedLlm;
+    const shellIsUsers = Boolean(shellLlm) && shellLlm !== recordedLlm && !recordedByAnyInstall().has(shellLlm)
+      && !(recordedLlm !== null && process.env.CLAUDECODE);
     if (llm && !shellIsUsers) want[LEARN_ENV_KEY] = llm;
     if (shellIsUsers && recordedLlm !== null) {
       process.stderr.write(`[geneseed] $GENESEED_LLM is set in your shell (${JSON.stringify(shellLlm)}): Geneseed stops managing `

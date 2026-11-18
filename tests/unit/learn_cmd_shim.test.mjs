@@ -47,7 +47,8 @@ test('spawnPlan: a word cmd.exe could still read inside quotes refuses the call'
 
 test('spawnPlan and doctor agree: a .ps1 is not runnable, nothing found is left to the spawn, other hosts unchanged', () => {
   assert.equal(resolveCommand('only', env, exists, 'win32'), null);
-  assert.deepEqual(plan(['only'], 'p').args, ['p']);
+  // S-F4: nothing on PATH refuses, because CreateProcess would look in the current folder first.
+  assert.match(plan(['only'], 'p').refuse ?? '', /is not on PATH - nothing learned/);
   // R-F4: `claude` and `openclaude` take the prompt over stdin on every path (a long one overran the Windows line);
   // any other command keeps it as the last argument.
   assert.deepEqual(spawnPlan(['claude', '-p'], 'hi', { platform: 'linux' }),
@@ -125,5 +126,34 @@ test('lean flags reach a claude.cmd shim intact through cmd.exe (Windows only)',
     assert.match(argv[11], /^You distil durable memories from notes[.] Follow the instructions/);
     assert.equal(argv.length, 12, 'the prompt is not an argument');
     assert.ok(fs.readFileSync(echo, 'utf8').includes('a turn worth distilling'), 'the prompt came over stdin');
+  } finally { sb.cleanup(); }
+});
+
+// S-F4: a program planted in the project folder is never run: with nothing on PATH, the bare word used to go to
+// CreateProcess, which searches the current folder first. A copy of node named like the command, with a hook that
+// leaves a marker only when it is the planted copy that runs.
+test('a command planted in the working folder is not run when PATH holds none (Windows only)', { skip: process.platform !== 'win32' }, () => {
+  const sb = makeSandbox();
+  try {
+    const inst = path.join(sb.path, 'inst');
+    fs.mkdirSync(path.join(inst, 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    fs.copyFileSync(process.execPath, path.join(repo, 'plantedcmd.exe'));
+    const marker = path.join(sb.path, 'ran.txt');
+    const hook = path.join(sb.path, 'mark.cjs');
+    fs.writeFileSync(hook, `if (require('node:path').basename(process.execPath) === 'plantedcmd.exe') require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran');\n`);
+    const transcript = path.join(sb.path, 't.jsonl');
+    fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'a turn worth distilling' } })}\n`);
+    const jobs = path.join(sb.path, 'home', '.config', 'geneseed', 'cache', 'learn-jobs');
+    fs.mkdirSync(jobs, { recursive: true });
+    const file = path.join(jobs, 'job-6.json');
+    fs.writeFileSync(file, JSON.stringify({ v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(inst, 'memory'), transcript, agents: [] }));
+    const childEnv = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), GENESEED_LLM: 'plantedcmd',
+      NODE_OPTIONS: `--require ${JSON.stringify(hook)}` };
+    delete childEnv.GENESEED_LEARN_CHILD;
+    spawnHook(['learn-worker', file], '', { env: childEnv, cwd: repo });
+    assert.ok(!fs.existsSync(marker), 'the planted plantedcmd.exe was run');
   } finally { sb.cleanup(); }
 });

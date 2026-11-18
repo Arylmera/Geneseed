@@ -305,8 +305,8 @@ export function leanArgv(argv, help = helpOf) {
 /**
  * What to hand `spawnSync` for the words `words` and the prompt (F5) — pure, so a table states every row.
  *
- * Off Windows, or for a command that resolves to nothing (the spawn then says ENOENT itself), the words
- * run as they are with the prompt as the last argument. On Windows `CreateProcess` runs only `.exe`, so
+ * Off Windows the OS resolves the word at spawn time and the words run as they are. On Windows a word that
+ * resolves to nothing on PATH refuses the call (S-F4: CreateProcess would look in the current folder first). On Windows `CreateProcess` runs only `.exe`, so
  * an npm-installed CLI (`claude.cmd`) was "not found" and learning silently did nothing: the word is
  * resolved against PATH and PATHEXT (`resolveCommand`, which `doctor` shares), an `.exe` is run directly,
  * and a `.cmd`/`.bat` goes through `cmd.exe /d /s /c "<line>"` with every word double-quoted. THE PROMPT
@@ -324,7 +324,9 @@ export function spawnPlan(words, prompt, { platform = process.platform, env = pr
     input: viaStdin ? prompt : undefined, verbatim: false, refuse: null };
   if (platform !== 'win32') return direct;
   const found = resolveCommand(words[0], env, exists, platform);
-  if (!found) return direct;
+  // Nothing on PATH: the bare word would be handed to CreateProcess, which looks in the CURRENT folder first, and a
+  // `claude.exe` planted in a repository would then run at every session end. So nothing runs.
+  if (!found) return { ...direct, refuse: `${JSON.stringify(words[0])} is not on PATH - nothing learned` };
   if (!/[.](?:cmd|bat)$/i.test(found)) return { ...direct, file: found };
   const parts = [found, ...words.slice(1)];
   const bad = parts.find((a) => /["%\r\n\0]|[\\]$/.test(a));
@@ -707,14 +709,17 @@ function queueAgentLesson(meta, args, install) {
   } catch { /* a lesson is a favour, never a failed hook */ }
 }
 
-/** The queued lessons of a session, taken out of the queue: the latest per agent, at most `MAX_LESSON_AGENTS`. */
-function takeQueuedLessons(session) {
+/**
+ * The queued lessons of a session: the latest per agent, at most `MAX_LESSON_AGENTS`, and the queue's file. The
+ * queue is NOT removed here: `startDistil` removes it once the job is written and started, so a failed write or
+ * start leaves the lessons for the next PreCompact or SessionEnd.
+ */
+function readQueuedLessons(session) {
   const dir = jobDir();
-  if (!dir) return [];
+  if (!dir) return { agents: [], file: null };
   const file = path.join(dir, `agents-${sessionKey(session)}.jsonl`);
   let text;
-  try { text = readFileSync(file, 'utf8'); } catch { return []; }
-  try { unlinkSync(file); } catch { /* the sweep gets it */ }
+  try { text = readFileSync(file, 'utf8'); } catch { return { agents: [], file: null }; }
   const latest = new Map();
   for (const line of splitLines(text).slice(-MAX_QUEUED_LESSONS)) {
     try {
@@ -722,7 +727,7 @@ function takeQueuedLessons(session) {
       if (typeof row.agent === 'string' && row.payload && typeof row.payload === 'object') latest.set(row.agent, row);
     } catch { /* a torn line is skipped */ }
   }
-  return [...latest.values()].slice(-MAX_LESSON_AGENTS);
+  return { agents: [...latest.values()].slice(-MAX_LESSON_AGENTS), file };
 }
 
 /**
@@ -733,14 +738,16 @@ function takeQueuedLessons(session) {
  */
 function startDistil(meta, args, install, hookEvent, llm) {
   const transcript = typeof meta.transcript_path === 'string' && meta.transcript_path ? meta.transcript_path : null;
-  const agents = takeQueuedLessons(meta.session_id);
+  const { agents, file: queue } = readQueuedLessons(meta.session_id);
   if (!transcript && !agents.length) return 0;
   const job = {
     v: 1, event: hookEvent, host: args.host || 'claude', memory: args.memory ?? null, transcript, agents,
   };
+  const dropQueue = () => { if (queue) { try { unlinkSync(queue); } catch { /* the sweep gets it */ } } };
   const dir = jobDir();
   if (!install || !dir || process.env.GENESEED_LEARN_INLINE) {
     runJob(job, llm);
+    dropQueue();
     return 0;
   }
   try {
@@ -749,6 +756,7 @@ function startDistil(meta, args, install, hookEvent, llm) {
     const file = path.join(dir, `job-${Date.now()}-${process.pid}.json`);
     writeFileSync(file, `${JSON.stringify(job)}\n`);
     spawnWorker(file);
+    dropQueue();
   } catch (e) {
     err(`[learn] could not start the distil worker: ${e instanceof Error ? e.message : e}\n`);
   }
@@ -800,10 +808,13 @@ function sameDir(a, b) {
  */
 function allowedMemory(memory) {
   try {
-    const real = realpathSync.native(memory);
-    if (path.basename(real) !== 'memory') return false;
-    if (sameDir(real, sharedPaths().memory)) return true;
-    return existsSync(path.join(path.dirname(real), GLOBAL_MANIFEST));
+    // The path as the hook was given it: an install's `memory/` may be a junction or a symlink to a folder of another
+    // name, and its name and manifest are those of the install, not of where it points. The real path is for the
+    // machine-tier comparison only.
+    const abs = path.resolve(memory);
+    if (path.basename(abs) !== 'memory' || !isDir(abs)) return false;
+    if (sameDir(abs, sharedPaths().memory)) return true;
+    return existsSync(path.join(path.dirname(abs), GLOBAL_MANIFEST));
   } catch { return false; }
 }
 
@@ -816,7 +827,7 @@ function allowedMemory(memory) {
  * learn-jobs folder (its real path equals `jobDir()`'s, so a folder merely NAMED learn-jobs does not count);
  * the model command is this process's own `$GENESEED_LLM`, inherited from the hook that started it, and a job
  * holds none; and the store it names is the machine tier's memory or an install's. A file outside that folder
- * or not named job-*.json is left exactly as it is; a job inside it that names a foreign store is removed unread.
+ * or not named job-*.json is left exactly as it is; a job inside it that names a foreign store is deleted without being run.
  */
 export function cmdLearnWorker(args) {
   if (process.env.GENESEED_LEARN_CHILD || !args.file) return 0;

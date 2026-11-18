@@ -1447,6 +1447,9 @@ export function wireClaudeEnv(p, want = CLAUDE_ENV, recorded = null) {
  */
 function reconcileClaudeEnv(p, want, recorded) {
   const wanted = want || {};
+  // Nothing to write and nothing of ours to remove: the file is not read, so a settings file that is commented or
+  // unreadable draws no warning for a key this build never touches (OpenClaude with `--learn off`).
+  if (!Object.keys(wanted).length && !Object.keys(recorded).length) return {};
   const loaded = readSettingsForMerge(p, 'Its "env" keys were not wired.');
   if (!loaded) return { ...recorded };
   const [config, hadComments] = loaded;

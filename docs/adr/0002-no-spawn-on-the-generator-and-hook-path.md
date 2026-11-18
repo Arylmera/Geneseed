@@ -30,7 +30,7 @@ tool call of every agent session, where a spawn costs time and a console window 
   path of its folder equals the real path of the machine cache's `learn-jobs` (a folder merely named that does not
   count; anything else is left untouched); the model command is the worker's own `$GENESEED_LLM`, inherited from
   the hook that started it, so a job can name none; and the job's `memory` must be the machine tier's `memory/` or
-  the `memory/` of a folder holding a Geneseed install manifest, or the job is removed unread. It then runs the distil
+  the `memory/` of a folder holding a Geneseed install manifest, or the job is refused and deleted without being run. It then runs the distil
   with the one model spawn above, and deletes the job. Measured
   on Windows 11 (spec S1c): the hook returns in 26 ms and the worker finishes 9 s later, after the session is gone.
   The model CLI itself runs lean (`--setting-sources ""`, `--strict-mcp-config`, `--tools ""`,

@@ -289,3 +289,24 @@ test('learnState: the most specific settings file names the command (local over 
   assert.equal(learnCommandNotes([{ host: 'claude', settingsEnv: [{ GENESEED_LLM: 'claude -p' }, null, { GENESEED_LLM: 'zzz -p' }] }],
     {}, (w) => w === 'claude').length, 1);
 });
+
+// S-F7: a build with nothing to write and nothing of ours to remove (OpenClaude, `--learn off`, no key) reads no
+// settings file, so a commented one draws no new warning.
+test('wireClaudeEnv with nothing wanted and nothing recorded does not read the file, so it cannot warn about it', () => {
+  withDir((d) => {
+    const p = path.join(d, 'settings.json');
+    // Not valid JSON: reading it for nothing would print "NOT touching it" at every build.
+    fs.writeFileSync(p, '{ not json');
+    const [got, said] = quietly(() => wireClaudeEnv(p, {}, {}));
+    assert.deepEqual(got, {});
+    assert.equal(said, '');
+    // A key of ours on record still reads the file: it has something to remove.
+    fs.writeFileSync(p, `{
+  // mine
+  "env": { "${KEY}": "${HAIKU}" }
+}
+`);
+    const [, said2] = quietly(() => wireClaudeEnv(p, {}, { [KEY]: HAIKU }));
+    assert.match(said2, /has comments/);
+  });
+});

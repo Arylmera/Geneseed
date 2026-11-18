@@ -1235,7 +1235,7 @@
     },
     {
       "name": "learn-worker",
-      "help": "the detached distil: run the job file a PreCompact/SessionEnd `learn` hook wrote (<install>/learn-jobs/job-*.json), then delete it. Started by `learn`, never wired in settings; prints nothing and always exits 0",
+      "help": "the detached distil: run the job file a PreCompact/SessionEnd `learn` hook wrote (<machine dir>/cache/learn-jobs/job-*.json, nowhere else), with the model command from this process's own $GENESEED_LLM and a store of the machine tier or an install, then delete it. Started by `learn`, never wired in settings; prints nothing and always exits 0",
       "description": "",
       "positionals": [
         {

@@ -2829,11 +2829,16 @@ test('every host and scope drops an excluded rule\'s citations from its root fil
 // R-F3 (D5): a `GENESEED_LLM` exported in the shell that differs from the value an earlier build recorded is the
 // user's, and the settings `env` would override it in a session. Geneseed stops managing the key, removes its own
 // value, and says so. A shell holding exactly the recorded value is a session that inherited ours: still ours.
-function withShellLlm(value, fn) {
+// `inSession` sets CLAUDECODE (the app sets it in every session); otherwise it is cleared, so a run inside a real session
+// of the developer's own reads as the CI would.
+function withShellLlm(value, fn, inSession = false) {
   const saved = process.env.GENESEED_LLM;
+  const savedApp = process.env.CLAUDECODE;
   if (value === undefined) delete process.env.GENESEED_LLM; else process.env.GENESEED_LLM = value;
+  if (inSession) process.env.CLAUDECODE = '1'; else delete process.env.CLAUDECODE;
   try { return fn(); } finally {
     if (saved === undefined) delete process.env.GENESEED_LLM; else process.env.GENESEED_LLM = saved;
+    if (savedApp === undefined) delete process.env.CLAUDECODE; else process.env.CLAUDECODE = savedApp;
   }
 }
 const HAIKU_CMD = 'claude -p --model haiku';
@@ -2871,4 +2876,54 @@ test('the learn command and the shell: the user\'s value wins, ours is removed, 
     assert.equal(recorded(cfg), 'claude -p --model sonnet');
     assert.doesNotMatch(err, /stops managing/);
   });
+});
+
+// S-F3: a session carries the GENESEED_LLM of the install it runs under, and a rebuild reaches the others. Global
+// records haiku, the project records sonnet; `rebuild-all` run inside a session of the global holds haiku, which is
+// the global's own recorded value, so the project keeps its key. A value no install recorded is the user's.
+test('a shell value that another install recorded is an inherited session, not the user\'s', () => {
+  withDir((d) => {
+    const home = claudeConfigDir();
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    const saved = process.env.CLAUDECODE;
+    delete process.env.CLAUDECODE;
+    try {
+      withShellLlm(undefined, () => {
+        capturedOut(() => emitGlobalInto('claude', { theme: 'neutral', out: path.join(d, 'b1'), cfgDir: home, footprint: 'full', learn: 'light' }));
+        capturedOut(() => emitProjectInto('claude', { theme: 'neutral', out: path.join(d, 'b2'), root: repo, footprint: 'full', learn: 'standard' }));
+      });
+      const proj = (...p) => path.join(repo, '.claude', ...p);
+      assert.equal(readJson(proj('settings.local.json')).env.GENESEED_LLM, 'claude -p --model sonnet');
+      // Inside a session of the global install: the shell holds haiku.
+      const [, , err] = withShellLlm(HAIKU_CMD, () => capturedOut(() => emitProjectInto('claude', { theme: 'neutral', out: path.join(d, 'b3'), root: repo, footprint: 'full', learn: 'standard' })));
+      assert.equal(readJson(proj('settings.local.json')).env.GENESEED_LLM, 'claude -p --model sonnet', 'the project kept its key');
+      assert.doesNotMatch(err, /stops managing/);
+      // A value nobody recorded is the user's: the project's key goes, with the warning.
+      const [, , err2] = withShellLlm('ollama run x', () => capturedOut(() => emitProjectInto('claude', { theme: 'neutral', out: path.join(d, 'b4'), root: repo, footprint: 'full', learn: 'standard' })));
+      assert.equal(readJson(proj('settings.local.json')).env?.GENESEED_LLM, undefined);
+      assert.match(err2, /stops managing/);
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDECODE; else process.env.CLAUDECODE = saved;
+    }
+  });
+});
+
+// The app sets CLAUDECODE in every session (seen in a real session's environment): an install holding a record keeps
+// its key whatever the session inherited, and one with no record still treats a shell value as the user's.
+test('inside a Claude Code session an install with a record keeps its key; without one the shell is the user\'s', () => {
+  {
+    withDir((d) => {
+      const cfg = path.join(d, 'dotclaude');
+      fs.mkdirSync(cfg);
+      const emit = () => capturedOut(() => emitGlobalInto('claude', { theme: 'neutral', out: path.join(d, 'bundle'), cfgDir: cfg, footprint: 'full', learn: 'light' }));
+      withShellLlm('ollama run x', emit, true);
+      assert.equal(readJson(cfg, 'settings.json').env?.GENESEED_LLM, undefined, 'no record: the shell value is the user\'s');
+      withShellLlm(undefined, emit, true);
+      assert.equal(readJson(cfg, 'settings.json').env.GENESEED_LLM, HAIKU_CMD);
+      const [, , err] = withShellLlm('ollama run x', emit, true);
+      assert.equal(readJson(cfg, 'settings.json').env.GENESEED_LLM, HAIKU_CMD, 'a record: the key stays');
+      assert.doesNotMatch(err, /stops managing/);
+    });
+  }
 });

@@ -38,7 +38,7 @@ function rig() {
   const job = (extra = {}) => ({ v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(inst, 'memory'), transcript, agents: [], ...extra });
   const calls = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length : 0);
   const run = (file) => spawnHook(['learn-worker', file], '', { env });
-  return { sb, inst, tier, jobs, job, env, run, calls, marker, script, fact: path.join(inst, 'memory', 'alpha-fact.md') };
+  return { sb, inst, tier, jobs, job, env, run, calls, marker, script, transcript, fact: path.join(inst, 'memory', 'alpha-fact.md') };
 }
 
 test('a job outside the machine cache\'s learn-jobs folder is refused and left where it is', () => {
@@ -122,5 +122,78 @@ test('SessionEnd through learn records the session as ended in the activity view
     const texts = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).filter((n) => /[.]json$/.test(String(n)))
       .map((n) => fs.readFileSync(path.join(dir, String(n)), 'utf8')) : [];
     assert.ok(texts.some((t) => t.includes('sess-9') && /"status":\s*"ended"/.test(t)), `no ended snapshot in ${dir}: ${texts.length} file(s)`);
+  } finally { r.sb.cleanup(); }
+});
+
+// S-F1: an install's memory/ may be a junction or a symlink to a folder of another name. The guard reads the
+// name and the manifest off the path the hook was given, and the real path only for the machine tier.
+test('an install whose memory/ is a junction to a differently named folder is allowed; a look-alike is not', () => {
+  const r = rig();
+  try {
+    const real = path.join(r.sb.path, 'real-store');
+    fs.mkdirSync(real, { recursive: true });
+    const inst2 = path.join(r.sb.path, 'inst2');
+    fs.mkdirSync(inst2, { recursive: true });
+    fs.writeFileSync(path.join(inst2, '.geneseed-manifest.json'), '{}');
+    fs.symlinkSync(real, path.join(inst2, 'memory'), 'junction');
+    const file = path.join(r.jobs, 'job-6.json');
+    fs.writeFileSync(file, JSON.stringify(r.job({ memory: path.join(inst2, 'memory') })));
+    r.run(file);
+    assert.ok(fs.existsSync(path.join(real, 'alpha-fact.md')), 'the fact landed in the folder the junction points at');
+    // A junction in a folder with no manifest, named memory, is still refused.
+    const bare = path.join(r.sb.path, 'bare2');
+    fs.mkdirSync(bare, { recursive: true });
+    fs.symlinkSync(real, path.join(bare, 'memory'), 'junction');
+    fs.rmSync(path.join(real, 'alpha-fact.md'));
+    const file2 = path.join(r.jobs, 'job-7.json');
+    fs.writeFileSync(file2, JSON.stringify(r.job({ memory: path.join(bare, 'memory') })));
+    r.run(file2);
+    assert.ok(!fs.existsSync(path.join(real, 'alpha-fact.md')), 'no manifest beside it: refused');
+  } finally { r.sb.cleanup(); }
+});
+
+// S-F5(a): a model-CLI child never learns, whichever verb it reaches.
+test('with GENESEED_LEARN_CHILD set, learn and learn-worker call no model', () => {
+  const r = rig();
+  try {
+    const env = { ...r.env, GENESEED_LEARN_CHILD: '1', GENESEED_LEARN_INLINE: '1' };
+    const payload = JSON.stringify({ hook_event_name: 'SessionEnd', session_id: 'c', transcript_path: r.transcript });
+    spawnHook(['learn', '--memory', path.join(r.inst, 'memory'), '--no-done-gate'], payload, { env });
+    const file = path.join(r.jobs, 'job-8.json');
+    fs.writeFileSync(file, JSON.stringify(r.job()));
+    spawnHook(['learn-worker', file], '', { env });
+    assert.equal(r.calls(), 0);
+    assert.ok(!fs.existsSync(r.fact));
+  } finally { r.sb.cleanup(); }
+});
+
+// S-F5(b): a model that fails or exits 2 neither blocks a compaction or a session end nor prints on stdout.
+test('a failing model on PreCompact and SessionEnd exits 0 and prints nothing on stdout', () => {
+  for (const rc of ['1', '2']) {
+    const r = rig();
+    try {
+      const env = { ...r.env, FAKE_LLM_RC: rc, FAKE_LLM_ERR: 'quota exceeded\n', GENESEED_LEARN_INLINE: '1' };
+      for (const event of ['PreCompact', 'SessionEnd']) {
+        const res = spawnHook(['learn', '--memory', path.join(r.inst, 'memory'), '--no-done-gate'],
+          JSON.stringify({ hook_event_name: event, session_id: `f${rc}`, transcript_path: r.transcript, cwd: r.sb.path }), { env });
+        assert.equal(res.status, 0, `${event} rc=${rc}`);
+        assert.equal(res.stdout, '', `${event} rc=${rc}: stdout stays empty`);
+        assert.ok(!fs.existsSync(r.fact), `${event} rc=${rc}: nothing stored from a failed model`);
+      }
+      assert.equal(r.calls(), 2, 'the model was called on both events');
+    } finally { r.sb.cleanup(); }
+  }
+});
+
+// S-F6: the queue goes only once the job is written and started.
+test('the agent queue is consumed once the job is started, and a distil with no queue still runs', () => {
+  const r = rig();
+  try {
+    const run = (payload) => spawnHook(['learn', '--memory', path.join(r.inst, 'memory'), '--no-done-gate'], JSON.stringify(payload), { env: r.env });
+    run({ hook_event_name: 'SubagentStop', session_id: 'z', agent_name: 'explore', last_assistant_message: 'did a thing' });
+    const queue = path.join(r.jobs, 'agents-z.jsonl');
+    assert.ok(fs.existsSync(queue));
+    run({ hook_event_name: 'SessionEnd', session_id: 'z', transcript_path: r.transcript });
+    assert.ok(!fs.existsSync(queue), 'taken once the worker was started');
   } finally { r.sb.cleanup(); }
 });
