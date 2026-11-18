@@ -35,7 +35,7 @@ import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
   cmdContext, discoverContext, SEED_SHA256, SESSION_FILES, sessionFiles, sessionStartSize,
-  CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge, RULES_PREAMBLE_SHA256,
+  CURATE_NUDGE, memoryNudge, RULES_PREAMBLE_SHA256,
 } from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
@@ -2508,15 +2508,18 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
 });
 
 // The memory map's curation nudge. Each row: the topic lines of a map -> whether the nudge is
-// appended. The rule: a topic over 40 facts, or any `misc` topic (facts with neither `topic:`
-// nor `type:`), asks for the memory-curator; a store that is only large never does, because a
-// curated large store would then be nagged every session.
+// appended. The rule (D23): only a `misc` topic (facts with neither `topic:` nor `type:`) asks for
+// the memory-curator. The SIZE of a topic never does: a migrated 500-fact store files by `type` into
+// topics of ~125 facts on its first day, and a user who did nothing must not be nagged at once.
 const MAP = (...topics) => ['# Memory Index', '',
   'Each topic file lists its facts; open the one the task needs.', '',
   ...topics.map(([t, n]) => `- [${t}](topics/${t}.md) — ${n} fact${n === 1 ? '' : 's'}`)].join('\n');
 const NUDGE_ROWS = [
   { name: 'a topic at exactly 40 facts', map: MAP(['build', 40], ['web', 12]), nudge: false },
-  { name: 'a topic at 41 facts', map: MAP(['build', 41]), nudge: true },
+  { name: 'a topic at 41 facts: size alone no longer fires', map: MAP(['build', 41]), nudge: false },
+  { name: 'a migrated 500-fact store filed by type, topics of 125', map: MAP(['feedback', 125], ['project', 125],
+    ['reference', 125], ['user', 125]), nudge: false },
+  { name: 'a huge topic AND a misc fact: misc still fires', map: MAP(['project', 400], ['misc', 1]), nudge: true },
   { name: 'a misc topic of one fact', map: MAP(['build', 3], ['misc', 1]), nudge: true },
   { name: 'many topics, 237 facts, none over 40', map: MAP(...Array.from({ length: 7 },
     (_, i) => [`t${i}`, i === 0 ? 40 : 33])), nudge: false },
@@ -2535,11 +2538,11 @@ for (const row of NUDGE_ROWS) {
 }
 
 test('the OpenCode context plugin carries the same curation nudge as the hook', () => {
-  // The plugin ships on its own and cannot import the hook, so it holds a copy: the threshold,
-  // the line it appends, and the map-line pattern must be the hook's, byte for byte.
+  // The plugin ships on its own and cannot import the hook, so it holds a copy: the line it
+  // appends and the map-line pattern must be the hook's, byte for byte.
   const plugin = fs.readFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins',
     'geneseed-context.js'), 'utf8');
-  assert.match(plugin, new RegExp(`const CURATE_TOPIC_MAX = ${CURATE_TOPIC_MAX}\\n`));
+  assert.doesNotMatch(plugin, /CURATE_TOPIC_MAX/, 'the plugin still fires on topic size');
   const text = plugin.match(/const CURATE_NUDGE = ("[^"]*")\s*\+\s*("[^"]*")/);
   assert.ok(text, 'the plugin no longer declares CURATE_NUDGE');
   assert.equal(JSON.parse(text[1]) + JSON.parse(text[2]), CURATE_NUDGE);

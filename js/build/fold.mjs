@@ -27,8 +27,8 @@ import path from 'node:path';
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { LINE_BREAK, listDir, splitLines } from '../hosts/hooks-prims.mjs';
 import {
-  archiveStore, consolidateMemory, draftChoiceHead, draftRuleHead, existingSlugs, indexNotes, MEMORY_SEED, parseRules,
-  readFoldState,
+  archiveStore, consolidateMemory, draftChoiceHead, draftItem, draftRuleHead, existingSlugs, indexNotes, itemKey,
+  MEMORY_SEED, parseRules, readFoldState,
 } from '../hosts/memory-files.mjs';
 import { foldExcludes } from '../inspect/excludes.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
@@ -49,7 +49,6 @@ export const isWholeFileSeed = (bytes) => WHOLE_FILE_SEEDS.has(seedHash(bytes));
 
 /** A folded store keeps these: the re-seed restores them, and their text never says "not folded". */
 const STORE_KEEPS = ['README.md', '.gitignore', '.own-writes.json'];
-const DRAFT_HEAD = '# User rules — draft\n\nNot active. The rule Rite or the console applies decisions.\n';
 
 /**
  * Claim `dest` with the finished bytes, or throw EEXIST: a rename would replace a file another
@@ -297,23 +296,7 @@ function foldNotes(cfgDir, ctx) {
   }
 }
 
-export const itemKey = (kind, host, bytes) => createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
-
-/**
- * A block in the draft and a C7 record. The key names the host too, so two hosts holding the same
- * text are two decisions. Draft first: a stop between the writes leaves a block the next run
- * recognises, not a lost one.
- */
-function draftItem(kind, key, block, tally, { host, shared, dryRun, report }) {
-  const state = readFoldState(shared);
-  if (state.items[key]) return;
-  report[tally] += 1;
-  if (dryRun) return;
-  const text = existsSync(shared.draft) ? readText(shared.draft) : DRAFT_HEAD;
-  if (!text.includes(`sha256: ${key}`)) writeTextAtomic(shared.draft, `${text}\n${block}`);
-  state.items[key] = { kind, host, state: 'pending' };
-  writeTextAtomic(shared.foldState, `${jsonDumpsIndent(state)}\n`);
-}
+export { itemKey };
 
 /** A pointer in the draft, never a copy (C9): each host's differing file gets its own decision. */
 function draftChoice(kind, hostFile, sharedFile, bytes, ctx) {

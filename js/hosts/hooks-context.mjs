@@ -16,6 +16,7 @@ import {
 } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 import { gitRootOf } from './gitref.mjs';
+import { frontmatter } from './memory-files.mjs';
 import { doneLine } from './done-checks.mjs';
 import { ownershipLine } from './ownership-gate.mjs';
 
@@ -178,24 +179,75 @@ export { SESSION_FILES, SEED_SHA256 };
 
 // A topic line of the memory map (`js/hosts/memory-files.mjs` writes it) and its fact count.
 const MAP_COUNT_RE = /^- \[([^\]]*)\]\(topics\/[^)]+\.md\) — (\d+) facts?$/;
-// Past this many facts a topic file stops being a quick read, and the curator splits it.
-const CURATE_TOPIC_MAX = 40;
-const CURATE_NUDGE = `[memory] A topic holds over ${CURATE_TOPIC_MAX} facts, or facts sit in misc: offer the user `
-  + 'to dispatch the memory-curator agent to merge, re-topic and archive this store.';
-export { CURATE_TOPIC_MAX, CURATE_NUDGE };
+const CURATE_NUDGE = '[memory] Facts sit in misc: offer the user to dispatch the memory-curator agent '
+  + 'to re-topic and archive them.';
+export { CURATE_NUDGE };
 
 /**
  * The one-line curation nudge for a memory map, or ''. Read off the map's own counts, so it
- * costs no extra file read on the hook path. Both triggers are ones a curation pass clears; a
- * store that is merely LARGE is not one, since a curated large store would be nagged forever.
+ * costs no extra file read on the hook path. The one trigger is a fact filed under `misc`, which a
+ * curation pass clears. The size of a topic no longer fires it (D23): a migrated store files by
+ * `type`, so a 500-fact store holds topics of about 125 facts on its first day, and a user who did
+ * nothing would be nagged at once; search is the way into a large topic. A store document is never
+ * `misc` (`isReservedStem`), so `ARCHIVE-INDEX.md` cannot raise it either.
  * The OpenCode context plugin carries the same rule (parity gated in tests/unit/claude.test.mjs).
  */
 export function memoryNudge(map) {
   for (const line of map.split('\n')) {
     const m = MAP_COUNT_RE.exec(line.trim());
-    if (m && (m[1] === 'misc' || Number(m[2]) > CURATE_TOPIC_MAX)) return CURATE_NUDGE;
+    if (m && m[1] === 'misc') return CURATE_NUDGE;
   }
   return '';
+}
+
+// The bridge slot (D31): the facts a migration drafted as standing rules keep loading, in this much
+// room, until their draft is decided (an entry of its own after user-rules.md: see BRIDGE_REL).
+// 1 800 is about the 3 072 characters memory used to get, less what the map now takes; a fact is cut
+// at BRIDGE_FACT_MAX and the rest are counted.
+// The OpenCode context plugin carries the same constants (parity gated in tests/unit/claude.test.mjs).
+const BRIDGE_CAP = 1800;
+const BRIDGE_FACT_MAX = 300;
+const BRIDGE_HEAD = '[memory] Standing rules from your old index, drafted in user-rules.draft.md and '
+  + 'loaded until you decide them:';
+// A slug is a file name the ledger holds: data, so no path may ride in it.
+const BRIDGE_SLUG_RE = /^[^/\\.\u0000-\u001f][^/\\\u0000-\u001f]*$/;
+
+// THE SLOT IS ITS OWN SESSION ENTRY, right after `user-rules.md`, and `renderPayload` budgets it as a
+// rule. As a tail of the memory map it was the first thing the budget cut, or went whole with the map
+// when the rules, profile and wiki left the 4th file no room: an undecided standing rule would then
+// stop loading silently, which is what the bridge exists to prevent. As a rule it answers only to the
+// rules' own size, so the profile and the wiki cannot push it out. Its rel names the draft it comes
+// from; `rel === 'user-rules.md'` consumers (a sub-agent's rules, the console) do not see it.
+export const BRIDGE_REL = 'user-rules.draft.md';
+function bridgeAbs() {
+  try { return sharedPaths().draft; } catch { return BRIDGE_REL; }
+}
+
+/**
+ * The slot's text for the tier's pending memory drafts, or ''. A draft the user has decided is not
+ * `pending` in the ledger, so it leaves on its own. A fact that is gone, or unreadable, is skipped.
+ * Both the ledger row and the file are the user's data, and nothing here writes either.
+ */
+export function bridgeSlot() {
+  let tier;
+  let items;
+  try {
+    tier = sharedPaths();
+    ({ items } = JSON.parse(readFileSync(tier.foldState, 'utf8')));
+  } catch { return ''; }
+  const lines = [];
+  for (const row of Object.values(items ?? {})) {
+    if (row?.state !== 'pending' || row.host !== 'memory' || typeof row.fact !== 'string'
+      || !BRIDGE_SLUG_RE.test(row.fact)) continue;
+    let text;
+    try { text = readFileSync(path.join(tier.memory, `${row.fact}.md`), 'utf8').replace(/\r\n/g, '\n'); } catch { continue; }
+    const [fm, body] = frontmatter(text);
+    const rule = (body.trim() || (fm.get('description') ?? '')).replace(/\s+/g, ' ');
+    lines.push(`- ${row.fact}: ${rule.length > BRIDGE_FACT_MAX ? `${rule.slice(0, BRIDGE_FACT_MAX)}…` : rule}`);
+  }
+  if (!lines.length) return '';
+  const tail = (n) => `- … ${n} more drafted rule${n === 1 ? '' : 's'} not shown (read them in memory/)`;
+  return [BRIDGE_HEAD, ...fitLines(lines, BRIDGE_CAP - cost(BRIDGE_HEAD), tail)].join('\n');
 }
 
 // The one context line for a project that names no runtime; the OpenCode context plugin carries
@@ -451,6 +503,10 @@ export function sessionFiles(hookRoot, host = null, carrier = installCarrier(hoo
       found.push(sessionEntry(rel, sharedAbs, shared, 'shared'));
     }
     if (own !== null) found.push(sessionEntry(rel, hostAbs, own, shared === null ? '' : `host: ${host || 'claude'}`));
+    if (rel === 'user-rules.md' && tier && rels.includes('memory/MEMORY.md')) {
+      const slot = bridgeSlot();
+      if (slot) found.push({ rel: BRIDGE_REL, abs: bridgeAbs(), label: 'shared', text: slot });
+    }
   }
   return found.filter(Boolean);
 }
@@ -722,7 +778,7 @@ function renderPayload({ heads, session, eager, lazy, source, root, title = SESS
     const left = [];
     for (const s of session) {
       const head = `----- ${s.rel}${s.label ? ` (${s.label})` : ''} -----`;
-      const rules = s.rel === 'user-rules.md';
+      const rules = s.rel === 'user-rules.md' || s.rel === BRIDGE_REL;
       const room = budget - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
       const where = `${s.abs} on demand`;
       if (room <= 0) {

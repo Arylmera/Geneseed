@@ -87,9 +87,10 @@ memory that carries a `force`; revising one stays with the agent and the user.
   `archive/` needs the user's consent ({{LAW:deletion-is-deliberate}}):
   `geneseed memory list --archived`, then `geneseed memory rm <name> --archived --purge`.
   `archive/` is part of this git-ignored store.
-- When the store outgrows one careful read — a topic over 40 facts, or facts in
-  `misc` — the session context says so in one line; the memory-curator {{AGENT}} then
-  merges, assigns topics and archives in bulk, and proposes deletions for approval.
+- When facts sit in `misc` (no `topic:` and no `type:`), the session context says so in
+  one line; the memory-curator {{AGENT}} then assigns topics, merges and archives in
+  bulk, and proposes deletions for approval. The size of a topic never raises it: a large
+  store is read through its topic files, not curated for its size.
 - Don't store what the repo already records (code structure, git history, the
   {{LAWS}}, `user-rules.md`). Store what was *non-obvious*.
 - When the same `feedback` lesson keeps recurring, propose promoting it into a
@@ -114,8 +115,26 @@ lowercase `[a-z0-9-]`. Both levels are generated from the fact files:
 `geneseed memory consolidate --memory <this dir>` rebuilds them (refreshing each
 hook from its `description`), and the `learn` hook rebuilds them after every fact it
 writes, updates or archives. Only top-level fact files are indexed; `archive/` and
-`agents/` never are. A build moves a flat, one-line-per-fact `MEMORY.md` from an older install to
-this layout once, keeping each line's own title and hook; it never touches a fact file.
+`agents/` never are.
+
+**A top-level file whose name is all capitals is a store document, not a fact:** `MEMORY.md`,
+`README.md`, `ARCHIVE-INDEX.md`. It is never indexed, never filed under `misc`, never shown to
+`learn`, and `geneseed memory rm` refuses it. Name a fact in lower case.
+
+**A build moves a flat index to this layout, once, in every store it manages** — each install's
+and the machine tier's. It keeps each pointer's own title and hook and
+every other line of the old `MEMORY.md` (headings, prose, a pointer to a store document), and it
+never touches a fact file. The hand-written headings that grouped the old fact lines now sit above
+nothing; delete them once if they bother you.
+
+**Rules the old index loaded every session become drafts.** A flat index was cut by position at
+session start, so what sat in its first 3 072 characters loaded by accident. At the move, a
+`feedback` fact whose line sat there, any fact with `force: constraint`, and a `feedback` fact whose
+description says *always* or *never* (*toujours*, *jamais*) are written to `user-rules.draft.md`
+(at most 30), exactly as the fold drafts a rule; `user-rules.md` is never written without your
+decision. Until you approve or reject a draft in the console or with the rule {{SKILL}}, its fact
+keeps loading at session start, in a slot of at most 1 800 characters under the map; a decided
+draft leaves it. A second build drafts nothing new.
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)
 

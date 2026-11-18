@@ -48,7 +48,7 @@
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { RESERVED_STEMS, archiveFact, consolidateMemory, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { archiveFact, consolidateMemory, isReservedStem, memoryDropIndex } from '../hosts/memory-files.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
@@ -57,7 +57,7 @@ import { printOut, printErr, isFile } from '../lib/fs.mjs';
 export function isFactName(name) {
   return Boolean(name) && !name.includes('/') && !name.includes('\\')
     && ![...name].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)
-    && !RESERVED_STEMS.has(name.toLowerCase());
+    && !isReservedStem(name);
 }
 
 /**

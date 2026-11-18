@@ -242,7 +242,7 @@ test("the wiki: a legacy wiki.json in the harness dir is still read", async () =
 
 test("session files: a memory map with a misc topic carries the curation nudge", async () => {
   // The plugin's copy of the hook's rule (tests/unit/claude.test.mjs pins the text): a `misc`
-  // topic, or a topic over 40 facts, appends one line asking for the memory-curator.
+  // topic appends one line asking for the memory-curator (a topic over 40 facts no longer does, D23).
   const h = path.join(tmp, "harness-nudge")
   await fs.mkdir(path.join(h, "memory"), { recursive: true })
   await fs.writeFile(path.join(h, "AGENT.md"), "# harness\n")
@@ -259,5 +259,5 @@ test("session files: a memory map with a misc topic carries the curation nudge",
     else process.env.GENESEED_HARNESS = prev
   }
   assert.match(output.messages[0].parts[0].text,
-    /— 2 facts\n\[memory\] A topic holds over 40 facts, or facts sit in misc: .*memory-curator agent/)
+    /— 2 facts\n\[memory\] Facts sit in misc: .*memory-curator agent/)
 })
