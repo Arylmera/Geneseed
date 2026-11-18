@@ -20,6 +20,7 @@ import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
 import Loading from './components/Loading.jsx'
 import PageBoundary from './components/PageBoundary.jsx'
+import LevelBanner from './components/LevelBanner.jsx'
 import { ConfirmProvider } from './hooks/useConfirm.jsx'
 import { StagingProvider } from './hooks/useStaging.jsx'
 // The Overview is the landing route, so it ships in the shell. Every other page is
@@ -352,6 +353,7 @@ export default function App() {
                   survive a page change (and a page crash); see hooks/useStaging.jsx. */}
               <InstallListStatus unreadable={!instLoading && !instData} />
               <StagingProvider activeId={activeId} finish={finish}>
+                <LevelBanner route={route} />
                 {/* Keyed on the page ONLY: a new page clears a crash, while an item change keeps
                     the one slot below. */}
                 <PageBoundary key={route.page}>

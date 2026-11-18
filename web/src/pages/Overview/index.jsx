@@ -11,6 +11,8 @@ import { docsHostOf } from '../../hooks/useHarness.js'
 import { installTag } from '../../lib/hosts.js'
 import { LAYOUTS } from '../../hooks/useLayout.js'
 import { readSeen, TRACK_GROUP } from '../../lib/track.js'
+import { LEVELS } from '../../lib/tiers.js'
+import { useViewLevel } from '../../hooks/useViewLevel.jsx'
 
 const DISMISS_KEY = 'geneseed-newhere-dismissed'
 
@@ -26,6 +28,7 @@ export function NewHere({ harness }) {
     () => (dismissed ? Promise.resolve(null) : api.docs(harness).catch(() => null)),
     [dismissed, harness],
   )
+  const { level } = useViewLevel()
   const pages = menu?.groups?.find((g) => g.id === TRACK_GROUP)?.pages || []
   const seen = readSeen()
   const next = pages.findIndex((p) => !seen.includes(p.id))
@@ -43,6 +46,12 @@ export function NewHere({ harness }) {
           {pages.length} short pages: what a harness is, what was installed, what changes in your
           day, and what is guaranteed.
         </p>
+        {/* At Power nothing is hidden, so the line would be noise. */}
+        {level !== 'power' ? (
+          <p className="newhere-level">
+            Showing the {LEVELS.find((l) => l.id === level)?.label} view — more in Appearance.
+          </p>
+        ) : null}
         {/* A meter with nothing on it is noise: it appears with the first page read. */}
         {done ? (
           <div className="newhere-dots" aria-label={`${done} of ${pages.length} read`}>

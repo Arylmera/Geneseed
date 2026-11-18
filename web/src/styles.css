@@ -233,6 +233,7 @@ button { font-family: inherit; }
 .spot-row { padding: var(--sp-2) 14px; cursor: pointer; } /* off-scale: between steps */
 .spot-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .spot-title { font-size: var(--fs-sm); color: var(--text); }
+.spot-level { margin-left: var(--sp-2); font-size: var(--fs-2xs); }
 .spot-desc { font-size: var(--fs-xs); color: var(--text-3); margin-top: 2px; /* off-scale: 2px hairline */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -320,6 +321,9 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
   flex-wrap: wrap; margin-bottom: var(--sp-4); padding: 10px 14px; border-radius: 8px; color: var(--warn-text); /* off-scale: between steps */
   border: 1px solid color-mix(in srgb, var(--warn) 36%, transparent);
   background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.level-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  flex-wrap: wrap; margin-bottom: var(--sp-4); padding: 10px 14px; border-radius: 8px; /* off-scale: between steps */
+  border: 1px solid var(--line); background: var(--surface-2); }
 .btn .glyph { width: 15px; height: 15px; }
 
 /* Disabled primary buttons must read as inert, not lit/pressable. Matrix layers an
@@ -2438,6 +2442,8 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase;
   color: var(--text-3); }
 .sb-group-title i { width: 6px; height: 6px; background: var(--sb-ink); }
+.sb-live-foot { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: auto; padding: var(--sp-2); }
+.sb-live { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3); }
 a.sb-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 10px 4px 6px; /* off-scale: 10px gap between steps */
   border-radius: var(--r-sm); color: var(--text-2); font-weight: 500;
   transition: background var(--dur-3), color var(--dur-3); }
@@ -3363,7 +3369,8 @@ a.kit-name:hover { color: var(--accent-text); }
   .sidebar.collapsed .sb-collapse .glyph { transform: none; }
   .sidebar.collapsed .sb-head .sb-brand { justify-content: center; padding: 4px 0; }
   .sidebar.collapsed .sb-brand-text { display: none; }
-  .sidebar.collapsed .sb-label, .sidebar.collapsed .sb-count, .sidebar.collapsed .sb-group-title {
+  .sidebar.collapsed .sb-label, .sidebar.collapsed .sb-count, .sidebar.collapsed .sb-group-title,
+  .sidebar.collapsed .sb-live-foot {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .sidebar.collapsed .sb-group + .sb-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
   .sidebar.collapsed a.sb-item { justify-content: center; min-height: 44px; padding: 0; }
@@ -3373,7 +3380,7 @@ a.kit-name:hover { color: var(--accent-text); }
   .sidebar { padding: 18px 8px; align-items: stretch; }
   .sb-head .sb-brand { justify-content: center; padding: 4px 0; }
   .sb-brand-text, .sb-collapse { display: none; }
-  .sb-label, .sb-count, .sb-group-title { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  .sb-label, .sb-count, .sb-group-title, .sb-live-foot { position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; }
   .sb-group + .sb-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
   .sb-group { margin-top: var(--sp-3); }
@@ -3399,7 +3406,7 @@ a.kit-name:hover { color: var(--accent-text); }
   /* In the drawer there is room for the labels again. */
   .sb-head .sb-brand { justify-content: flex-start; padding: 4px 8px; }
   .sb-brand-text { display: flex; }
-  .sb-label, .sb-count, .sb-group-title { position: static; width: auto; height: auto; clip-path: none; }
+  .sb-label, .sb-count, .sb-group-title, .sb-live-foot { position: static; width: auto; height: auto; clip-path: none; }
   .sb-group + .sb-group { padding-top: 0; border-top: 0; }
   .sb-group { margin-top: var(--sp-3); }
   a.sb-item { justify-content: flex-start; min-height: 40px; padding: 4px 10px 4px 6px; }

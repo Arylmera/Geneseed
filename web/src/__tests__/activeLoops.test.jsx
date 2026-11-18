@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({ api: { activeLoops: vi.fn(), setLoopPreset: vi.fn() } }))
 
-import { ActiveDetail, useActiveLoops } from '../components/ActiveLoops.jsx'
+import { ActiveDetail } from '../components/ActiveLoops.jsx'
+import { useActiveLoops } from '../hooks/useActiveLoops.js'
 import { api } from '../api/index.js'
 import RingGraph from '../components/RingGraph.jsx'
 
