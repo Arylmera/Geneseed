@@ -3,12 +3,14 @@ import { go } from '../lib/router.js'
 import { libraryCount, ruleCount } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 import { useLocalStorage } from '../hooks/useLocalStorage.js'
+import { useViewLevel } from '../hooks/useViewLevel.jsx'
+import HiddenLive from './HiddenLive.jsx'
 
 // The pages, in the order a visit reads them. The rail groups them (GROUPS below): the Overview
 // alone, then what governs, what is built, what runs, and help. A badge is what
 // its page lists, across every install, deduped (`overview.counts`; __tests__/railCounts.test.jsx
 // holds each one to its page); a page with no honest single number carries none.
-const NAV = [
+export const NAV = [
   { group: 'core', hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
   {
     group: 'govern',
@@ -60,7 +62,7 @@ const NAV = [
   },
 ]
 
-const FOOT = [
+export const FOOT = [
   { group: 'help', hash: '#/docs', page: 'docs', label: 'Docs', icon: 'docs' },
   { group: 'run', hash: '#/activity', page: 'activity', label: 'Activity', icon: 'activity' },
   { group: 'help', hash: '#/settings', page: 'settings', label: 'Settings', icon: 'settings' },
@@ -110,6 +112,10 @@ export default function Sidebar({ route, overview, installs, onNavigate }) {
     v === 'collapsed' ? 'collapsed' : 'open',
   )
   const collapsed = rail === 'collapsed'
+  const { canSee } = useViewLevel()
+  // A page above the level leaves the rail, but the one the reader is on stays lit, so they see
+  // where they are (the same rule as a tab).
+  const shown = (n) => canSee(`page:${n.page}`) || route.page === n.page
   const toggle = () => setRail(collapsed ? 'open' : 'collapsed')
   const toggleLabel = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
   return (
@@ -154,7 +160,8 @@ export default function Sidebar({ route, overview, installs, onNavigate }) {
           </span>
         </button>
       </div>
-      {GROUPS.map((g) => (
+      {/* A group whose pages all sit above the level drops its header; none does today. */}
+      {GROUPS.filter((g) => ALL.some((n) => n.group === g.id && shown(n))).map((g) => (
         <div
           key={g.id}
           className={`sb-group sb-${g.id}`}
@@ -169,7 +176,7 @@ export default function Sidebar({ route, overview, installs, onNavigate }) {
             </div>
           ) : null}
           <ul className="sb-list">
-            {ALL.filter((n) => n.group === g.id).map((n) => (
+            {ALL.filter((n) => n.group === g.id && shown(n)).map((n) => (
               <NavLink
                 key={n.page}
                 n={n}
@@ -182,6 +189,7 @@ export default function Sidebar({ route, overview, installs, onNavigate }) {
           </ul>
         </div>
       ))}
+      <HiddenLive />
     </nav>
   )
 }
@@ -193,9 +201,12 @@ const TABBED = ['overview', 'laws', 'library', 'installs']
 // (five cells fit "Constitution" at 360px; eight did not), and More, which opens the drawer
 // holding every page, Docs and Activity. More is lit on a page only it reaches.
 export function TabBar({ route, navOpen, onMore }) {
+  const { canSee } = useViewLevel()
   return (
     <nav className="tabbar" aria-label="Console pages">
-      {NAV.filter((n) => TABBED.includes(n.page)).map((n) => (
+      {NAV.filter(
+        (n) => TABBED.includes(n.page) && (canSee(`page:${n.page}`) || route.page === n.page),
+      ).map((n) => (
         <a
           key={n.page}
           href={n.hash}

@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { animate, stagger } from 'animejs'
 import { DUR, EASE_OUT, motionOK, settle } from '../lib/motion.js'
+import { LEVELS, levelOfHref, rankOf } from '../lib/tiers.js'
+import { useViewLevel } from '../hooks/useViewLevel.jsx'
 
 const MAX_RESULTS = 24
 
@@ -57,6 +59,14 @@ function marked(title, query) {
 export default function Spotlight({ query, index, loading, error, active, onActive, onPick }) {
   const results = useMemo(() => filterAndRank(index, query), [index, query])
   const containerRef = useRef(null)
+  const { rank } = useViewLevel()
+  // A row for a page above the reader's level still opens (a banner explains), so it names the
+  // level it needs. A row with no route has no page to place.
+  const needs = (e) => {
+    if (!e.route) return null
+    const id = levelOfHref(e.route)
+    return rankOf(id) > rank ? LEVELS.find((l) => l.id === id).label : null
+  }
 
   // The rows cascade in when the list first HAS rows — not on every keystroke, which
   // re-ranks and would re-deal the whole list under the user's typing.
@@ -139,7 +149,10 @@ export default function Spotlight({ query, index, loading, error, active, onActi
               }}
               onMouseEnter={() => onActive(i)}
             >
-              <div className="spot-title">{marked(entry.title, query)}</div>
+              <div className="spot-title">
+                {marked(entry.title, query)}
+                {needs(entry) ? <span className="tag spot-level">{needs(entry)}</span> : null}
+              </div>
               {entry.desc ? <div className="spot-desc">{entry.desc}</div> : null}
             </div>
           ))}

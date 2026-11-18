@@ -1,0 +1,1 @@
+import{r as e}from"./rolldown-runtime-XKyaHtl9.js";import{i as t}from"./react-C1iE8mnY.js";var n=e(t(),1);function r(e,t){let[r,i]=(0,n.useState)(()=>{try{return t(localStorage.getItem(e))}catch{return t(null)}});return[r,(0,n.useCallback)(t=>i(n=>{let r=typeof t==`function`?t(n):t;try{localStorage.setItem(e,r)}catch{}return r}),[e])]}export{r as t};
