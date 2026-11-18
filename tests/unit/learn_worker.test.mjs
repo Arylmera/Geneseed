@@ -445,9 +445,11 @@ test('an unreadable job replaces an earlier good verdict with a failure', () => 
 });
 
 test('a verdict file is data: control characters go, the reason is cut, a bad date is not printed', () => {
-  const evil = { at: '\u001b[2Jnot a date', ok: false, reason: `\u001b[31mred\u001b]0;pwned\u0007 ${'x'.repeat(500)}` };
+  // C0, DEL, C1 (`\u009b` is CSI on an 8-bit terminal) and the bidi overrides that reorder printed text.
+  const evil = { at: '\u001b[2Jnot a date', ok: false,
+    reason: `\u001b[31mred\u001b]0;pwned\u0007 \u009b2J \u202egnp.exe\u202c ${'x'.repeat(500)}` };
   const note = learnLastNote(evil);
-  assert.ok(!/[\u0000-\u001f\u007f]/.test(note), 'no control character reaches the terminal');
+  assert.ok(!/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/.test(note), 'no control character reaches the terminal');
   assert.match(note, /^ · last run failed an unknown date: /);
   assert.ok(note.length < 260, 'the reason is capped at 200 characters');
   const r = rig();
@@ -471,5 +473,21 @@ test('a .cmd shim that hangs is abandoned at the timeout, not when its child exi
     const took = Date.now() - t0;
     assert.ok(took < 10000, `the worker returned after ${took} ms, not after the hung child's 15 s`);
     assert.match(readLearnLast(lastFile(r)).reason, /gave no answer in 2 s/);
+  } finally { r.sb.cleanup(); }
+});
+
+// The model's prompt is transcript text, written to a scratch folder so no pipe can hold the wait. That folder
+// must be gone after the run, an answered one and a timed-out one alike. (A throw before the call is covered by
+// the same `finally` but cannot be provoked from here: no env value can carry the NUL that would make spawn throw.)
+test('the scratch folder holding the prompt is removed after an answered run and after a timeout', () => {
+  const r = rig();
+  try {
+    const tmp = path.join(r.sb.path, 'tmp');
+    fs.mkdirSync(tmp, { recursive: true });
+    const tmpEnv = { TEMP: tmp, TMP: tmp, TMPDIR: tmp };
+    workerRun(r, tmpEnv);
+    assert.deepEqual(fs.readdirSync(tmp).filter((n) => n.startsWith('geneseed-learn-')), [], 'answered run leaves no scratch');
+    workerRun(r, { ...tmpEnv, GENESEED_LLM: `node -e "setTimeout(()=>{},15000)"`, GENESEED_LLM_TIMEOUT: '1' });
+    assert.deepEqual(fs.readdirSync(tmp).filter((n) => n.startsWith('geneseed-learn-')), [], 'timed-out run leaves no scratch');
   } finally { r.sb.cleanup(); }
 });

@@ -370,25 +370,30 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {
   // a hung CLI held the wait for as long as it lived (measured: 15.7 s for a 2 s timeout). A file has no reader to
   // wait for: `spawnSync` returns when cmd.exe is gone. The prompt comes from a file for the same reason (an orphan
   // would hold a stdin pipe too).
+  // The scratch folder holds the prompt (transcript text), so every exit, a throw included, removes it.
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'geneseed-learn-'));
   const outFile = path.join(scratch, 'out');
   const errFile = path.join(scratch, 'err');
   const inFile = path.join(scratch, 'in');
-  writeFileSync(inFile, plan.input ?? '');
-  const inFd = openSync(inFile, 'r');
-  const outFd = openSync(outFile, 'w');
-  const errFd = openSync(errFile, 'w');
+  const fds = [];
+  const closeAll = () => { for (const fd of fds.splice(0)) { try { closeSync(fd); } catch { /* already closed */ } } };
   let proc;
   try {
-    proc = spawnSync(plan.file, plan.args,
-      { windowsVerbatimArguments: plan.verbatim, stdio: [inFd, outFd, errFd], timeout: seconds * 1000, killSignal: 'SIGKILL',
-        env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+    writeFileSync(inFile, plan.input ?? '');
+    fds.push(openSync(inFile, 'r'), openSync(outFile, 'w'), openSync(errFile, 'w'));
+    try {
+      proc = spawnSync(plan.file, plan.args,
+        { windowsVerbatimArguments: plan.verbatim, stdio: [...fds], timeout: seconds * 1000, killSignal: 'SIGKILL',
+          env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+    } finally {
+      closeAll();
+    }
+    const slurp = (f) => { try { return readFileSync(f, 'utf8'); } catch { return ''; } };
+    proc = { ...proc, stdout: slurp(outFile), stderr: slurp(errFile) };
   } finally {
-    closeSync(inFd); closeSync(outFd); closeSync(errFd);
+    closeAll();
+    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* an orphan may still hold it open: the OS temp sweep gets it */ }
   }
-  const slurp = (f) => { try { return readFileSync(f, 'utf8'); } catch { return ''; } };
-  proc = { ...proc, stdout: slurp(outFile), stderr: slurp(errFile) };
-  try { rmSync(scratch, { recursive: true, force: true }); } catch { /* an orphan may still hold it open: the OS temp sweep gets it */ }
   if (proc.error && /** @type {NodeJS.ErrnoException} */ (proc.error).code === 'ETIMEDOUT') {
     if (track) noteFail(`${argv[0]} gave no answer in ${seconds} s and was stopped`);
     err(`[learn] ${argv[0]} gave no answer in ${seconds} s and was stopped - nothing learned.\n`);

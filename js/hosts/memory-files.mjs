@@ -737,7 +737,7 @@ export function learnLastNote(last, now = Date.now()) {
     return Number.isFinite(by) && now > by ? ` · last run stuck since ${day}` : '';
   }
   if (last.ok !== false) return '';
-  const reason = String(last.reason || '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 200) || 'no reason recorded';
+  const reason = String(last.reason || '').replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, ' ').trim().slice(0, 200) || 'no reason recorded';
   return ` · last run failed ${day}: ${reason}`;
 }
 
