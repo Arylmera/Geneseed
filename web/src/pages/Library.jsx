@@ -19,6 +19,7 @@ import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Loading from '../components/Loading.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
+import { useViewLevel } from '../hooks/useViewLevel.jsx'
 import Seg from '../components/Seg.jsx'
 import Stat from '../components/Stat.jsx'
 
@@ -156,7 +157,9 @@ const DOC_OF = {
   config: 'project-context',
 }
 
-const resolveSec = (s, lock) => lock || (s && LIBRARY_ORDER.includes(s) ? s : LIBRARY_ORDER[0])
+// The route's own kind stays even when hidden; a bare #/library opens the first kind on offer.
+const resolveSec = (s, lock, shown = LIBRARY_ORDER) =>
+  lock || (s && LIBRARY_ORDER.includes(s) ? s : (shown[0] ?? LIBRARY_ORDER[0]))
 const enc = encodeURIComponent
 
 // Skills in class order, each row tagged with its class and the header it sits under, plus
@@ -207,7 +210,9 @@ export default function Library({
   onCountsChanged,
 }) {
   const confirm = useConfirm()
-  const [sec, setSec] = useState(() => resolveSec(section, lock))
+  const { canSee } = useViewLevel()
+  const onOffer = LIBRARY_ORDER.filter((k) => canSee(`section:library/${k}`))
+  const [sec, setSec] = useState(() => resolveSec(section, lock, onOffer))
   const [q, setQ] = useState('')
   // The skill class picked under Skills in the rail ('all' or a SKILL_CATS key). Skills only; reset with the kind.
   const [cat, setCat] = useState('all')
@@ -232,7 +237,7 @@ export default function Library({
   if (section !== seenSection) {
     setSeenSection(section)
     setActionErr('')
-    const next = resolveSec(section, lock)
+    const next = resolveSec(section, lock, onOffer)
     if (next !== sec) {
       setSec(next)
       setQ('')
@@ -529,6 +534,8 @@ export default function Library({
     }
   }
 
+  // The kind on screen stays in the list even above the level, the same rule as a tab.
+  const kinds = LIBRARY_ORDER.filter((k) => k === sec || onOffer.includes(k))
   return (
     <div className="lib-wrap">
       <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
@@ -545,7 +552,7 @@ export default function Library({
               ) : null}
             </div>
             <nav className="kind-list" aria-label="Kinds">
-              {LIBRARY_ORDER.map((k) => (
+              {kinds.map((k) => (
                 <React.Fragment key={k}>
                   <a
                     href={`#/section/${k}`}
@@ -584,7 +591,7 @@ export default function Library({
           sections={
             lock
               ? undefined
-              : LIBRARY_ORDER.map((k) => ({
+              : kinds.map((k) => ({
                   key: k,
                   label: SECTIONS[k].label,
                   n: railCount(k),

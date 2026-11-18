@@ -5,6 +5,7 @@ import { RestartServer, StopServer } from './ServerControl.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { installName } from '../../lib/hosts.js'
 import PageHeader from '../../components/PageHeader.jsx'
+import { useViewLevel } from '../../hooks/useViewLevel.jsx'
 import { relTime } from '../../lib/format.js'
 import { motionOK } from '../../lib/motion.js'
 import ErrorState from '../../components/ErrorState.jsx'
@@ -59,14 +60,14 @@ function Section({ id, title, head, className = '', children }) {
 
 // The index scrolls instead of linking: a bare href="#server" would be read by the hash router
 // as a page and leave Settings.
-function SheetIndex({ stale }) {
+function SheetIndex({ stale, ids }) {
   const go = (id) =>
     document
       .getElementById(`set-${id}`)
       ?.scrollIntoView?.({ behavior: motionOK() ? 'smooth' : 'auto', block: 'start' })
   return (
     <nav className="sheet-index" aria-label="On this page">
-      {SECTIONS.map(([id, label]) => (
+      {SECTIONS.filter(([id]) => ids.includes(id)).map(([id, label]) => (
         <button
           key={id}
           type="button"
@@ -260,6 +261,9 @@ function StartAtLogin({ initial }) {
 // home in the topbar's Appearance popover; each install's detail and building live on Hosts.
 export default function Settings({ overview, onAction }) {
   const confirm = useConfirm()
+  const { canSee } = useViewLevel()
+  // The sheet's sections on offer at this level: the index and the body both read it.
+  const shown = SECTIONS.map(([id]) => id).filter((id) => canSee(`section:settings/${id}`))
   const server = overview?.server
   const stale = overview?.daemon_stale
 
@@ -304,7 +308,7 @@ export default function Settings({ overview, onAction }) {
       <PageHeader title="Settings" sub="This copy of Geneseed and the local server." />
 
       <div className="sheet">
-        <SheetIndex stale={stale} />
+        <SheetIndex stale={stale} ids={shown} />
         <div className="sheet-body">
           <Section id="machine" title="Machine">
             <Row
@@ -385,28 +389,30 @@ export default function Settings({ overview, onAction }) {
 
           <AboutSection version={overview?.version} />
 
-          <Section id="danger" title="Danger zone" className="danger-zone">
-            <Row
-              k="Stop the server"
-              help="The console goes offline until you run geneseed web"
-              control={<StopServer />}
-            />
-            <Row
-              k="The geneseed command"
-              help="Installs keep working; only the command goes"
-              control={
-                <button className="btn ghost danger-line" onClick={() => onAction('unlink')}>
-                  Remove from PATH
-                </button>
-              }
-            />
-            <Row k="Uninstall">
-              <span className="sub">
-                Each install has its own Uninstall in <a href="#/installs/hosts">Hosts</a>, bound to
-                its host and path.
-              </span>
-            </Row>
-          </Section>
+          {shown.includes('danger') && (
+            <Section id="danger" title="Danger zone" className="danger-zone">
+              <Row
+                k="Stop the server"
+                help="The console goes offline until you run geneseed web"
+                control={<StopServer />}
+              />
+              <Row
+                k="The geneseed command"
+                help="Installs keep working; only the command goes"
+                control={
+                  <button className="btn ghost danger-line" onClick={() => onAction('unlink')}>
+                    Remove from PATH
+                  </button>
+                }
+              />
+              <Row k="Uninstall">
+                <span className="sub">
+                  Each install has its own Uninstall in <a href="#/installs/hosts">Hosts</a>, bound
+                  to its host and path.
+                </span>
+              </Row>
+            </Section>
+          )}
         </div>
       </div>
     </div>
