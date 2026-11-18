@@ -704,26 +704,41 @@ const LEARN_LAST = 'learn-last.json';
 export function learnLastFile() {
   try { return path.join(sharedPaths().root, 'cache', LEARN_LAST); } catch { return null; }
 }
-export function writeLearnLast(ok, reason, facts = 0) {
+export function writeLearnLast(ok, reason, facts = 0, { runningFor = 0 } = {}) {
   const file = learnLastFile();
   if (!file) return;
   try {
     mkdirSync(path.dirname(file), { recursive: true });
     const line = String(reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
-    writeTextAtomic(file, `${JSON.stringify({ at: new Date().toISOString(), ok: !!ok, reason: line, facts })}\n`);
+    const now = Date.now();
+    // `ok: null` + `by`: a run that has begun and says by when it must be over. Nothing else ever clears it but the
+    // run's own end, so a run still marked running past `by` hung: a model CLI whose own child never exits.
+    const row = runningFor > 0
+      ? { at: new Date(now).toISOString(), ok: null, running: true, by: new Date(now + runningFor * 1000).toISOString(), reason: 'running', facts: 0 }
+      : { at: new Date(now).toISOString(), ok: !!ok, reason: line, facts };
+    writeTextAtomic(file, `${JSON.stringify(row)}\n`);
   } catch { /* a verdict is a favour, never a failed hook */ }
 }
 /** The verdict, or null: no run yet, or an unreadable file. */
 export function readLearnLast(file = learnLastFile()) {
   try {
     const v = JSON.parse(readFileSync(file, 'utf8'));
-    return isDict(v) && typeof v.ok === 'boolean' ? v : null;
+    return isDict(v) && (typeof v.ok === 'boolean' || v.running === true) ? v : null;
   } catch { return null; }
 }
 /** ` · last run failed <date>: <reason>` for a failed verdict, else ''. A success adds nothing. */
-export function learnLastNote(last) {
-  if (!last || last.ok !== false) return '';
-  return ` · last run failed ${String(last.at ?? '').slice(0, 10)}: ${String(last.reason || 'no reason recorded')}`;
+export function learnLastNote(last, now = Date.now()) {
+  if (!last) return '';
+  // The file is read from disk and printed to a terminal: a date that is not an ISO date is dropped, and the reason
+  // loses its control characters (an ESC sequence would drive the terminal) and is cut.
+  const day = /^\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z)?$/.test(String(last.at)) ? String(last.at).slice(0, 10) : 'an unknown date';
+  if (last.running === true) {
+    const by = Date.parse(String(last.by));
+    return Number.isFinite(by) && now > by ? ` · last run stuck since ${day}` : '';
+  }
+  if (last.ok !== false) return '';
+  const reason = String(last.reason || '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 200) || 'no reason recorded';
+  return ` · last run failed ${day}: ${reason}`;
 }
 
 /**
@@ -740,7 +755,8 @@ export function learnLastNote(last) {
  * OpenCode's learn plugin distils with the session's own model and reads no `$GENESEED_LLM` at all.
  * Bob's Stop payload carries no transcript, so learn returns at once there: not dormant, n/a.
  *
- * `last` is `readLearnLast()`: a failed verdict appends ` · last run failed <date>: <reason>`.
+ * `last` is `readLearnLast()`: a failed verdict appends ` · last run failed <date>: <reason>`, a run still marked
+ * running past its `by` ` · last run stuck since <date>`. The file is machine-wide: it holds the latest run of any install.
  * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, learn?: string|null }]`;
  * with none, the env alone answers, as before.
  */

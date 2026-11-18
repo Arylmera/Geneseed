@@ -13,7 +13,7 @@ import { learnEnvCommand } from '../../js/build/emit-claude.mjs';
 import { leanArgv } from '../../js/hosts/hooks-learn.mjs';
 import { commandOnPath, learnCommandNotes } from '../../js/inspect/doctor.mjs';
 import { learnInstalls } from '../../js/inspect/status.mjs';
-import { learnState, readLearnLast } from '../../js/hosts/memory-files.mjs';
+import { learnLastNote, learnState, readLearnLast } from '../../js/hosts/memory-files.mjs';
 import { FAKE_LLM } from '../helpers/cli_golden.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
@@ -382,4 +382,94 @@ test('wireClaudeEnv: a user-set spawn depth is kept silently; a user-set GENESEE
     assert.equal(said, '', 'the user\'s depth is theirs: nothing printed on a rebuild');
     assert.equal(readEnv(p).CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH, '5');
   });
+});
+
+// ---- the blind review's round: stuck runs, prose replies, hostile verdict files -----------------------------------
+
+test('a run is marked running before the model is called, and a mark past its deadline reads as stuck', async () => {
+  const r = rig({ FAKE_LLM_DELAY_MS: '2500' });
+  try {
+    r.run({ session_id: 's', transcript_path: r.transcript, hook_event_name: 'SessionEnd' });
+    assert.ok(await until(() => readLearnLast(lastFile(r))?.running === true), 'the worker marks the run before it answers');
+    const mark = readLearnLast(lastFile(r));
+    assert.equal(learnState({}, installs, mark), 'claude: active (haiku)', 'a fresh run adds nothing');
+    const late = Date.parse(mark.by) + 1000;
+    assert.match(learnState({}, installs, mark).concat(learnLastNote(mark, late)), /last run stuck since \d{4}-\d{2}-\d{2}$/,
+      'past `by` the same mark is a stuck run');
+    assert.ok(await until(() => readLearnLast(lastFile(r))?.ok === true), 'a run that ends replaces the mark');
+  } finally { r.sb.cleanup(); }
+});
+
+test('a model that exits 0 with prose and no memory file is a failed run', () => {
+  const r = rig();
+  try {
+    fs.writeFileSync(path.join(r.sb.path, 'prose.txt'), 'Please run /login to continue\n');
+    workerRun(r, { FAKE_LLM_OUT: path.join(r.sb.path, 'prose.txt') });
+    const last = readLearnLast(lastFile(r));
+    assert.equal(last.ok, false);
+    assert.match(last.reason, /^unparseable reply: Please run \/login to continue$/);
+    assert.ok(!fs.existsSync(r.fact));
+    // A reply that is a stored fact again (a duplicate) is not prose: it stays a success.
+    workerRun(r, {});
+    workerRun(r, {});
+    assert.equal(readLearnLast(lastFile(r)).ok, true, 'a duplicate fact is not a failure');
+  } finally { r.sb.cleanup(); }
+});
+
+test('an empty reply to a sub-agent lesson is a failed run, as it is for the transcript', () => {
+  const r = rig();
+  try {
+    delete r.env.FAKE_LLM_OUT;
+    fs.mkdirSync(r.jobs, { recursive: true });
+    const file = path.join(r.jobs, 'job-11.json');
+    fs.writeFileSync(file, JSON.stringify({ v: 1, event: 'SessionEnd', host: 'claude', memory: path.join(r.inst, 'memory'),
+      transcript: null, agents: [{ agent: 'explore', payload: { last_assistant_message: 'did the thing well enough' } }] }));
+    spawnHook(['learn-worker', file], '', { env: r.env });
+    assert.equal(r.calls().length, 1, 'only the lesson was asked');
+    assert.match(readLearnLast(lastFile(r)).reason, /empty reply/);
+  } finally { r.sb.cleanup(); }
+});
+
+test('an unreadable job replaces an earlier good verdict with a failure', () => {
+  const r = rig();
+  try {
+    workerRun(r, {});
+    assert.equal(readLearnLast(lastFile(r)).ok, true);
+    const bad = path.join(r.jobs, 'job-12.json');
+    fs.writeFileSync(bad, '{ not json');
+    spawnHook(['learn-worker', bad], '', { env: r.env });
+    const last = readLearnLast(lastFile(r));
+    assert.equal(last.ok, false);
+    assert.match(last.reason, /the job could not be read/);
+  } finally { r.sb.cleanup(); }
+});
+
+test('a verdict file is data: control characters go, the reason is cut, a bad date is not printed', () => {
+  const evil = { at: '\u001b[2Jnot a date', ok: false, reason: `\u001b[31mred\u001b]0;pwned\u0007 ${'x'.repeat(500)}` };
+  const note = learnLastNote(evil);
+  assert.ok(!/[\u0000-\u001f\u007f]/.test(note), 'no control character reaches the terminal');
+  assert.match(note, /^ · last run failed an unknown date: /);
+  assert.ok(note.length < 260, 'the reason is capped at 200 characters');
+  const r = rig();
+  try {
+    fs.mkdirSync(path.dirname(lastFile(r)), { recursive: true });
+    fs.writeFileSync(lastFile(r), JSON.stringify(evil));
+    assert.ok(!/[\u0000-\u001f\u007f]/.test(learnState({}, installs, readLearnLast(lastFile(r)))));
+  } finally { r.sb.cleanup(); }
+});
+
+// A hung npm CLI: cmd.exe is killed at the timeout but the node it started is not, and it holds the stdout pipe.
+// With pipes `spawnSync` returned only when that node did (15.7 s for a 2 s timeout); with files it returns at the kill.
+test('a .cmd shim that hangs is abandoned at the timeout, not when its child exits (Windows only)', { skip: process.platform !== 'win32' }, () => {
+  const r = rig();
+  try {
+    const bin = path.join(r.sb.path, 'shims');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'hang-llm.cmd'), `@"${process.execPath}" -e "setTimeout(()=>{},15000)"\r\n`);
+    const t0 = Date.now();
+    workerRun(r, { PATH: `${bin};${process.env.PATH}`, GENESEED_LLM: 'hang-llm', GENESEED_LLM_TIMEOUT: '2' });
+    const took = Date.now() - t0;
+    assert.ok(took < 10000, `the worker returned after ${took} ms, not after the hung child's 15 s`);
+    assert.match(readLearnLast(lastFile(r)).reason, /gave no answer in 2 s/);
+  } finally { r.sb.cleanup(); }
 });

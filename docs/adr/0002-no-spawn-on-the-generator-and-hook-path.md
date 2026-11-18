@@ -37,7 +37,9 @@ tool call of every agent session, where a spawn costs time and a console window 
   on Windows 11 (spec S1c): the hook returns in 26 ms and the worker finishes 9 s later, after the session is gone.
   The worker has no stdio, so it reports through one file: after each run (the inline path too) it writes
   `<machine dir>/cache/learn-last.json`, `{ at, ok, reason, facts }`, which `status` and `doctor` append to the learn
-  line when the last run failed. No stdout, no further spawn.
+  line when the last run failed. It holds the latest run of any install on the machine, and what a reader prints from
+  it loses its control characters and is cut to 200 characters. A custom `.cmd` or `.bat` command gets its prompt on
+  stdin, not as an argument. No stdout, no further spawn.
   The model CLI itself runs lean (`--setting-sources ""`, `--strict-mcp-config`, `--tools ""`,
   `--disable-slash-commands`, `--no-session-persistence`, a short `--system-prompt`; never `--bare`, which needs an
   API key) and, for `openclaude`, runs `openclaude --help` first, through the same one `spawnSync` call.
@@ -57,9 +59,16 @@ tool call of every agent session, where a spawn costs time and a console window 
   words on the line are the user's own command and the fixed lean flags; a word holding a double quote, `%`, a line
   break or a trailing backslash refuses the call. For `claude` and `openclaude` the prompt goes over stdin on every path, native `.exe` and non-Windows included (a long
   prompt overran the 32 767-character Windows line and failed silently); any other command keeps it as its last argument.
-- **Known limit, `.cmd` path on Windows:** the model call's timeout bounds the *wait*, not the child's life. `SIGKILL`
-  ends `cmd.exe`, and the node process the npm shim started under it can outlive that kill. A kill-tree would be a
-  new spawn (`taskkill`), which this ADR does not allow, so it is not done; an `.exe` model CLI is killed whole.
+- **Known limits, `.cmd` path on Windows:** the timeout kills `cmd.exe`, and the node process the npm shim started under
+  it outlives the kill, so the timeout bounds the *wait*, not the child's life (the orphan ends when the CLI does). A
+  kill-tree would be a new spawn (`taskkill`), which this ADR does not allow; an `.exe` model CLI is killed whole. The
+  wait is bounded only because the one `spawnSync` call reads the model's answer from files and gives it its prompt from
+  a file, never pipes: an orphan holding a pipe's end kept `spawnSync` waiting for it (measured with a `.cmd` that
+  sleeps 15 s and a 2 s timeout: 15.7 s with pipes, 2.2 s with files). A run is also marked in `learn-last.json` before
+  the model is called (`running`, with the time by which it must be over), and `status` and `doctor` report
+  `last run stuck since <date>` for a mark left past that time, so a hung run is never `active` in silence. Two
+  workers can overlap (a PreCompact's and the SessionEnd's); the file then holds whichever ended last, the race
+  concurrent sessions already had.
 - `bin/geneseed-cli.mjs`, the user-facing CLI, spawns only from modules on a declared allow-list
   (`ALLOWED_SPAWNS`), each row naming the exact argv it may start — `git` for update, `node --check`
   for doctor, the web daemon relaunching this program, and so on. A new spawn is a new row with its

@@ -13,10 +13,11 @@
  * small job file and starts `geneseed-hook learn-worker <job>` apart from itself (S1c). A sub-agent's
  * lesson is queued at its SubagentStop and distilled by that worker, so a session pays for one run.
  */
+import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
-  appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync,
+  appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
@@ -364,9 +365,30 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {
     if (track) noteFail(plan.refuse);
     return { stdout: '', stderr: `[learn] ${plan.refuse}\n`, returncode: 1, error: null };
   }
-  const proc = spawnSync(plan.file, plan.args,
-    { input: plan.input, windowsVerbatimArguments: plan.verbatim, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: seconds * 1000, killSignal: 'SIGKILL',
-      env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+  // The answer goes to FILES, not pipes. On the Windows `.cmd` path the timeout kills cmd.exe but not the node the
+  // shim started under it; that orphan keeps a pipe's write end open, and `spawnSync` waits for the pipe to close, so
+  // a hung CLI held the wait for as long as it lived (measured: 15.7 s for a 2 s timeout). A file has no reader to
+  // wait for: `spawnSync` returns when cmd.exe is gone. The prompt comes from a file for the same reason (an orphan
+  // would hold a stdin pipe too).
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'geneseed-learn-'));
+  const outFile = path.join(scratch, 'out');
+  const errFile = path.join(scratch, 'err');
+  const inFile = path.join(scratch, 'in');
+  writeFileSync(inFile, plan.input ?? '');
+  const inFd = openSync(inFile, 'r');
+  const outFd = openSync(outFile, 'w');
+  const errFd = openSync(errFile, 'w');
+  let proc;
+  try {
+    proc = spawnSync(plan.file, plan.args,
+      { windowsVerbatimArguments: plan.verbatim, stdio: [inFd, outFd, errFd], timeout: seconds * 1000, killSignal: 'SIGKILL',
+        env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+  } finally {
+    closeSync(inFd); closeSync(outFd); closeSync(errFd);
+  }
+  const slurp = (f) => { try { return readFileSync(f, 'utf8'); } catch { return ''; } };
+  proc = { ...proc, stdout: slurp(outFile), stderr: slurp(errFile) };
+  try { rmSync(scratch, { recursive: true, force: true }); } catch { /* an orphan may still hold it open: the OS temp sweep gets it */ }
   if (proc.error && /** @type {NodeJS.ErrnoException} */ (proc.error).code === 'ETIMEDOUT') {
     if (track) noteFail(`${argv[0]} gave no answer in ${seconds} s and was stopped`);
     err(`[learn] ${argv[0]} gave no answer in ${seconds} s and was stopped - nothing learned.\n`);
@@ -403,6 +425,7 @@ function learnAgentLesson(agent, notes, memDir, llm) {
   const proc = runLlm(llm, prompt);
   // A model that failed (a lapsed login, a usage error) said nothing: what it printed is never a lesson.
   const text = proc.returncode === 0 ? proc.stdout.trim() : '';
+  if (proc.returncode === 0 && !text) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
   if (text && text.toUpperCase() !== 'NOTHING') {
     const lesson = splitLines(text)[0].replace(/^[-*]+/, '').trim();
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
@@ -647,11 +670,17 @@ function distil(notes, memDir, llm, hookEvent) {
   const proc = runLlm(llm, prompt);
   // On a hook run a failed model said nothing (S1f: a lapsed login prints on stdout or stderr alike).
   const output = hookEvent && proc.returncode !== 0 ? '' : proc.stdout;
+  const said = output.trim();
   // A zero exit with nothing said is a lapsed login or a swallowed error, never an answer: NOTHING is the answer.
   if (hookEvent && proc.returncode === 0 && !output.trim()) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
     const { created, updated, archived } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
     if (run) run.facts += created.length + updated.length;
+    // Prose is no memory file: a model that answers "Please run /login" exited 0 and stored nothing. A reply with
+    // a name: line that merely repeats stored facts is a duplicate, not a failure.
+    if (hookEvent && !created.length && !updated.length && !archived.length && !/^name:\s*\S/m.test(output)) {
+      noteFail(`unparseable reply: ${said.split(/\r?\n/)[0].slice(0, 80)}`);
+    }
     if (created.length) {
       err(`[learn] wrote ${created.length} memory file(s) to `
         + `${memDir}: ${created.join(', ')}\n`);
@@ -813,6 +842,9 @@ function runJob(job, llm) {
     return 0;
   }
   run = { fail: null, facts: 0 };
+  // Marked running BEFORE the model is called, with the latest time the run may end (every call can take the
+  // timeout): a hung CLI never reaches the line below, so this mark is what `status` finds.
+  writeLearnLast(null, '', 0, { runningFor: (1 + MAX_LESSON_AGENTS) * llmTimeoutSeconds() + 60 });
   try { return runJobIn(job, llm); } finally {
     const { fail, facts } = run;
     run = null;
@@ -886,7 +918,10 @@ export function cmdLearnWorker(args) {
     } else {
       runJob(job, process.env.GENESEED_LLM);
     }
-  } catch { /* an unreadable job is no job */ } finally {
+  } catch (e) {
+    // An unreadable job is no job, but the last verdict must not go on saying the run before it was fine.
+    writeLearnLast(false, `the job could not be read: ${e instanceof Error ? e.message : e}`);
+  } finally {
     try { if (existsSync(file)) unlinkSync(file); } catch { /* the sweep gets it */ }
   }
   return 0;
