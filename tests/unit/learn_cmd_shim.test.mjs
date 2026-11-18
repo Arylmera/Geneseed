@@ -129,7 +129,9 @@ test('lean flags reach a claude.cmd shim intact through cmd.exe (Windows only)',
   } finally { sb.cleanup(); }
 });
 
-// S-F4: a program planted in the project folder is never run: with nothing on PATH, the bare word used to go to
+// S-F4: a program planted in the project folder is never run. (Measured on Node 22.23: libuv no longer looks in the
+// current folder for a bare word, so this test is green with or without the refusal; the refusal's own row is the pure
+// `spawnPlan` test above, and this one guards an older libuv.) With nothing on PATH, the bare word used to go to
 // CreateProcess, which searches the current folder first. A copy of node named like the command, with a hook that
 // leaves a marker only when it is the planted copy that runs.
 test('a command planted in the working folder is not run when PATH holds none (Windows only)', { skip: process.platform !== 'win32' }, () => {
