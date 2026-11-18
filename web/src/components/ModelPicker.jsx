@@ -29,6 +29,9 @@ export default function ModelPicker({ open, title, data, current, onPick, onClos
     }
   }, [open])
 
+  // A model listed under its provider and again under "In use" is marked once: the In use copy of a
+  // detected id is the duplicate.
+  const selected = (g, m) => m.id === current && !(g.provider === 'in-use' && m.detected)
   const groups = open ? pickerGroups(data, q) : []
   const custom = typed.trim()
   return (
@@ -68,9 +71,9 @@ export default function ModelPicker({ open, title, data, current, onPick, onClos
               <button
                 type="button"
                 key={`${g.provider}|${m.id}`}
-                className={`mp-row${m.id === current ? ' on' : ''}`}
+                className={`mp-row${selected(g, m) ? ' on' : ''}`}
                 disabled={m.available === false}
-                aria-pressed={m.id === current}
+                aria-pressed={selected(g, m)}
                 onClick={() => onPick(m.id)}
                 title={m.available === false ? m.reason : undefined}
               >

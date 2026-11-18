@@ -69,6 +69,17 @@ export default function Models({ dataRev, onAction }) {
       />
     </>
   )
+  // The first load of the install list is "loading"; an empty list is an answer: no install to set.
+  if (active !== null && active.length === 0)
+    return (
+      <div className="lib-wrap">
+        {head}
+        <p className="sub" data-testid="models-no-install">
+          No Geneseed install is active, so there is no agent model to set.{' '}
+          <a href="#/installs">Install one on Installs →</a>
+        </p>
+      </div>
+    )
   if (error)
     return (
       <div className="lib-wrap">
@@ -80,7 +91,7 @@ export default function Models({ dataRev, onAction }) {
     return (
       <div className="lib-wrap">
         {head}
-        {error ? null : <Loading />}
+        <Loading />
       </div>
     )
   const label = hostInfo(data.host).label

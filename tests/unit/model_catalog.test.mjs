@@ -46,6 +46,7 @@ function fakeFetch(routes = {}) {
   const calls = [];
   const fn = async (url, init = {}) => {
     calls.push({ url, init });
+    if (init.redirect !== 'error') throw new Error('a probe must pass redirect: error');
     if (!Object.hasOwn(routes, url)) throw new Error('ECONNREFUSED');
     return { ok: true, json: async () => routes[url] };
   };
@@ -295,6 +296,49 @@ test('office setup end to end: both hosts list both models, tiers on corp-fast w
     assert.equal(res.tiers, 'auto');
   }
   for (const c of f.calls) assert.match(c.url, /^http:\/\/127\.0\.0\.1:/, 'nothing but loopback was called');
+});
+
+// ---- review fixes: redirects, env URLs, case, host scope ------------------------------------------------
+
+test('a probe refuses redirects, so a local service cannot bounce it elsewhere', async () => {
+  const m = machine();
+  const f = fakeFetch({ [OLLAMA_URL]: { models: [] } });
+  await readModelCatalog({ host: 'opencode', scope: 'global', dir: m.home, root: m.home, ...m, fetchFn: f });
+  assert.ok(f.calls.length >= 2);
+  for (const c of f.calls) assert.equal(c.init.redirect, 'error', c.url);
+});
+
+test('an OpenCode baseURL written as {env:X} is resolved before the OpenClaude match; an unset one never matches', async () => {
+  const cfg = { provider: { corp: { options: { baseURL: '{env:CORP_URL}', apiKey: '{env:CORP_LLM_KEY}' }, models: { 'corp-coder-xl': {}, 'corp-fast': {} } } } };
+  const m = machine({ CORP_URL: 'https://llm.internal.example/v1', CORP_LLM_KEY: SENTINEL, CLAUDE_CODE_USE_OPENAI: '1', OPENAI_BASE_URL: 'https://llm.internal.example/v1/', OPENAI_MODEL: 'other' });
+  put(opencodeFile(m), cfg);
+  const dir = path.join(m.home, '.openclaude');
+  const res = await read({ host: 'openclaude', dir, root: m.home, ...m });
+  assert.deepEqual(ids(res), ['inherit', 'corp-coder-xl', 'corp-fast', 'other']);
+  assert.equal(JSON.stringify(res).includes(SENTINEL), false);
+  const unset = { ...m, env: { ...m.env } };
+  delete unset.env.CORP_URL;
+  assert.deepEqual(ids(await read({ host: 'openclaude', dir, root: m.home, ...unset })), ['inherit', 'other']);
+  // A partial reference is not a whole-string one: it is taken as written, so it matches nothing.
+  put(opencodeFile(m), { provider: { corp: { options: { baseURL: '{env:CORP_URL}/x' }, models: { a: {} } } } });
+  assert.deepEqual(ids(await read({ host: 'openclaude', dir, root: m.home, ...m })), ['inherit', 'other']);
+});
+
+test('OpenClaude does not read its own config dir as an OpenCode config', async () => {
+  const home = sandbox('mc-oc-home-');
+  const dir = path.join(home, '.openclaude');
+  const m = { home, env: { CLAUDE_CODE_USE_OPENAI: '1', OPENAI_BASE_URL: 'https://x.example/v1', OPENAI_MODEL: 'act' } };
+  put(path.join(dir, 'opencode.json'), { provider: { stray: { options: { baseURL: 'https://x.example/v1' }, models: { 'stray-model': {} } } } });
+  assert.deepEqual(ids(await read({ host: 'openclaude', dir, root: home, ...m })), ['inherit', 'act']);
+  // The same file IS read for an OpenCode install whose config dir it is.
+  assert.ok(ids(await read({ host: 'opencode', dir, root: dir, ...m })).includes('stray/stray-model'));
+});
+
+test('availableModels extras keep their case (a Bedrock ARN), while the match ignores it', async () => {
+  const dir = sandbox('mc-claude-case-');
+  put(path.join(dir, 'settings.json'), { availableModels: ['Sonnet', 'arn:aws:bedrock:us-east-1:123:Inference-Profile/Corp.Haiku'] });
+  const res = await read({ host: 'claude', dir, root: dir, home: dir, env: {} });
+  assert.deepEqual(ids(res), ['inherit', 'sonnet', 'arn:aws:bedrock:us-east-1:123:Inference-Profile/Corp.Haiku']);
 });
 
 test('Bob answers no models', async () => {

@@ -337,6 +337,43 @@ describe('Models page', () => {
     expect(names()).toEqual(['reviewer', 'developer', 'explorer'])
   })
 
+  it('with no active install it says so and links to Installs, never spinning; while the list loads it spins', async () => {
+    let release
+    api.installs.mockReset().mockReturnValue(new Promise((r) => (release = r)))
+    api.agentModels.mockRejectedValue(new Error('no install'))
+    render(<Models dataRev={0} onAction={() => {}} />)
+    expect(screen.queryByTestId('models-no-install')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Models' })).toBeTruthy()
+    await act(async () => release({ installs: [] }))
+    const note = await screen.findByTestId('models-no-install')
+    expect(note.textContent).toMatch(/No Geneseed install is active/)
+    expect(within(note).getByRole('link').getAttribute('href')).toBe('#/installs')
+    expect(screen.queryByText('no install')).toBeNull()
+  })
+
+  it('marks the picked model once, though it also sits under In use', async () => {
+    api.agentModels.mockResolvedValue({
+      ...DATA,
+      models: [
+        ...DATA.models,
+        row('corp/corp-fast', {
+          provider: 'in-use',
+          providerName: 'In use',
+          source: 'in-use',
+          note: 'written',
+          detected: true,
+        }),
+      ],
+    })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: /Light tier model/ }))
+    const dlg = await screen.findByRole('dialog', { hidden: true })
+    const pressed = within(dlg).getAllByRole('button', { pressed: true, hidden: true })
+    expect(pressed.map((b) => b.closest('section').getAttribute('aria-label'))).toEqual([
+      'Corp LLM',
+    ])
+  })
+
   it('says plainly that Bob takes no per-agent model', async () => {
     api.installs.mockResolvedValue({ installs: [BOB] })
     api.agentModels.mockResolvedValue({ host: 'bob', claude: false, tiers: 'off', agents: [] })

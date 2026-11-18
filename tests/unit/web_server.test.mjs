@@ -541,7 +541,7 @@ test('the declared surface is the one the dispatcher uses', async () => {
     assert.equal(await hit('GET', '/api/profile'), 200,
       'a table GET must answer — the control, without which every refusal below is vacuous');
     assert.equal(await hit('GET', '/api/jobs'), 200, 'an inline GET must answer too');
-    assert.equal(await hit('GET', '/api/agent-models'), 200, 'GET /api/agent-models must answer on the default install');
+    assert.equal(await hit('GET', '/api/agent-models?models=0'), 200, 'GET /api/agent-models must answer on the default install (the light read: no probe of a real runtime)');
     // The probe's default install is OpenCode, where 'x' is no provider/model: refused (409) by the value check, nothing written.
     assert.equal(await hit('POST', '/api/agent-models', 'tok', '{"tiers": {"light": "x"}}'), 409,
       'POST /api/agent-models must reach apiAgentModelsSave and refuse a value OpenCode cannot take');

@@ -326,7 +326,39 @@ test('a hand-edited marker value reads as off, so it can never reach --tiers', (
   assert.equal(tiersOfDir(d, 'claude'), 'off');
 });
 
-test('OpenClaude, Bob and OpenCode record the choice; with no map none of them routes (no default), and a mapped tier routes on the first two', () => {
+/** Where one emit's agents land, and where its agent-overrides.json is read (OpenCode: the project root). */
+const emitPlace = (emitName, d) => ({
+  agents: path.join(d, { opencode: '.opencode', bob: '.bob', openclaude: '.openclaude' }[emitName], 'agents'),
+  overrides: path.join(d, emitName === 'openclaude' ? '.openclaude' : emitName === 'bob' ? '.bob' : '', 'agent-overrides.json'),
+});
+const withModels = (agents) => fs.readdirSync(agents).filter((f) => /^model: /m.test(read(agents, f)));
+const MAP = { tiers: { light: 'corp/fast' } };
+
+for (const emitName of ['opencode', 'openclaude', 'bob']) {
+  // A populated tiers map is inert while the routing is off: every agent file carries no model line.
+  test(`${emitName}: --tiers off with a populated tiers map writes no model line`, () => {
+    const d = sandbox(`gst-off-map-${emitName}-`);
+    const { agents, overrides } = emitPlace(emitName, d);
+    fs.mkdirSync(path.dirname(overrides), { recursive: true });
+    fs.writeFileSync(overrides, JSON.stringify(MAP));
+    withEnv(NO_CLOUD, () => assert.equal(build('--emit', emitName, '--out', d, '--theme', 'neutral', '--tiers', 'off').value, 0));
+    assert.deepEqual(withModels(agents), [], emitName);
+  });
+  // The same map with the routing on: OpenCode and OpenClaude route the light tier, Bob never writes a model.
+  test(`${emitName}: --tiers auto with a tiers map ${emitName === 'bob' ? 'still writes no model line' : 'routes the light tier through a real build'}`, () => {
+    const d = sandbox(`gst-auto-map-${emitName}-`);
+    const { agents, overrides } = emitPlace(emitName, d);
+    fs.mkdirSync(path.dirname(overrides), { recursive: true });
+    fs.writeFileSync(overrides, JSON.stringify(MAP));
+    withEnv(NO_CLOUD, () => assert.equal(build('--emit', emitName, '--out', d, '--theme', 'neutral', '--tiers', 'auto').value, 0));
+    if (emitName === 'bob') { assert.deepEqual(withModels(agents), []); return; }
+    assert.equal(modelOf(agents, 'explorer'), 'corp/fast');
+    assert.equal(modelOf(agents, 'developer'), null, 'the unmapped standard tier has no default here');
+    assert.equal(modelOf(agents, 'reviewer'), null);
+  });
+}
+
+test('OpenClaude, Bob and OpenCode record the choice, and with no map none of them routes (no default)', () => {
   for (const emitName of ['openclaude', 'bob', 'opencode']) {
     const d = sandbox(`gst-${emitName}-`);
     withEnv(NO_CLOUD, () => assert.equal(build('--emit', emitName, '--out', d, '--theme', 'neutral', '--tiers', 'auto').value, 0));

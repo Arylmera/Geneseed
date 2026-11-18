@@ -86,7 +86,7 @@ function readJson(p) {
 /** `GET url` on loopback, no header at all, `PROBE_MS`; the parsed body or null. */
 async function probe(fetchFn, url) {
   try {
-    const res = await fetchFn(url, { signal: AbortSignal.timeout(PROBE_MS) });
+    const res = await fetchFn(url, { signal: AbortSignal.timeout(PROBE_MS), redirect: 'error' });
     if (!res || !res.ok) return null;
     return await res.json();
   } catch { return null; }
@@ -114,19 +114,25 @@ const localRuntimes = (fetchFn) => Promise.all([localRuntime(fetchFn, 'ollama'),
 const xdg = (env, home, name, dflt) => env[name] || path.join(home, dflt);
 
 /** The opencode config files that apply: the user's, then the project's. Order is merge order. */
-function opencodeConfigFiles({ scope, root, dir, env, home }) {
+function opencodeConfigFiles({ host, scope, root, dir, env, home }) {
   const dirs = [];
   const add = (d) => { if (d && !dirs.includes(d)) dirs.push(d); };
   add(env.OPENCODE_CONFIG_DIR);
   add(path.join(xdg(env, home, 'XDG_CONFIG_HOME', '.config'), 'opencode'));
   const projectDirs = scope === 'project' ? [root, path.join(root, '.opencode')] : [];
-  if (scope === 'global') add(dir);
+  if (scope === 'global' && host === 'opencode') add(dir);
   return [...dirs, ...projectDirs].flatMap((d) => [path.join(d, 'opencode.json'), path.join(d, 'opencode.jsonc')]);
 }
 
+/** A whole-string `{env:X}` reference resolved against the env; a URL is not a secret. Anything else as written. */
+const envRef = (v, env) => {
+  const m = typeof v === 'string' ? /^\{env:([A-Za-z_][A-Za-z0-9_]*)\}$/.exec(v) : null;
+  return m ? text(env[m[1]]) : v;
+};
+
 /**
  * The custom providers the OpenCode configs define (`provider` V1, `providers` V2), the two
- * `*_providers` lists and the files read. `options` is never read: a key may sit there.
+ * `*_providers` lists and the files read. Of `options` only `baseURL` is read; a key may sit beside it.
  */
 export function readOpencodeConfig(ctx) {
   const providers = new Map();
@@ -141,7 +147,7 @@ export function readOpencodeConfig(ctx) {
       if (!isDict(data[key])) continue;
       for (const [id, p] of Object.entries(data[key])) {
         if (id === '__proto__' || !isDict(p)) continue;
-        const baseURL = text(p.options?.baseURL) ?? text(p.options?.baseUrl) ?? text(p.baseURL);
+        const baseURL = envRef(text(p.options?.baseURL) ?? text(p.options?.baseUrl) ?? text(p.baseURL), ctx.env);
         providers.set(id, { id, name: text(p.name) ?? id, baseURL, models: isDict(p.models) ? p.models : {}, file: path.basename(f) });
       }
     }
@@ -272,13 +278,13 @@ function claudeAvailable({ dir }) {
   let list = null;
   for (const f of ['settings.json', 'settings.local.json']) {
     const { state, data } = loadJsonObject(path.join(dir, f));
-    if (state === 'ok' && Array.isArray(data.availableModels)) list = data.availableModels.filter((x) => typeof x === 'string').map((x) => x.trim().toLowerCase()).filter(Boolean);
+    if (state === 'ok' && Array.isArray(data.availableModels)) list = data.availableModels.filter((x) => typeof x === 'string').map((x) => x.trim()).filter(Boolean);
   }
   return list;
 }
 
 /** An alias is allowed by an entry that is the family, or a version/full id of it. */
-const aliasAllowed = (alias, list) => list === null || list.some((e) => e === alias || e.startsWith(`${alias}-`) || e.startsWith(`claude-${alias}`) || e.startsWith(`${alias}[`));
+const aliasAllowed = (alias, list) => list === null || list.map((x) => x.toLowerCase()).some((e) => e === alias || e.startsWith(`${alias}-`) || e.startsWith(`claude-${alias}`) || e.startsWith(`${alias}[`));
 
 function claudeModels(ctx, add, group) {
   const list = claudeAvailable(ctx);
@@ -286,7 +292,8 @@ function claudeModels(ctx, add, group) {
   group(base);
   for (const [id, name] of CLAUDE_ALIASES) if (aliasAllowed(id, list)) add(row(id, base, { name }));
   for (const e of list ?? []) {
-    if (CLAUDE_ALIASES.some(([a]) => e === a || e.startsWith(`${a}-`) || e.startsWith(`claude-${a}`))) continue;
+    const l = e.toLowerCase();
+    if (CLAUDE_ALIASES.some(([a]) => l === a || l.startsWith(`${a}-`) || l.startsWith(`claude-${a}`))) continue;
     add(row(e, { ...base, note: 'availableModels' }));
   }
 }
