@@ -628,7 +628,9 @@ describe('Installs / Hosts', () => {
     expect(screen.queryByRole('group', { name: /Model tiers for/ })).toBeNull()
     expect(api.agentModels).not.toHaveBeenCalled()
     fireEvent.change(sel, { target: { value: 'auto' } })
-    expect(screen.getByText(/Standard agents run on sonnet, light ones on haiku/)).toBeTruthy()
+    expect(
+      screen.getByText(/By default standard agents run on sonnet and light ones on haiku/),
+    ).toBeTruthy()
     expect(apply.disabled).toBe(false)
     fireEvent.click(apply)
     await answered()

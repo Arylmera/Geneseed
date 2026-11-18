@@ -26,7 +26,7 @@ const CONTEXT_WINDOW_NOTE = {
 const TIERS_OPTIONS = ['off', 'auto']
 const TIERS_NOTE = {
   off: 'Every agent runs on your session model, unless you pin one.',
-  auto: 'Standard agents run on sonnet, light ones on haiku; strong ones (architect, reviewer, security, performance) keep your session model. Your pins in agent-overrides.json win.',
+  auto: 'By default standard agents run on sonnet and light ones on haiku; strong ones keep your session model. Your pins in agent-overrides.json win.',
 }
 
 // The MCP servers an active install's config already holds, read-only. Which servers to wire

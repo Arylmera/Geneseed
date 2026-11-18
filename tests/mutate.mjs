@@ -709,10 +709,8 @@ export const MUTATIONS = [
     id: 'M45',
     name: "a tier's model outranks the user's own pin",
     file: 'js/hosts/native.mjs',
-    find: "  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);\n"
-      + '  else if (tierModel) fm.push(`model: ${formatValue(tierModel)}`);',
-    replace: '  if (tierModel) fm.push(`model: ${formatValue(tierModel)}`);\n'
-      + '  else if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);',
+    find: "  if (isTruthy(pin)) return { model: formatValue(pin), from: 'pin', warning: null };",
+    replace: "  if (isTruthy(pin) && !tiers) return { model: formatValue(pin), from: 'pin', warning: null };",
     gate: ['--test', 'tests/unit/tiers.test.mjs'],
     why: 'THE PRECEDENCE IS THE DECISION (spec D5, B4): the user\'s `agents.<name>.model` beats the tier, '
       + 'a stronger model included. Flipped, `--tiers auto` silently overrides a model the user chose, '

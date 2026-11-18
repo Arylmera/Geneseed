@@ -250,6 +250,20 @@ test('POST creates the file when there is none, and clears a pin without touchin
   assert.deepEqual(JSON.parse(read(cfg, 'agent-overrides.json')), { agents: { developer: { variant: 'high' } } });
 });
 
+test('the first save against what a plain emit leaves behind works, and keeps its keys', () => {
+  // NO pre-written overrides: the file (or its absence) a real user has on the first save.
+  const { st, cfg, file } = claudeInstall('auto');
+  const stub = fs.existsSync(file) ? JSON.parse(read(cfg, 'agent-overrides.json')) : {};
+  const res = apiAgentModelsSave(st, { tiers: { light: 'claude-haiku-4-5' }, agents: { reviewer: 'opus' } });
+  assert.equal(res.ok, true, res.error);
+  const saved = JSON.parse(read(cfg, 'agent-overrides.json'));
+  for (const [k, v] of Object.entries(stub)) {
+    if (k !== 'tiers' && k !== 'agents') assert.deepEqual(saved[k], v, `the stub's ${k} is kept`);
+  }
+  assert.equal(saved.tiers.light, 'claude-haiku-4-5');
+  assert.equal(saved.agents.reviewer.model, 'opus');
+});
+
 test('POST refuses a file that does not parse, and leaves its bytes alone', () => {
   const broken = '{\n  // my notes\n  "tiers": {}\n}\n';
   const { st, file } = claudeInstall('auto', broken);
