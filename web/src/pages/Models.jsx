@@ -118,7 +118,13 @@ export default function Models({ dataRev, onAction }) {
         : tierDraft[t]
       : tierNow(data, t)
   const pinValue = (a) => (pinDraft[a.name] !== undefined ? pinDraft[a.name] : a.pin)
-  const changes = Object.keys(tierDraft).length + Object.keys(pinDraft).length
+  const fileChanges = Object.keys(tierDraft).length + Object.keys(pinDraft).length
+  // The routing lives in the install's carrier (`Model tiers: auto`), not in agent-overrides.json:
+  // only a rebuild writes it. It still counts as an unsaved change, and Save carries it through
+  // that rebuild, or the flip looks saved while a reload silently puts it back (user, 2026-11-18).
+  // Compared with the install's own value, so a draft the rebuild has applied is no longer pending.
+  const routingPending = routing !== null && routing !== data.tiers
+  const changes = fileChanges + (routingPending ? 1 : 0)
   const sorted = sort
     ? [...data.agents].sort(
         (a, b) =>
@@ -148,20 +154,28 @@ export default function Models({ dataRev, onAction }) {
   }
 
   const save = async () => {
-    setBusy(true)
-    setErr('')
-    try {
-      const res = await api.agentModelsSave({ tiers: tierDraft, agents: pinDraft }, pairOf(install))
-      setData({ ...data, ...res })
-      reload()
-      setTierDraft({})
-      setPinDraft({})
-      setSaved(true)
-    } catch (e) {
-      setErr(e.message)
-    } finally {
-      setBusy(false)
+    if (fileChanges) {
+      setBusy(true)
+      setErr('')
+      try {
+        const res = await api.agentModelsSave(
+          { tiers: tierDraft, agents: pinDraft },
+          pairOf(install),
+        )
+        setData({ ...data, ...res })
+        reload()
+        setTierDraft({})
+        setPinDraft({})
+        setSaved(true)
+      } catch (e) {
+        setErr(e.message)
+        return
+      } finally {
+        setBusy(false)
+      }
     }
+    // The routing reaches the install only through a rebuild, so a pending flip goes there now.
+    if (routingPending) await rebuild()
   }
 
   const rebuild = async () => {
@@ -227,7 +241,7 @@ export default function Models({ dataRev, onAction }) {
           {routingNow === 'auto'
             ? 'Agents run on the model of their tier, unless you pin one. Applied at the next rebuild.'
             : 'Every agent runs on your session model, unless you pin one.'}
-          {routing !== null ? ' Not rebuilt yet.' : ''}
+          {routingPending ? ' Not rebuilt yet: Save rebuilds this install.' : ''}
         </p>
       </div>
 
@@ -350,10 +364,10 @@ export default function Models({ dataRev, onAction }) {
         <button
           type="button"
           className="btn"
-          disabled={!changes || !!problem || busy}
+          disabled={!changes || (fileChanges > 0 && !!problem) || busy}
           onClick={save}
         >
-          Save
+          {routingPending ? 'Save and rebuild…' : 'Save'}
         </button>
         <button
           type="button"

@@ -275,14 +275,22 @@ describe('Models page', () => {
     expect(api.agentModelsSave.mock.calls[0][0]).toEqual({ tiers: { standard: null }, agents: {} })
   })
 
-  it('the routing flip is a rebuild choice: Rebuild… confirms and sends tiers with the install', async () => {
+  // The routing lives in the install's carrier, so only a rebuild writes it. A flip is still an
+  // unsaved change: Save is enabled, says it rebuilds, and sends tiers with the install action.
+  // agent-overrides.json is not touched, because nothing in it changed (user, 2026-11-18: a flip
+  // that left Save disabled was lost on reload).
+  it('the routing flip is an unsaved change: Save and rebuild… sends tiers with the install', async () => {
     const onAction = vi.fn()
     await open({ onAction })
     fireEvent.click(screen.getByRole('button', { name: 'auto' }))
-    expect(screen.getByText(/Not rebuilt yet/)).toBeTruthy()
-    expect(api.agentModelsSave).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Rebuild…' }))
+    expect(screen.getByText(/Not rebuilt yet: Save rebuilds this install/)).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('1 unsaved change')
+    expect(screen.getByRole('button', { name: 'Rebuild…' }).disabled).toBe(true)
+    const save = screen.getByRole('button', { name: 'Save and rebuild…' })
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
     await answered()
+    expect(api.agentModelsSave).not.toHaveBeenCalled()
     expect(askConfirm.mock.calls[0][0]).toMatch(/model routing auto/)
     expect(onAction).toHaveBeenCalledWith('install', {
       host: 'opencode',
@@ -290,6 +298,24 @@ describe('Models page', () => {
       path: '/oc',
       tiers: 'auto',
     })
+  })
+
+  // A pin and a flip together: the file is saved first, then the same Save rebuilds with the
+  // routing. Flipping back to the install's own value is no change at all.
+  it('a pin and a routing flip: Save writes the file, then rebuilds with tiers', async () => {
+    const onAction = vi.fn()
+    await open({ onAction })
+    fireEvent.click(screen.getByRole('button', { name: 'auto' }))
+    fireEvent.click(screen.getByRole('button', { name: 'off' }))
+    expect(screen.getByRole('status').textContent).toBe('No unsaved changes.')
+    fireEvent.click(screen.getByRole('button', { name: 'auto' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the pin of developer' }))
+    expect(screen.getByRole('status').textContent).toBe('2 unsaved changes')
+    api.agentModelsSave.mockResolvedValue({ ...DATA, ok: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and rebuild…' }))
+    await answered()
+    expect(api.agentModelsSave.mock.calls[0][0]).toEqual({ tiers: {}, agents: { developer: null } })
+    expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ tiers: 'auto' }))
   })
 
   it('a refusal from the server is shown and the draft is kept; Rebuild waits for the save', async () => {

@@ -12,6 +12,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 - `status` and `doctor` called memory learning dormant on installs that learn. The `learn` line read only the shell's `$GENESEED_LLM`. It now judges each installed host: OpenCode distils with the session model (active), Bob sends no transcript (n/a), and a Claude Code or OpenClaude hook also counts `GENESEED_LLM` set in the `"env"` of its settings files.
 - The web console's Doctor counted `[note]` lines as problems, so a healthy machine read "1 problem". Notes are now split out as the CLI does and shown as muted lines.
+- The Models page lost a routing flip (`off` ↔ `auto`). Save stayed disabled, the footer said "No unsaved changes", and a reload put the old value back: only *Rebuild…* applied it, and the page did not say so. A flip now counts as an unsaved change, and Save becomes *Save and rebuild…*: it writes any tier or pin edits, then rebuilds the install with the new routing.
 
 ## [6.0.3] — 2026-11-18
 
