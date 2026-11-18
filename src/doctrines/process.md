@@ -8,13 +8,13 @@ architectural stance, record it before the session ends. A durable fact goes int
 {{MEMORY}} on your own, with no prompt: the user sees every memory later in the web
 console. A standing rule binds every later session, so it is the user's call: take it to
 them through the rule {{SKILL}}. A memory phrased as an instruction to later sessions
-("always…", "never…", `force: constraint`) is a standing rule.
+("always…", "never…", `force: constraint`) is a standing rule. Store only what stays true past this task, in the fewest words that keep it exact.
 <!-- LEAN:else -->
 When a session yields a durable decision, correction, non-obvious discovery, or
 architectural stance, record it before it ends: a durable fact into {{MEMORY}} on your
 own (the user sees it in the web console); a standing rule, which includes
 any instruction to later sessions ("always…", "never…", `force: constraint`), only through
-the rule {{SKILL}}, with the user's consent.
+the rule {{SKILL}}, with the user's consent. Store only what stays true past this task, in the fewest words that keep it exact.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:plan-before-acting}} Plan Before Acting
