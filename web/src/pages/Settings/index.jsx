@@ -16,7 +16,7 @@ const FALLBACK_REPO = 'https://github.com/Arylmera/Geneseed'
 const CREATOR_URL = 'https://github.com/Arylmera'
 
 // The sheet's sections, in page order: the index is built from this, so the two never differ.
-const SECTIONS = [
+export const SECTIONS = [
   ['machine', 'Machine'],
   ['server', 'Server'],
   ['about', 'About'],

@@ -8,7 +8,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage.js'
 // alone, then what governs, what is built, what runs, and help. A badge is what
 // its page lists, across every install, deduped (`overview.counts`; __tests__/railCounts.test.jsx
 // holds each one to its page); a page with no honest single number carries none.
-const NAV = [
+export const NAV = [
   { group: 'core', hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
   {
     group: 'govern',
@@ -60,7 +60,7 @@ const NAV = [
   },
 ]
 
-const FOOT = [
+export const FOOT = [
   { group: 'help', hash: '#/docs', page: 'docs', label: 'Docs', icon: 'docs' },
   { group: 'run', hash: '#/activity', page: 'activity', label: 'Activity', icon: 'activity' },
   { group: 'help', hash: '#/settings', page: 'settings', label: 'Settings', icon: 'settings' },
