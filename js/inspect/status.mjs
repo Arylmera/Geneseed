@@ -273,6 +273,32 @@ export function keptKitFiles(host, scope, root, active) {
 }
 
 /**
+ * The installs present, each with the settings `"env"` objects its hook runs under, for
+ * `learnState` (D12). A Claude-shaped hook gets its env from the shell and from the settings
+ * files: the host's user settings always, plus the project's two for a project install. Not on
+ * the hook path; an unreadable file is simply no env.
+ */
+export function learnInstalls(targets = installTargets()) {
+  const envOf = (file) => readJsonMaybe(file)?.env ?? null;
+  const out = [];
+  for (const [host, scope, root] of targets) {
+    let state;
+    try { state = installState(root, host, scope); } catch { continue; }
+    if (state !== 'active') continue;
+    if (!CLAUDE_STYLE.includes(host) || host === 'bob') { out.push({ host }); continue; }
+    const spec = HOSTS.find((h) => h.host === host);
+    const files = [];
+    try { files.push(path.join(spec.configDir(), 'settings.json')); } catch { /* no host dir */ }
+    if (scope !== 'global') {
+      const dir = path.join(root, spec.projectMarker);
+      files.push(path.join(dir, 'settings.json'), path.join(dir, 'settings.local.json'));
+    }
+    out.push({ host, settingsEnv: files.map(envOf) });
+  }
+  return out;
+}
+
+/**
  * The `[host, scope, root]` of `targets` the user chose as the default, or null: no pick, or a pick
  * that no longer names an ACTIVE install (removed, disabled, or not seen from here). A stale pick
  * stays on disk and works again if that install comes back.
@@ -365,7 +391,7 @@ export function statusData() {
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
     drafts_pending: pendingDrafts(),
-    learn: learnState(),
+    learn: learnState(process.env, learnInstalls()),
     store_report: lastStoreReport(),
     opencode_shadow: opencodeShadowedInstall(),
     openclaude_dual_harness: openclaudeDualHarnessRoots(),
