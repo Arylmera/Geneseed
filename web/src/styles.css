@@ -3244,7 +3244,9 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: var(--fs-xs);
 .ip-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } /* off-scale: 10px, 2px from a step */
 .ip-picks .dp-field, .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; /* off-scale: 6px, 2px from a step */
   font-size: var(--fs-sm); font-weight: 600; }
-.ip-picks .dp-field:first-child { grid-column: 1 / -1; }
+/* Voice by name, not first-child: below Standard it is hidden and Footprint would take the row.
+   The footprint note gets its own row too, rather than a narrow cell after the last pick. */
+.ip-picks .dp-field[data-pick="voice"], .ip-picks > .sub { grid-column: 1 / -1; }
 .ip-picks .sel, .field .sel { width: 100%; min-width: 0; font-family: var(--font-ui); }
 .ip-block { display: flex; flex-direction: column; gap: 6px; } /* off-scale: 6px, 2px from a step */
 .ip-label { font-size: var(--fs-sm); font-weight: 600; }

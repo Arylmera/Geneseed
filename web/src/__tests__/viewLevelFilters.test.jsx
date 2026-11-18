@@ -11,6 +11,7 @@ vi.mock('../api/index.js', () => ({
     usage: vi.fn(() => Promise.resolve(null)),
     loadout: vi.fn(() => Promise.resolve(null)),
     agentModels: vi.fn(),
+    excludes: vi.fn(() => Promise.resolve({ patterns: [] })),
   },
 }))
 
@@ -18,6 +19,7 @@ import Sidebar, { TabBar } from '../components/Sidebar.jsx'
 import Tabs from '../components/Tabs.jsx'
 import Library, { resolveSec } from '../pages/Library.jsx'
 import Settings from '../pages/Settings/index.jsx'
+import InstallPanel from '../pages/Installs/InstallPanel.jsx'
 import { ViewLevelProvider } from '../hooks/useViewLevel.jsx'
 
 const at = (level, ui) => {
@@ -33,7 +35,7 @@ describe('view level filters the surfaces', () => {
   it('Essentials rail', () => {
     at('essentials', <Sidebar route={{ page: 'overview' }} />)
     expect(sorted(rail())).toEqual(
-      sorted(['Overview', 'Library', 'Personal', 'Installs', 'Docs', 'Settings']),
+      sorted(['Overview', 'Constitution', 'Library', 'Personal', 'Installs', 'Docs', 'Settings']),
     )
   })
 
@@ -44,7 +46,7 @@ describe('view level filters the surfaces', () => {
     expect(screen.queryByText('Run')).not.toBeNull()
   })
 
-  it('Standard rail adds Kits, Activity, Constitution', () => {
+  it('Standard rail adds Kits and Activity', () => {
     at('standard', <Sidebar route={{ page: 'overview' }} />)
     expect(sorted(rail())).toEqual(
       sorted([
@@ -69,8 +71,7 @@ describe('view level filters the surfaces', () => {
   it('Essentials tab bar', () => {
     at('essentials', <TabBar route={{ page: 'overview' }} />)
     const bar = screen.getByRole('navigation', { name: 'Console pages' })
-    expect(within(bar).queryByText('Constitution')).toBeNull()
-    for (const t of ['Overview', 'Library', 'Installs', 'More'])
+    for (const t of ['Overview', 'Constitution', 'Library', 'Installs', 'More'])
       expect(within(bar).getByText(t)).toBeTruthy()
   })
 
@@ -108,17 +109,58 @@ describe('view level filters the surfaces', () => {
     expect(resolveSec('config', undefined, ['agents', 'wiki'])).toBe('config')
   })
 
-  it('TabBar keeps the lit page when it is hidden', () => {
-    at('essentials', <TabBar route={{ page: 'laws' }} />)
-    const bar = screen.getByRole('navigation', { name: 'Console pages' })
-    expect(within(bar).getByText('Constitution')).toBeTruthy()
-  })
-
   it('Settings hides the Danger zone below Power', () => {
     const { unmount } = at('standard', <Settings onAction={() => {}} />)
     expect(screen.queryAllByText('Danger zone')).toHaveLength(0)
     unmount()
     at('power', <Settings onAction={() => {}} />)
     expect(screen.getAllByText('Danger zone').length).toBeGreaterThan(0)
+  })
+
+  // Essentials keeps the two picks a newcomer weighs (how big, how chatty); the voice, the
+  // mode, loop trust and the context window wait for Standard.
+  it('install panel shows only Footprint and Posture at Essentials', () => {
+    const inst = { id: 'c', host: 'claude', scope: 'global', state: 'active', path: '/c' }
+    const choice = {
+      theme: 'imperial',
+      footprint: 'lean',
+      posture: 'expert',
+      mode: 'foreman',
+      trust: 'balanced',
+      contextWindow: '1m',
+    }
+    const options = {
+      theme: ['imperial'],
+      footprint: ['lean', 'full'],
+      posture: ['expert'],
+      mode: ['foreman'],
+      trust: ['balanced'],
+    }
+    const panel = (level) =>
+      at(
+        level,
+        <InstallPanel
+          inst={inst}
+          targets={[]}
+          choice={choice}
+          options={options}
+          onPick={() => {}}
+          canAct
+        />,
+      )
+    const fields = () =>
+      [...document.querySelectorAll('.dp-field > span')].map((n) => n.textContent)
+    const { unmount } = panel('essentials')
+    expect(fields()).toEqual(['Footprint', 'Posture'])
+    unmount()
+    panel('standard')
+    expect(fields()).toEqual([
+      'Voice',
+      'Footprint',
+      'Posture',
+      'Mode',
+      'Loop trust',
+      'Context window',
+    ])
   })
 })

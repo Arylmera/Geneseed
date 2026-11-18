@@ -1,4 +1,5 @@
 import React from 'react'
+import { useViewLevel } from '../../hooks/useViewLevel.jsx'
 
 // A <select> in the app's `.sel` style, shared by every picker on the Hosts tab — voice,
 // footprint, posture and mode were four near-identical components differing only in
@@ -55,7 +56,7 @@ export function Switch({ on, disabled, label, onToggle }) {
 
 // The five build choices every install carries, in the order the install consumes them.
 // `name` is the accessible label's first word, `title` the visible one.
-const PICKS = [
+export const PICKS = [
   { key: 'theme', name: 'voice', title: 'Voice' },
   { key: 'footprint', name: 'footprint', title: 'Footprint' },
   { key: 'posture', name: 'posture', title: 'Posture' },
@@ -66,10 +67,12 @@ const PICKS = [
 // The five selects, each in its own label: the install side panel and the deploy-to-folder
 // form both lay them out this way. `value` is { theme, footprint, posture, mode, trust };
 // `options` the same keys -> option lists; `who` finishes each accessible label ("voice for
-// Claude Code · global").
+// Claude Code · global"). A pick above the view level is not shown; its value still rides
+// the build unchanged, so hiding it never resets it.
 export function PickSelects({ value, options, onChange, who }) {
-  return PICKS.map((p) => (
-    <label className="dp-field" key={p.key}>
+  const { canSee } = useViewLevel()
+  return PICKS.filter((p) => canSee(`field:install/${p.name}`)).map((p) => (
+    <label className="dp-field" key={p.key} data-pick={p.name}>
       <span>{p.title}</span>
       <Sel
         label={`${p.name} for ${who}`}
