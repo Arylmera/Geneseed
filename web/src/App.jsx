@@ -30,6 +30,7 @@ import Overview from './pages/Overview/index.jsx'
 const Activity = lazy(() => import('./pages/Activity.jsx'))
 const ActivityDetail = lazy(() => import('./pages/ActivityDetail.jsx'))
 const Library = lazy(() => import('./pages/Library.jsx'))
+const Models = lazy(() => import('./pages/Models.jsx'))
 const Kits = lazy(() => import('./pages/Kits.jsx'))
 const Loops = lazy(() => import('./pages/Loops.jsx'))
 const Factories = lazy(() => import('./pages/Factories.jsx'))
@@ -255,6 +256,7 @@ export default function App() {
         onCountsChanged={reload}
       />
     ),
+    models: () => <Models dataRev={dataRev} onAction={runAction} />,
     kits: () => <Kits item={route.item} onAction={runAction} dataRev={dataRev} />,
     loops: () => <Loops tab={route.tab} item={route.item} dataRev={dataRev} />,
     factories: () => <Factories tab={route.tab} item={route.item} dataRev={dataRev} />,

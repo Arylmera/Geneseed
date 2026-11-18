@@ -37,6 +37,7 @@ import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
 import { writeTextAtomic } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
+import { pinCountOf } from './model-catalog.mjs';
 import {
   configItems, deployed, dget, fleetCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
@@ -252,6 +253,8 @@ export function apiInstalls(state) {
       // Files here that are the user's where Geneseed ships one, and retired leftovers: what a
       // forced rebuild would replace or remove (`leftoversOf`). Read off the emit's own record.
       leftovers: leftoversOf(root, host, scope),
+      // The agents of this install that carry their own model pin: the Installs panel's line to the Models page.
+      pins: installState(root, host, scope) === 'absent' ? 0 : pinCountOf(viewCfg(host, scope, root)),
       // OpenCode only: the bash gates a `--prune-gates` rebuild would take out (`strandedGatesOf`).
       strandedGates: strandedGatesOf(root, host, scope),
       // The install a request naming none reads (`defaultView`): the console's pickers start on it.

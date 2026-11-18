@@ -39,6 +39,7 @@ describe('Sidebar', () => {
         'Constitution',
         'Personal',
         'Library',
+        'Models',
         'Kits',
         'Loops',
         'Factories',
@@ -88,19 +89,20 @@ describe('Sidebar', () => {
     ])
     expect(names(within(nav).getByRole('group', { name: 'Build' }))).toEqual([
       'Library',
+      'Models',
       'Kits',
       'Loops',
       'Factories',
     ])
     expect(names(within(nav).getByRole('group', { name: 'Run' }))).toEqual(['Installs', 'Activity'])
     expect(names(within(nav).getByRole('group', { name: 'Help' }))).toEqual(['Docs', 'Settings'])
-    expect(nav.querySelectorAll('a.sb-item')).toHaveLength(11)
+    expect(nav.querySelectorAll('a.sb-item')).toHaveLength(12)
   })
 
   // The owner's order for Build: Library, Kits, Loops, and last Factories, right after Loops.
   // Factories carries no badge: the overview counts no factories (railCounts holds every badge
   // to what its page lists).
-  it('places Factories in Build, right after Library, Kits and Loops', () => {
+  it('places Factories in Build, right after Library, Models, Kits and Loops', () => {
     render(<Sidebar route={{ page: 'factories' }} overview={overview} installs={installs} />)
     const build = within(screen.getByRole('navigation', { name: 'Console' })).getByRole('group', {
       name: 'Build',
@@ -108,7 +110,7 @@ describe('Sidebar', () => {
     const labels = within(build)
       .getAllByRole('link')
       .map((a) => a.querySelector('.sb-label').textContent)
-    expect(labels.slice(-4)).toEqual(['Library', 'Kits', 'Loops', 'Factories'])
+    expect(labels.slice(-5)).toEqual(['Library', 'Models', 'Kits', 'Loops', 'Factories'])
     expect(labels.indexOf('Factories')).toBe(labels.indexOf('Loops') + 1)
     expect(row('Factories').getAttribute('href')).toBe('#/factories')
     expect(row('Factories').getAttribute('aria-current')).toBe('page')

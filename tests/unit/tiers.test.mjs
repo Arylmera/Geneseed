@@ -12,9 +12,10 @@
 //      value means inherit.
 //   4. D11 (revised): the alias is always written. On Bedrock or Vertex without ANTHROPIC_DEFAULT_<ALIAS>_MODEL
 //      Claude Code falls back to its built-in model id, which may not exist in the user's project, so
-//      `claudeTierModel` returns the model AND a warning that says to pin it; only the doctor prints it.
-//   5. With the option off or absent every emit is what it was; OpenClaude, Bob and OpenCode
-//      write no tier model (B6, D8, and the OpenCode resolver is not built yet).
+//      `tierModel` returns the model AND a warning that says to pin it; only the doctor prints it.
+//   5. With the option off or absent every emit is what it was. With it on, OpenCode (`model:
+//      provider/model`) and OpenClaude route only the tiers the map names a model for: they have no
+//      default (O12, 2026-11-18 D1). Bob's agents take no model line at all.
 //   6. The choice is recorded in the carrier (`Model tiers: auto`, only off the default), read
 //      back by `tiersOfDir`, kept by the rebuild argv, and held by the preserve guard.
 //   7. The doctor names the missing alias variable of an installed `--tiers auto` build.
@@ -30,7 +31,7 @@ import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { makeCfg, splitTier } from '../../js/build/source.mjs';
 import { claudeConfigDir } from '../../js/hosts/hosts.mjs';
 import { tiersOfDir } from '../../js/hosts/installs.mjs';
-import { claudeTierModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../../js/hosts/native.mjs';
+import { TIER_DEFAULTS, tierModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { tierEnvNotes } from '../../js/inspect/checks-build.mjs';
 import { tierMarkerProblem } from '../../js/inspect/checks-authoring.mjs';
 import { statusData } from '../../js/inspect/status.mjs';
@@ -139,8 +140,8 @@ const rows = [
   ['strong', {}, BEDROCK, null, null],                                      // inherit needs no alias
 ];
 for (const [tier, map, env, model, variable] of rows) {
-  test(`claudeTierModel(${tier}, ${JSON.stringify(map)}, ${JSON.stringify(env)}) -> ${model ?? 'inherit'}`, () => {
-    const r = claudeTierModel(tier, map, env);
+  test(`tierModel(${tier}, ${JSON.stringify(map)}, ${JSON.stringify(env)}) -> ${model ?? 'inherit'}`, () => {
+    const r = tierModel(tier, map, env);
     assert.equal(r.model, model);
     if (variable) assert.ok(r.warning?.includes(variable), `warning does not name ${variable}: ${r.warning}`);
     else assert.equal(r.warning, null);
@@ -158,7 +159,6 @@ function emit(overrides, opts) {
   return { dir: path.join(d, 'agents'), err: r.err };
 }
 const tiers = (map = {}, env = {}) => ({ map, env });
-
 test('pin > map > default > inherit, row by row', () => {
   const pins = { explorer: { model: 'opus' }, tester: { model: 'haiku' }, reviewer: { model: 'sonnet' } };
   const { dir } = emit(pins, { tiers: tiers({ standard: 'claude-x' }) });
@@ -222,12 +222,42 @@ test('tiers off: no agent of a build carries a model line', () => {
   assert.deepEqual(fs.readdirSync(base).filter((f) => /^model: /m.test(read(base, f))), []);
 });
 
-test('OpenClaude and Bob (bobDialect) and OpenCode write no tier model', () => {
-  const bob = emit({}, { tiers: tiers(), bobDialect: true }).dir;
-  const oc = emit({}, { tiers: tiers(), host: 'opencode' }).dir;
-  for (const dir of [bob, oc]) {
+test('Bob (bobDialect) writes no tier model, and OpenCode or OpenClaude with an empty map write none either (no default)', () => {
+  const bob = emit({}, { tiers: tiers({ light: 'x/y' }), bobDialect: true }).dir;
+  const oc = emit({}, { tiers: { ...tiers(), host: 'opencode' }, host: 'opencode' }).dir;
+  const ocl = emit({}, { tiers: { ...tiers(), host: 'openclaude' } }).dir;
+  for (const dir of [bob, oc, ocl]) {
     assert.deepEqual(fs.readdirSync(dir).filter((f) => /^model: /m.test(read(dir, f))), [], dir);
   }
+});
+
+test('OpenCode: a tier the map names writes provider/model (a V2 #variant verbatim); strong, a pin and an unnamed tier keep their rule', () => {
+  const map = { standard: 'corp/mid#high', light: 'corp/fast' };
+  const pins = { skeptic: { model: 'corp/pinned', variant: 'max' }, developer: { variant: 'low' } };
+  const { dir } = emit(pins, { host: 'opencode', tiers: { map, env: {}, host: 'opencode' } });
+  assert.equal(modelOf(dir, 'explorer'), 'corp/fast', 'light, mapped');
+  assert.equal(modelOf(dir, 'tester'), 'corp/mid#high', 'standard, mapped, the #variant suffix is written as given');
+  assert.equal(modelOf(dir, 'skeptic'), 'corp/pinned', 'a pin outranks the map');
+  assert.equal(modelOf(dir, 'security'), null, 'strong inherits');
+  // V1 keeps `variant` as its own key beside a tier model: the pin entry without a model still contributes it.
+  assert.match(read(dir, 'developer.md'), /^model: corp\/mid#high\r?\nvariant: low\r?$/m);
+  // Only light named: standard has no default on OpenCode, so it inherits.
+  const half = emit({}, { host: 'opencode', tiers: { map: { light: 'corp/fast' }, env: {}, host: 'opencode' } }).dir;
+  assert.equal(modelOf(half, 'explorer'), 'corp/fast');
+  assert.equal(modelOf(half, 'tester'), null);
+});
+
+test('OpenClaude writes the mapped tier model through the Claude dialect, and sonnet/haiku are not defaults there', () => {
+  const { dir } = emit({}, { tiers: { map: { light: 'corp-fast' }, env: {}, host: 'openclaude' } });
+  assert.equal(modelOf(dir, 'explorer'), 'corp-fast');
+  assert.equal(modelOf(dir, 'tester'), null, 'no default: the unmapped standard tier inherits');
+});
+
+test('the host default table is one table: Claude Code has two aliases, OpenCode and OpenClaude none', () => {
+  assert.deepEqual(TIER_DEFAULTS, { claude: { standard: 'sonnet', light: 'haiku' }, opencode: {}, openclaude: {} });
+  assert.equal(tierModel('light', {}, {}, 'opencode').model, null);
+  assert.equal(tierModel('light', {}, {}, 'openclaude').model, null);
+  assert.equal(tierModel('light', { light: 'haiku' }, BEDROCK, 'openclaude').warning, null, 'the cloud-alias advice is Claude Code only');
 });
 
 test('D11 through the writer: a cloud provider changes no line and the build says nothing', () => {
@@ -296,7 +326,39 @@ test('a hand-edited marker value reads as off, so it can never reach --tiers', (
   assert.equal(tiersOfDir(d, 'claude'), 'off');
 });
 
-test('OpenClaude, Bob and OpenCode record the choice and route nothing', () => {
+/** Where one emit's agents land, and where its agent-overrides.json is read (OpenCode: the project root). */
+const emitPlace = (emitName, d) => ({
+  agents: path.join(d, { opencode: '.opencode', bob: '.bob', openclaude: '.openclaude' }[emitName], 'agents'),
+  overrides: path.join(d, emitName === 'openclaude' ? '.openclaude' : emitName === 'bob' ? '.bob' : '', 'agent-overrides.json'),
+});
+const withModels = (agents) => fs.readdirSync(agents).filter((f) => /^model: /m.test(read(agents, f)));
+const MAP = { tiers: { light: 'corp/fast' } };
+
+for (const emitName of ['opencode', 'openclaude', 'bob']) {
+  // A populated tiers map is inert while the routing is off: every agent file carries no model line.
+  test(`${emitName}: --tiers off with a populated tiers map writes no model line`, () => {
+    const d = sandbox(`gst-off-map-${emitName}-`);
+    const { agents, overrides } = emitPlace(emitName, d);
+    fs.mkdirSync(path.dirname(overrides), { recursive: true });
+    fs.writeFileSync(overrides, JSON.stringify(MAP));
+    withEnv(NO_CLOUD, () => assert.equal(build('--emit', emitName, '--out', d, '--theme', 'neutral', '--tiers', 'off').value, 0));
+    assert.deepEqual(withModels(agents), [], emitName);
+  });
+  // The same map with the routing on: OpenCode and OpenClaude route the light tier, Bob never writes a model.
+  test(`${emitName}: --tiers auto with a tiers map ${emitName === 'bob' ? 'still writes no model line' : 'routes the light tier through a real build'}`, () => {
+    const d = sandbox(`gst-auto-map-${emitName}-`);
+    const { agents, overrides } = emitPlace(emitName, d);
+    fs.mkdirSync(path.dirname(overrides), { recursive: true });
+    fs.writeFileSync(overrides, JSON.stringify(MAP));
+    withEnv(NO_CLOUD, () => assert.equal(build('--emit', emitName, '--out', d, '--theme', 'neutral', '--tiers', 'auto').value, 0));
+    if (emitName === 'bob') { assert.deepEqual(withModels(agents), []); return; }
+    assert.equal(modelOf(agents, 'explorer'), 'corp/fast');
+    assert.equal(modelOf(agents, 'developer'), null, 'the unmapped standard tier has no default here');
+    assert.equal(modelOf(agents, 'reviewer'), null);
+  });
+}
+
+test('OpenClaude, Bob and OpenCode record the choice, and with no map none of them routes (no default)', () => {
   for (const emitName of ['openclaude', 'bob', 'opencode']) {
     const d = sandbox(`gst-${emitName}-`);
     withEnv(NO_CLOUD, () => assert.equal(build('--emit', emitName, '--out', d, '--theme', 'neutral', '--tiers', 'auto').value, 0));
@@ -483,6 +545,28 @@ test('diff reports no drift for a --tiers auto install with a tiers map and a pi
   assert.equal(modelOf(agents, 'explorer'), 'claude-haiku-4-5', 'a restore wrote the default model over the map\'s');
   assert.deepEqual(drift(), []);
 });
+
+for (const [emitName, model] of [['opencode-global', 'corp/fast'], ['openclaude-global', 'corp-fast']]) {
+  test(`diff reports no drift for a ${emitName} --tiers auto install with a tiers map and a pin, and restore keeps them`, () => {
+    const cfg = sandbox('gst-diff-');
+    fs.writeFileSync(path.join(cfg, 'agent-overrides.json'),
+      JSON.stringify({ agents: { skeptic: { model: `${model}-pin` } }, tiers: { light: model } }));
+    assert.equal(build('--emit', emitName, '--theme', 'neutral', '--config-dir', cfg, '--tiers', 'auto').value, 0);
+    const agents = path.join(cfg, 'agents');
+    assert.equal(modelOf(agents, 'explorer'), model, 'the fixture did not route through the map');
+    assert.equal(modelOf(agents, 'skeptic'), `${model}-pin`);
+    const drift = () => diffCollect({ target: cfg }).files.map((f) => f.rel).filter((r) => r !== 'agent-overrides.json');
+    assert.deepEqual(drift(), [], 'a routed model line was reported as drift');
+    const explorer = path.join(agents, 'explorer.md');
+    fs.writeFileSync(explorer, `${read(explorer)}\nLOCAL EDIT\n`);
+    assert.deepEqual(drift(), ['agents/explorer.md']);
+    const st = webState('neutral', cfg);
+    st.selectView(cfg, null, emitName);
+    assert.deepEqual(apiRestore(st, ['agents/explorer.md']).errors, []);
+    assert.equal(modelOf(agents, 'explorer'), model, 'a restore dropped the routed model');
+    assert.deepEqual(drift(), []);
+  });
+}
 
 test('restore keeps the carrier\'s routing line (an OpenCode install built --tiers auto)', () => {
   const sb = makeSandbox();

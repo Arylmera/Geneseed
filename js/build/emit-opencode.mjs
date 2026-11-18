@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { bundleFiles } from '../hosts/owned.mjs';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
+import { claimer, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../hosts/native.mjs';
 import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
   writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
@@ -66,7 +66,9 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
 
   const { nAgents, nSkills, written, userOnlySkills } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
-    { host: 'opencode', theme, src: cfg.src, claim });
+    { host: 'opencode', theme, src: cfg.src, claim,
+      // `--tiers auto`: a tier routes once the user's `tiers` map names a model for it (no default).
+      tiers: cfg.tiers === 'auto' ? { map: loadTierMap(overridesDir), env: process.env, host: 'opencode' } : null });
   for (const p of written) owned.push(relPosix(dir, p));
 
   const primary = writePrimaryAgent(cfg, path.join(dir, 'agents'), overrides, claim);

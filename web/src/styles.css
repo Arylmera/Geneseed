@@ -4179,9 +4179,31 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .prof-changes .warn-text { color: var(--warn-text); font-weight: 600; }
 .prof-changes .dim { color: var(--text-3); }
 
-/* The agent model block (Library) and the tiers editor (Installs panel). */
-.tiers-row { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); align-items: center; gap: var(--sp-2); }
+/* The Models page (pages/Models.jsx), its picker (components/ModelPicker.jsx) and the Library's model line. */
 .tiers-warn { color: var(--warn-text); }
-.agent-model { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-/* Wide enough for the placeholder ("none: follows the tier") and a full model id; shrinks on a phone. */
-.agent-model .inp { flex: 0 1 28ch; width: 28ch; }
+.agent-model { margin-bottom: var(--sp-3); }
+.models-page { display: flex; flex-direction: column; gap: var(--sp-4); }
+.models-routing .seg { align-self: flex-start; }
+.models-tier-row { display: grid; grid-template-columns: 5rem minmax(0, auto) auto auto; align-items: center; justify-content: start; gap: var(--sp-2); }
+.models-model { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
+.models-agents { overflow-x: auto; }
+.models-agents table { width: 100%; border-collapse: collapse; }
+.models-agents th, .models-agents td { text-align: left; padding: var(--sp-2) var(--sp-3); vertical-align: middle; }
+.models-foot { position: sticky; bottom: 0; padding: var(--sp-3) 0; background: var(--bg); }
+dialog.model-picker { width: min(720px, calc(100vw - 2 * var(--sp-4))); max-width: none; max-height: calc(100vh - 2 * var(--sp-4)); display: flex; flex-direction: column; gap: var(--sp-3); }
+dialog.model-picker:not([open]) { display: none; }
+.mp-search { width: 100%; }
+.mp-list { overflow-y: auto; min-height: 120px; display: flex; flex-direction: column; gap: var(--sp-3); }
+.mp-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.mp-name { font-weight: 700; }
+.mp-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); width: 100%; padding: var(--sp-2) var(--sp-3); text-align: left;
+  background: transparent; color: var(--text); border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer; }
+.mp-row:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-2); }
+.mp-row.on { background: var(--accent-soft); border-color: var(--accent-line); }
+.mp-row:disabled { opacity: .5; cursor: default; }
+.mp-id { font-size: var(--fs-md); overflow-wrap: anywhere; }
+.mp-meta { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.mp-custom { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2); }
+.mp-custom-label { display: flex; flex-direction: column; gap: var(--sp-1); flex: 1 1 260px; }
+.mp-custom-label .inp { width: 100%; }
+@media (max-width: 720px) { .models-tier-row { grid-template-columns: minmax(0, 1fr); } }

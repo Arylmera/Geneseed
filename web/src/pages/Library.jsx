@@ -11,7 +11,7 @@ import { dropRules } from '../hooks/useRules.js'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
 import { BaseBadge, GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
-import AgentModel from '../components/AgentModel.jsx'
+import AgentModelLine from '../components/AgentModelLine.jsx'
 import Loadout from '../components/Loadout.jsx'
 import RailCats from '../components/RailCats.jsx'
 import DropMenu from '../components/DropMenu.jsx'
@@ -800,10 +800,10 @@ export default function Library({
               ) : null}
               <hr className="hr" />
               {wantLoad ? (
-                <AgentModel
+                <AgentModelLine
                   name={activeName}
                   install={loadInst ? installOfKey(loadInst) : undefined}
-                  installName={fleetWide ? loadName : undefined}
+                  installId={loadKey}
                 />
               ) : null}
               {isAgents ? (
