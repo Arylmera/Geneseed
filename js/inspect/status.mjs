@@ -36,7 +36,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { DEFAULT_CONTEXT_WINDOW, GATE_SWITCHES, THEMES, ROOT, loadKits, makeCfg } from '../build/source.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, GATE_SWITCHES, THEMES, ROOT, loadKits, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { sourceGeneration } from '../build/render.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
@@ -542,6 +542,8 @@ export function statusLines(d, color = false, boxed = true) {
       // Elided at the default, like the shared tier, so a default row prints what it did.
       ...(p.contextWindow && p.contextWindow !== DEFAULT_CONTEXT_WINDOW ? [`context window: ${p.contextWindow}`] : []),
       ...(p.tiers && p.tiers !== 'off' ? [`model tiers: ${p.tiers}`] : []),
+      // The learn model, elided at its default (`light`) like the tiers: a default row prints what it did.
+      ...(p.learn && p.learn !== DEFAULT_LEARN ? [`learn model: ${p.learn}`] : []),
       // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
         .map((g) => `${g.marker.toLowerCase()}: off${g.law ? ` (Law ${g.law} text still binds)` : ''}`)]

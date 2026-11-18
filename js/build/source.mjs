@@ -594,6 +594,15 @@ export const TIERS_CHOICES = Object.freeze(['auto', 'off']);
 export const DEFAULT_TIERS = 'off';
 /** The carrier marker, written only when the value is not the default (the kits line's contract). */
 export const TIERS_MARKER = 'Model tiers';
+/**
+ * `--learn off|light|standard|session`: the model memory learning distils with (spec
+ * `2026-11-18-learn-model-row.md`, D1-D3, D11). `light`/`standard` name a sub-agent tier and resolve
+ * through `tierModel` (`learnModel`); `session` is the chat's own model; `off` distils nothing.
+ * The default is `light` (D2), so the marker line is written only off it, like the tiers line.
+ */
+export const LEARN_CHOICES = Object.freeze(['off', 'light', 'standard', 'session']);
+export const DEFAULT_LEARN = 'light';
+export const LEARN_MARKER = 'Learn model';
 /** `{ text, tier }`: the spec without its tier line, and the tier it named (`standard` when none). */
 export function splitTier(text) {
   const m = TIER_MARKER_RE.exec(text);
@@ -768,7 +777,7 @@ export const CONTEXT_WINDOW_MARKER = 'Context window';
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
   excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false),
-  contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS, pruneGates = false, force = false, ...switches
+  contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS, learn = DEFAULT_LEARN, pruneGates = false, force = false, ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -804,6 +813,8 @@ export function makeCfg({
     contextWindow: Object.hasOwn(CONTEXT_WINDOWS, contextWindow) ? contextWindow : DEFAULT_CONTEXT_WINDOW,
     // `--tiers auto|off`: only a literal `auto` turns the tier routing on; anything else is off.
     tiers: tiers === 'auto' ? 'auto' : DEFAULT_TIERS,
+    // `--learn off|light|standard|session`: anything unknown is the default.
+    learn: LEARN_CHOICES.includes(learn) ? learn : DEFAULT_LEARN,
     // `--force`, for this one build: only a literal `true` forces. Never an axis of the install.
     force: force === true,
     // The gate switches (`GATE_SWITCHES`: `secretsGate`, `doneGate`, `deletionGate`), each armed

@@ -155,7 +155,7 @@ export function cmdValidate(args) {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
       excludeSkills: args.excludeSkills, kits: args.kits, sharedTier: args.sharedTier === 'on',
-      contextWindow: args.contextWindow, tiers: args.tiers,
+      contextWindow: args.contextWindow, tiers: args.tiers, learn: args.learn,
       ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, args[g.arg] ? false : null])),
     };
     let scanDirs;

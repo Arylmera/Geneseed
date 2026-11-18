@@ -40,7 +40,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
-  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, sharedTierOfDir, tiersOfDir,
+  contextWindowOfDir, excludedSkillsOfDir, gatesOfDir, sharedTierOfDir, tiersOfDir, learnOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
@@ -280,6 +280,8 @@ export function diffCollect({
     contextWindow: contextWindowOfDir(dir, host),
     // The tier routing, or an install built `--tiers auto` reads its `Model tiers: auto` line and every tiered agent as drift.
     tiers: tiersOfDir(dir, host),
+    // The learn model, or an install built `--learn off` reads its `Learn model: off` line as drift.
+    learn: learnOfDir(dir, host),
     // The user's own overrides file (pins and the tiers map): a render input like every axis above, so it is
     // part of the memo key, and `null` (no file) leaves the emit to seed its stub as before.
     overridesText: readMaybe(path.join(dir, 'agent-overrides.json')),

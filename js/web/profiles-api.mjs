@@ -15,7 +15,7 @@ import path from 'node:path';
 import { ROOT } from '../build/source.mjs';
 import { installProfile } from '../build/profile.mjs';
 import { HOSTS, expanduser } from '../hosts/hosts.mjs';
-import { installState, installTargets, tiersOfDir } from '../hosts/installs.mjs';
+import { installState, installTargets, learnOfDir, tiersOfDir } from '../hosts/installs.mjs';
 import {
   BASE_PROFILE, isGitClone, listProfiles, loadProfile, profileBuildArgs, profileDiff, profileDirs,
   profileFromInstall, profileHosts, profileKits,
@@ -83,7 +83,7 @@ function previewRows(p, project, hosts) {
     // (`markerCollision`): the row says so and the panel does not offer it.
     const refused = project ? markerCollision(project, h.host) : null;
     const changes = h.present && !refused && state === 'active'
-      ? profileChanges(profileBuildArgs(p, h.host, project, root ? tiersOfDir(root, h.host) : null)) : [];
+      ? profileChanges(profileBuildArgs(p, h.host, project, root ? tiersOfDir(root, h.host) : null, {}, root ? learnOfDir(root, h.host) : null)) : [];
     return {
       host: h.host, label: h.label, present: h.present, state, root: root ? String(root) : null,
       changes, layering: project && !refused ? globalLayering(h.host) : null, refused,

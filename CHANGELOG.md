@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- `--learn off|light|standard|session`: the model memory learning distils with (default `light`). The build records it per install (`Learn model: <value>` in the carrier, written only off the default), `rebuild-all`, `upgrade`, profiles and the setup wizard keep it, `diff` reads it, and `status` shows it in an install's row when it is not `light`. It takes effect on hosts in later changes: nothing reads it yet, so `learn` behaves as before.
+
 ### Fixed
 
 - `status` and `doctor` called memory learning dormant on installs that learn. The `learn` line read only the shell's `$GENESEED_LLM`. It now judges each installed host: OpenCode distils with the session model (active), Bob sends no transcript (n/a), and a Claude Code or OpenClaude hook also counts `GENESEED_LLM` set in the `"env"` of its settings files.

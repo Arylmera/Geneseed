@@ -11,14 +11,14 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER, loadKits } from './source.mjs';
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER, loadKits } from './source.mjs';
 import { migrateSuperpowersKit } from '../maintain/kit-migration.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
 import {
   EMIT_FOR, EMIT_HOST_SCOPE, contextWindowOfDir, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   emitHostScopeOf, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitAwareOfDir, kitsOfDir, sharedTierOfDir,
-  gatesOfDir, installState, modeOfDir, postureOfDir, readMaybe, themeOfDir, tiersOfDir, trustOfDir,
+  gatesOfDir, installState, learnOfDir, modeOfDir, postureOfDir, readMaybe, themeOfDir, tiersOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 
 /**
@@ -57,7 +57,7 @@ import {
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
   excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null, sharedTier = false,
-  contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS) {
+  contextWindow = DEFAULT_CONTEXT_WINDOW, tiers = DEFAULT_TIERS, learn = DEFAULT_LEARN) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -101,6 +101,8 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   // The tier routing elides at its default, like the context window: only `auto` speaks, last, so
   // every argv with the routing off stays the bytes it was before the flag existed.
   if (tiers && tiers !== DEFAULT_TIERS) argv.push('--tiers', tiers);
+  // The learn model elides at its default (`light`) the same way: only a non-default value speaks, after the tiers.
+  if (learn && learn !== DEFAULT_LEARN) argv.push('--learn', learn);
   return argv;
 }
 
@@ -163,9 +165,11 @@ export function installProfile(host, scope, root, notify = null) {
   const contextWindow = contextWindowOfDir(root, host);
   // `Model tiers: auto` stays auto: a rebuild that forgot it would put every agent back on the parent's model.
   const tiers = tiersOfDir(root, host);
+  // `Learn model: off` stays off: a rebuild that forgot it would turn learning back on at the default.
+  const learn = learnOfDir(root, host);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits, sharedTier, contextWindow, tiers);
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits, sharedTier, contextWindow, tiers, learn);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -174,7 +178,7 @@ export function installProfile(host, scope, root, notify = null) {
   return {
     host, scope, root, state: installState(root, host, scope),
     emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills,
-    kits, sharedTier, contextWindow, tiers, ...gates, argv,
+    kits, sharedTier, contextWindow, tiers, learn, ...gates, argv,
   };
 }
 
@@ -220,6 +224,7 @@ const GUARDED = [
   { name: 'context-window', given: 'contextWindow', flag: '--context-window',
     now: (a) => a.contextWindow ?? DEFAULT_CONTEXT_WINDOW, was: (p) => p.contextWindow },
   { name: 'tiers', given: 'tiers', flag: '--tiers', now: (a) => a.tiers ?? DEFAULT_TIERS, was: (p) => p.tiers },
+  { name: 'learn', given: 'learn', flag: '--learn', now: (a) => a.learn ?? DEFAULT_LEARN, was: (p) => p.learn },
   // A switch reads as its flag says. `--no-deletion-gate` given is `deletion-gate: off`;
   // `--strict-consent` (the one switch whose flag adds asks, so it is not `--no-*`) given is
   // `strict-consent: on`. Either way the flag given means the switch's key is `false`.

@@ -267,6 +267,21 @@
         },
         {
           "names": [
+            "--learn"
+          ],
+          "dest": "learn",
+          "metavar": null,
+          "help": "the model memory learning distils with: off|light|standard|session (default: light). light and standard use the sub-agent tier of that name (a Claude Code install: haiku or sonnet; elsewhere only a model the tiers map names, else the session model); session uses the chat's own model; off distils nothing. Recorded per install and kept by rebuild-all; it takes effect on hosts in later changes",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--out"
           ],
           "dest": "out",

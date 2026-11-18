@@ -19,12 +19,13 @@ import {
 import { cellEnv, makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { isDoctorNote } from '../../js/inspect/scan.mjs';
 
-// A saved profile of a default install holds every key BUT `tiers`: that key is written only when the
-// install routes by tier (`profileFromInstall`), because an absent `tiers` means "this profile does not
-// set it" and keeps the install's own value on apply, while a written `off` would force it. Nor
+// A saved profile of a default install holds every key BUT `tiers` and `learn`: those keys are written only
+// when the install routes by tier or learns off the default (`profileFromInstall`), because an absent key
+// means "this profile does not set it" and keeps the install's own value on apply, while a written one
+// would force it. Nor
 // `kitsByDetection`, which only a hand-written profile holds: an install's read-back has the kits it has,
 // never a kit "by detection".
-const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'tiers' && k !== 'kitsByDetection');
+const SAVED_KEYS = PROFILE_KEYS.filter((k) => k !== 'tiers' && k !== 'learn' && k !== 'kitsByDetection');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 

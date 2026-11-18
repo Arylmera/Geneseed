@@ -37,7 +37,7 @@ import { normcase, comparePaths } from '../lib/paths.mjs';
 import {
   CREDIT_RE, GATE_SWITCHES, PACK_ORDER, WORKFLOW_PROVIDER_HEADING, kitMembers, linkTargetOf, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
-import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_TIERS, TIERS_MARKER, splitTier } from './source.mjs';
+import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, LEARN_MARKER, TIERS_MARKER, splitTier } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
 import { PROJECT_NOTES_DIR } from '../hosts/spec-feedback.mjs';
 import { PORTABLE_MACHINE_DIR } from '../lib/machine-dir.mjs';
@@ -774,6 +774,8 @@ export function effectiveTheme(cfg, themeName, {
     ? `\n${CONTEXT_WINDOW_MARKER}: ${cfg.contextWindow}\n` : '';
   // `--tiers`, under the same contract (`tiersOfDir` reads it): a line only off the default.
   theme.TIERS_LINE = cfg.tiers && cfg.tiers !== DEFAULT_TIERS ? `\n${TIERS_MARKER}: ${cfg.tiers}\n` : '';
+  // `--learn`, under the same contract (`learnOfDir` reads it): a line only off the default (`light`).
+  theme.LEARN_LINE = cfg.learn && cfg.learn !== DEFAULT_LEARN ? `\n${LEARN_MARKER}: ${cfg.learn}\n` : '';
   // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
   // written only when its gate is OFF, so a default build stays byte-identical and a missing
   // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so
