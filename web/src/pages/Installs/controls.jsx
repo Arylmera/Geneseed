@@ -72,7 +72,7 @@ export const PICKS = [
 export function PickSelects({ value, options, onChange, who }) {
   const { canSee } = useViewLevel()
   return PICKS.filter((p) => canSee(`field:install/${p.name}`)).map((p) => (
-    <label className="dp-field" key={p.key}>
+    <label className="dp-field" key={p.key} data-pick={p.name}>
       <span>{p.title}</span>
       <Sel
         label={`${p.name} for ${who}`}
