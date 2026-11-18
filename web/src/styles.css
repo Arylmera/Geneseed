@@ -3406,7 +3406,7 @@ a.kit-name:hover { color: var(--accent-text); }
   /* In the drawer there is room for the labels again. */
   .sb-head .sb-brand { justify-content: flex-start; padding: 4px 8px; }
   .sb-brand-text { display: flex; }
-  .sb-label, .sb-count, .sb-group-title { position: static; width: auto; height: auto; clip-path: none; }
+  .sb-label, .sb-count, .sb-group-title, .sb-live-foot { position: static; width: auto; height: auto; clip-path: none; }
   .sb-group + .sb-group { padding-top: 0; border-top: 0; }
   .sb-group { margin-top: var(--sp-3); }
   a.sb-item { justify-content: flex-start; min-height: 40px; padding: 4px 10px 4px 6px; }

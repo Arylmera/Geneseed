@@ -8,8 +8,9 @@ import AccentPicker from './AccentPicker.jsx'
 import LevelSeg from './LevelSeg.jsx'
 
 // The console's appearance, one click from any page: the skin, where the accent colour comes from
-// and how much of the console to show (the view level). The first two are this browser's alone (localStorage) and apply live;
-// nothing here rebuilds anything. Each says its pick in words: a title reaches no touch screen.
+// and how much of the console to show (the view level). All three are this browser's alone
+// (localStorage) and apply live; nothing here rebuilds anything. Each says its pick in words:
+// a title reaches no touch screen.
 //
 // Portalled out of the topbar into `.app`: nested in the sticky topbar, its layer was capped
 // by the topbar's own stacking context, so the phone drawer and its scrim covered it. `.app`,

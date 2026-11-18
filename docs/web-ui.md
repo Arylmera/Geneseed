@@ -229,7 +229,7 @@ The console shows three view levels. A level shows every part at or below its ow
 
 - **Essentials** — the default. The pages most readers need to see and fix their harness.
 - **Standard** — adds the pages and tabs for kits, activity, laws, memory and profiles.
-- **Power** — adds everything else: models, loops, factories, the notebook, local edits, the wiki, the config files and the danger zone.
+- **Power** — adds everything else. That is models, loops, factories, the notebook, local edits, the wiki, setup files and the danger zone.
 
 | Part | Level |
 | --- | --- |
@@ -241,12 +241,12 @@ The console shows three view levels. A level shows every part at or below its ow
 | Tabs: Personal / Memory; Installs / Profiles | Standard |
 | Pages: Models, Loops, Factories | Power |
 | Tabs: Loops (all three); Factories (both); Personal / Notebook; Installs / Local edits | Power |
-| Library sections: Wiki and Config | Power |
+| Library sections: Wiki and Setup files | Power |
 | Settings section: Danger zone | Power |
 
 Change the level in the **Appearance** popover in the topbar, or in **Settings › Machine**. The choice is kept in this browser.
 
-A hidden part is not off. It keeps working, and a link, a bookmark or a search result still opens it. A page above your level opens with a banner that names the level it needs. The search results mark such a page with that level. A running loop or factory that your level hides is named at the foot of the rail, so you do not lose track of it. The Overview "New here?" card also says which view is on, until you choose Power.
+A hidden part is not off. It keeps working, and a link, a bookmark or a search result still opens it. A page above your level opens with a banner that names the level it needs. The search results mark such a page with that level. The foot of the rail names a running loop or factory that your level hides. This way you do not lose track of it. The Overview "New here?" card also says which view is on, until you choose Power.
 
 ## Views
 

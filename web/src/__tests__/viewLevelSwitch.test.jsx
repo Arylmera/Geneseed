@@ -35,6 +35,15 @@ describe('the view-level switch', () => {
     expect(screen.getByText('Hidden parts keep working.')).toBeTruthy()
   })
 
+  it('the Settings switch has an accessible name', () => {
+    render(
+      <ViewLevelProvider>
+        <Settings onAction={() => {}} />
+      </ViewLevelProvider>,
+    )
+    expect(levelButtons(screen.getByRole('group', { name: 'View level' }))).toHaveLength(3)
+  })
+
   it('clicking Power in the popover shows Power pressed in the Settings row', () => {
     render(
       <ViewLevelProvider>

@@ -17,6 +17,47 @@ describe('view-level table', () => {
     expect(missing).toEqual([])
   })
 
+  it('the table is exactly the decided map', () => {
+    const E = 'essentials'
+    const S = 'standard'
+    const P = 'power'
+    expect(TIER).toEqual({
+      'page:overview': E,
+      'page:library': E,
+      'page:installs': E,
+      'page:personal': E,
+      'page:docs': E,
+      'page:settings': E,
+      'tab:personal/rules': E,
+      'tab:personal/profile': E,
+      'tab:installs/hosts': E,
+      'tab:installs/doctor': E,
+      'section:library/skills': E,
+      'section:library/agents': E,
+      'section:settings/machine': E,
+      'section:settings/server': E,
+      'section:settings/about': E,
+      'page:kits': S,
+      'page:activity': S,
+      'page:laws': S,
+      'tab:personal/memory': S,
+      'tab:installs/profiles': S,
+      'page:models': P,
+      'page:loops': P,
+      'page:factories': P,
+      'tab:loops/templates': P,
+      'tab:loops/bricks': P,
+      'tab:loops/active': P,
+      'tab:factories/templates': P,
+      'tab:factories/active': P,
+      'tab:personal/notebook': P,
+      'tab:installs/edits': P,
+      'section:library/wiki': P,
+      'section:library/config': P,
+      'section:settings/danger': P,
+    })
+  })
+
   it('levels as decided', () => {
     expect(visible('page:kits', 'essentials')).toBe(false)
     expect(visible('page:kits', 'standard')).toBe(true)

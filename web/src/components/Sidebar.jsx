@@ -160,6 +160,7 @@ export default function Sidebar({ route, overview, installs, onNavigate }) {
           </span>
         </button>
       </div>
+      {/* A group whose pages all sit above the level drops its header; none does today. */}
       {GROUPS.filter((g) => ALL.some((n) => n.group === g.id && shown(n))).map((g) => (
         <div
           key={g.id}

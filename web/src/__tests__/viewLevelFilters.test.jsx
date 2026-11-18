@@ -37,7 +37,7 @@ describe('view level filters the surfaces', () => {
     )
   })
 
-  it('Essentials rail keeps the lit page and drops an empty group header', () => {
+  it('Essentials rail keeps the lit page above the level', () => {
     at('essentials', <Sidebar route={{ page: 'loops' }} />)
     expect(rail()).toContain('Loops')
     expect(rail()).not.toContain('Kits')
