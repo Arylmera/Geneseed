@@ -1,9 +1,14 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
+import { ViewLevelProvider } from './hooks/useViewLevel.jsx'
 import './styles.css'
 
-createRoot(document.getElementById('root')).render(<App />)
+createRoot(document.getElementById('root')).render(
+  <ViewLevelProvider>
+    <App />
+  </ViewLevelProvider>,
+)
 
 // Register the PWA service worker so the console can be installed as a
 // standalone app. Best-effort: failures (or unsupported browsers) are ignored.
