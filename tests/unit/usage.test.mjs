@@ -12,7 +12,8 @@
 // - a leading `/` is dropped (a slash-command spelling), and a name that is not a plain
 //   identifier — a path, a sentence, an empty string — is not counted at all;
 // - an MCP tool that merely has "skill" in its name is not a skill call;
-// - anything else (Bash, Write, an Agent with no type) is not counted.
+// - anything else (Bash, Write, an OpenCode `task` with no type) is not counted.
+// A Claude `Agent`/`Task` with no type is in its own table below: only the hook reads that shape.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -39,8 +40,18 @@ const TABLE = [
   [{ tool_name: 'Skill', tool_input: { skill: 'two words' } }, null],
   [{ tool_name: 'Skill', tool_input: {} }, null],
   [{ tool_name: 'mcp__notion__notion-get-enabled-skills', tool_input: { name: 'x' } }, null],
-  [{ tool_name: 'Agent', tool_input: { description: 'no type given' } }, null],
+  [{ tool: 'task', args: { description: 'no type given' } }, null],
   [{ tool_name: 'Bash', tool_input: { command: 'ls' } }, null],
+];
+
+// CLAUDE'S UNTYPED SUBAGENT CALL, read by the hook alone. Claude Code runs `general-purpose` when
+// `Agent` (or the older `Task`) carries no `subagent_type`, so the call counts under that name;
+// 121 of ~5 000 real calls had that shape (2026-11 transcripts). An explicit type still wins, and
+// a type that is not a plain identifier is still refused, not defaulted.
+const CLAUDE_TABLE = [
+  [{ tool_name: 'Agent', tool_input: { description: 'no type given', prompt: 'p' } }, { kind: 'agent', name: 'general-purpose' }],
+  [{ tool_name: 'Task', tool_input: { prompt: 'p' } }, { kind: 'agent', name: 'general-purpose' }],
+  [{ tool_name: 'Agent', tool_input: { subagent_type: 'two words' } }, null],
 ];
 
 const lines = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -59,7 +70,7 @@ const BOB_TABLE = [
 ];
 
 test('the hook reads each host\'s skill and subagent payloads, and nothing else', () => {
-  for (const [payload, want] of [...TABLE, ...BOB_TABLE]) {
+  for (const [payload, want] of [...TABLE, ...BOB_TABLE, ...CLAUDE_TABLE]) {
     assert.deepEqual(usageOf(payload), want, JSON.stringify(payload));
   }
 });
