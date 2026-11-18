@@ -668,6 +668,11 @@ test('the spawns in the hook entry are the model CLI and its one detached worker
     `js/hosts/hooks-learn.mjs imports ${imports} from child_process; exactly spawn and spawnSync are allowed`);
   assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
     'js/hosts/hooks-learn.mjs has more than one spawnSync call site');
+  // F5: the one model spawn may run a Windows `.cmd` shim, and only as `cmd.exe /d /s /c "<quoted words>"` with the
+  // prompt on stdin (`spawnPlan`; tests/unit/learn_cmd_shim.test.mjs states the rows). Never a shell option.
+  assert.ok(!/shell\s*:\s*true/.test(text), 'js/hosts/hooks-learn.mjs asks spawnSync for a shell');
+  assert.equal((text.match(/windowsVerbatimArguments/g) ?? []).length, 1, 'the verbatim flag is set from the plan alone');
+  assert.ok(text.includes("args: ['/d', '/s', '/c',"), 'the cmd.exe form is no longer /d /s /c');
   const detached = [...text.matchAll(/(?<![.\w])spawn\s*\(/g)];
   assert.equal(detached.length, 1, 'js/hosts/hooks-learn.mjs has more than one spawn call site');
   // The exact shape, whitespace folded: this node, this checkout's hook entry, the one verb, the job's path,

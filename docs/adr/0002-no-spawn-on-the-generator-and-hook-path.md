@@ -37,6 +37,13 @@ tool call of every agent session, where a spawn costs time and a console window 
   still spawns nothing. If git is missing or fails, the gate asks. The one exception that is not
   destructive-looking: a plain `git checkout <x>` while `main`, `master` or the default branch is
   checked out runs `git rev-parse` to tell a branch switch from a path discard.
+- **Amended 2026-11-18, on Windows** (F5): the one model `spawnSync` resolves the command's first word against
+  `PATH` and `PATHEXT` (`resolveCommand`, `js/lib/proc.mjs`, the same function `doctor`'s PATH note uses), because an
+  npm-installed CLI is a `.cmd` shim that `CreateProcess` cannot find. An `.exe` runs directly. A `.cmd` or `.bat`
+  runs as `cmd.exe /d /s /c "<every word double-quoted>"` (no shell option; `windowsVerbatimArguments`), and
+  **the prompt goes over stdin, never on that line**: what a session's notes hold is never read by cmd.exe. The
+  words on the line are the user's own command and the fixed lean flags; a word holding a double quote, `%`, a line
+  break or a trailing backslash refuses the call. Elsewhere nothing changes.
 - `bin/geneseed-cli.mjs`, the user-facing CLI, spawns only from modules on a declared allow-list
   (`ALLOWED_SPAWNS`), each row naming the exact argv it may start — `git` for update, `node --check`
   for doctor, the web daemon relaunching this program, and so on. A new spawn is a new row with its

@@ -44,6 +44,7 @@ import { validateIsVendored } from '../hosts/native.mjs';
 import { learnState } from '../hosts/memory-files.mjs';
 import { learnInstalls } from './status.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
+import { resolveCommand } from '../lib/proc.mjs';
 import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
@@ -72,15 +73,12 @@ export function themesToCheck(theme, allThemes, detected, available) {
 }
 
 /**
- * Whether `word` (a command's first word) resolves to a file: as written when it holds a separator,
- * else on `env.PATH`, with `env.PATHEXT` on Windows. Pure over `exists`, so a test names every row.
+ * Whether `word` (a command's first word) is something `learn`'s spawn can run (`resolveCommand`).
+ * Pure over `exists`, so a test names every row.
  */
 export function commandOnPath(word, env = process.env, exists = existsSync, platform = process.platform) {
-  if (!word) return false;
-  const win = platform === 'win32';
-  const exts = win ? ['', ...String(env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
-  const dirs = /[\\/]/.test(word) ? [''] : String(env.PATH ?? env.Path ?? '').split(win ? ';' : ':').filter(Boolean);
-  return dirs.some((dir) => exts.some((ext) => exists(path.join(dir, word + ext))));
+  // The spawn's own resolver (`resolveCommand`, F5): on Windows a `claude.cmd` shim counts, a `.ps1` does not.
+  return resolveCommand(word, env, exists, platform) !== null;
 }
 
 /**

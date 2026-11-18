@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
-import { NO_WINDOW } from '../lib/proc.mjs';
+import { NO_WINDOW, resolveCommand } from '../lib/proc.mjs';
 import {
   globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
@@ -300,6 +300,36 @@ export function leanArgv(argv, help = helpOf) {
 }
 
 /**
+ * What to hand `spawnSync` for the words `words` and the prompt (F5) — pure, so a table states every row.
+ *
+ * Off Windows, or for a command that resolves to nothing (the spawn then says ENOENT itself), the words
+ * run as they are with the prompt as the last argument. On Windows `CreateProcess` runs only `.exe`, so
+ * an npm-installed CLI (`claude.cmd`) was "not found" and learning silently did nothing: the word is
+ * resolved against PATH and PATHEXT (`resolveCommand`, which `doctor` shares), an `.exe` is run directly,
+ * and a `.cmd`/`.bat` goes through `cmd.exe /d /s /c "<line>"` with every word double-quoted. THE PROMPT
+ * NEVER RIDES THAT LINE: it goes over stdin, so the notes of a session (anything a person or a web page
+ * typed) are never parsed by cmd.exe. What remains on the line is the command's own words and the fixed
+ * lean flags, and a word cmd.exe could still read inside quotes (`"`, `%`, a line break, a trailing
+ * backslash) refuses the call instead of being passed on.
+ */
+export function spawnPlan(words, prompt, { platform = process.platform, env = process.env, exists = undefined } = {}) {
+  const direct = { file: words[0], args: [...words.slice(1), ...(prompt === null ? [] : [prompt])], input: undefined,
+    verbatim: false, refuse: null };
+  if (platform !== 'win32') return direct;
+  const found = resolveCommand(words[0], env, exists, platform);
+  if (!found) return direct;
+  if (!/[.](?:cmd|bat)$/i.test(found)) return { ...direct, file: found };
+  const parts = [found, ...words.slice(1)];
+  const bad = parts.find((a) => /["%\r\n\0]|[\\]$/.test(a));
+  if (bad !== undefined) {
+    return { ...direct, refuse: `${JSON.stringify(bad)} cannot be passed through cmd.exe safely - nothing learned` };
+  }
+  const shell = path.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'cmd.exe');
+  return { file: shell, args: ['/d', '/s', '/c', `"${parts.map((a) => `"${a}"`).join(' ')}"`],
+    input: prompt === null ? undefined : prompt, verbatim: true, refuse: null };
+}
+
+/**
  * `prompt` null runs the words as they are (the `--help` probe above); a string is appended after the
  * lean flags. The ONE `spawnSync` call site of this module: the test that pins it reads this line.
  */
@@ -313,9 +343,10 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds() } = {}) {
   // `learn` — one recursion per nested session, stopped only by the host's 600 s timeout
   // killing the outermost call. The marker rides in the child's own environment (inherited by
   // every grandchild too), and `cmdLearn`'s first line stands down the instant it sees it.
-  const words = prompt === null ? argv : [...leanArgv(argv), prompt];
-  const proc = spawnSync(argv[0], words.slice(1),
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: seconds * 1000, killSignal: 'SIGKILL',
+  const plan = spawnPlan(prompt === null ? argv : leanArgv(argv), prompt);
+  if (plan.refuse) return { stdout: '', stderr: `[learn] ${plan.refuse}\n`, returncode: 1, error: null };
+  const proc = spawnSync(plan.file, plan.args,
+    { input: plan.input, windowsVerbatimArguments: plan.verbatim, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: seconds * 1000, killSignal: 'SIGKILL',
       env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
   if (proc.error && /** @type {NodeJS.ErrnoException} */ (proc.error).code === 'ETIMEDOUT') {
     err(`[learn] ${argv[0]} gave no answer in ${seconds} s and was stopped - nothing learned.\n`);

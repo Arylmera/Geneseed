@@ -42,7 +42,9 @@ import path from 'node:path';
 const echo = process.env.FAKE_LLM_ECHO;
 if (echo) {
   fs.mkdirSync(path.dirname(echo), { recursive: true });
-  const prompt = process.argv[2] ?? '';
+  // The prompt is the last argument, or stdin when there is none (a `.cmd` shim is fed over stdin: F5).
+  let prompt = process.argv[2] ?? '';
+  if (process.argv[2] === undefined) { try { prompt = fs.readFileSync(0, 'utf8'); } catch { /* no stdin */ } }
   fs.writeFileSync(echo, Buffer.from(os.EOL === '\n' ? prompt : prompt.replaceAll('\n', os.EOL),
     'utf8'));
 }

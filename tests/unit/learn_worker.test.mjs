@@ -249,7 +249,7 @@ test('doctor: a command whose first word is not on PATH is a note, never a probl
   const exists = (p) => has.has(p);
   assert.equal(commandOnPath('claude', { PATH: '/bin:/usr/bin' }, exists, 'linux'), true);
   assert.equal(commandOnPath('openclaude', { PATH: '/bin:/usr/bin' }, exists, 'linux'), false);
-  assert.equal(commandOnPath('claude', { PATH: 'C:\\x', PATHEXT: '.EXE' }, (p) => p === path.join('C:\\x', 'claude.EXE'), 'win32'), true);
+  assert.equal(commandOnPath('claude', { PATH: 'C:\\x', PATHEXT: '.EXE' }, (p) => p === path.join('C:\\x', 'claude.exe'), 'win32'), true);
   const onPath = (w) => w === 'claude';
   const inst = (host, llm) => ({ host, settingsEnv: [{ [KEY]: llm }] });
   assert.deepEqual(learnCommandNotes([inst('claude', HAIKU)], {}, onPath), []);
