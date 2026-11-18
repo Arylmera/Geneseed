@@ -1813,7 +1813,8 @@
       "env": {
         "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
         "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
+        "GENESEED_LLM": "{py} {llm}",
+        "GENESEED_LEARN_INLINE": "1"
       },
       "expect": [
         "agent lesson"
@@ -1830,7 +1831,16 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\", \"transcript_path\": \"\"}"
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\", \"transcript_path\": \"\", \"last_assistant_message\": \"The review found a stale fixture and fixed it.\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
         }
       ],
       "world": {
@@ -1842,7 +1852,8 @@
       "env": {
         "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
         "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
+        "GENESEED_LLM": "{py} {llm}",
+        "GENESEED_LEARN_INLINE": "1"
       },
       "expect": [
         "agent lesson"
@@ -1859,7 +1870,16 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"subagent_type\": \"code-reviewer\"}"
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"subagent_type\": \"code-reviewer\", \"last_assistant_message\": \"The review found a stale fixture and fixed it.\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
         }
       ],
       "world": {
@@ -1871,7 +1891,8 @@
       "env": {
         "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
         "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
+        "GENESEED_LLM": "{py} {llm}",
+        "GENESEED_LEARN_INLINE": "1"
       },
       "expect_silent": true,
       "id": "learn/subagent-unnamed-is-a-silent-no-op",
@@ -1883,7 +1904,16 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\"}"
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
         }
       ],
       "world": {
@@ -1894,7 +1924,8 @@
       "env": {
         "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
         "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
+        "GENESEED_LLM": "{py} {llm}",
+        "GENESEED_LEARN_INLINE": "1"
       },
       "expect_silent": true,
       "id": "learn/subagent-lesson-too-short-is-dropped",
@@ -1906,7 +1937,16 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\"}"
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\", \"last_assistant_message\": \"The review found a stale fixture and fixed it.\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
         }
       ],
       "world": {
@@ -1918,7 +1958,8 @@
       "env": {
         "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
         "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
+        "GENESEED_LLM": "{py} {llm}",
+        "GENESEED_LEARN_INLINE": "1"
       },
       "expect": [
         "agent lesson"
@@ -1935,7 +1976,7 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\"}"
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\", \"last_assistant_message\": \"The review found a stale fixture and fixed it.\", \"session_id\": \"s1\"}"
         },
         {
           "argv": [
@@ -1944,7 +1985,25 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\"}"
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\", \"last_assistant_message\": \"The review found a stale fixture and fixed it.\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
         }
       ],
       "world": {
@@ -1957,7 +2016,8 @@
       "env": {
         "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
         "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
+        "GENESEED_LLM": "{py} {llm}",
+        "GENESEED_LEARN_INLINE": "1"
       },
       "expect": [
         "agent lesson"
@@ -1974,7 +2034,16 @@
             "{repo}/memory"
           ],
           "cwd": "repo",
-          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\"}"
+          "stdin": "{\"hook_event_name\": \"SubagentStop\", \"agent_name\": \"explore\", \"last_assistant_message\": \"The review found a stale fixture and fixed it.\", \"session_id\": \"s1\"}"
+        },
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"SessionEnd\", \"session_id\": \"s1\"}"
         }
       ],
       "world": {

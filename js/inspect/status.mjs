@@ -48,8 +48,8 @@ import {
 // the deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs read them.
 import {
-  claudeCfg, defaultTheme, hookShellProblems, installedDefaults, installState, installTargets,
-  installsReferencingShim, openclaudeDualHarnessRoots, themeOfDir, readJsonMaybe, readMaybe,
+  claudeCfg, claudeReadManifest, defaultTheme, hookShellProblems, installedDefaults, installState, installTargets,
+  installsReferencingShim, learnOfDir, openclaudeDualHarnessRoots, themeOfDir, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { providerWarning } from '../maintain/kit-migration.mjs';
@@ -293,7 +293,12 @@ export function learnInstalls(targets = installTargets()) {
       const dir = path.join(root, spec.projectMarker);
       files.push(path.join(dir, 'settings.json'), path.join(dir, 'settings.local.json'));
     }
-    out.push({ host, settingsEnv: files.map(envOf) });
+    // What the manifest recorded Geneseed wrote (D5): a value equal to it is Geneseed's, any other is the user's.
+    const cfg = claudeCfg(root, scope, host);
+    const recorded = claudeReadManifest(cfg).managed?.settings_env?.GENESEED_LLM;
+    let learn = null;
+    try { learn = learnOfDir(cfg, host); } catch { /* no carrier: the default */ }
+    out.push({ host, settingsEnv: files.map(envOf), recorded: typeof recorded === 'string' ? recorded : null, learn });
   }
   return out;
 }

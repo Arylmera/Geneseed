@@ -152,9 +152,10 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
 
     // Foreman's depth, main → worker → sub-worker, is armed in Claude Code's own setting, and
     // the manifest records the pair so uninstall can take exactly that back.
-    assert.deepEqual(s.env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
-    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env,
-      { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+    // And, since --learn defaults to light, the learn command: Haiku on Claude Code (spec D4).
+    const wired = { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2', GENESEED_LLM: 'claude -p --model haiku' };
+    assert.deepEqual(s.env, wired);
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env, wired);
 
     // No `cat AGENT.md` at global scope, and the plugins dir is never written.
     assert.ok(!hookCmds(s).some((c) => c.includes('cat AGENT.md')));
@@ -516,8 +517,10 @@ test("a depth cap the user set is theirs: the emit keeps it and the uninstall le
     fs.writeFileSync(path.join(cfg, 'settings.json'),
       JSON.stringify({ env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' } }));
     globalEmit('claude', path.join(d, 'bundle'), cfg);
-    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' });
-    assert.ok(!('settings_env' in readJson(cfg, GLOBAL_MANIFEST).managed));
+    const mine = { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5', GENESEED_LLM: 'claude -p --model haiku' };
+    assert.deepEqual(readJson(cfg, 'settings.json').env, mine);
+    // Only the learn command is recorded: the user's depth cap is not Geneseed's to take back.
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env, { GENESEED_LLM: 'claude -p --model haiku' });
     captured(() => uninstallGlobal(cfg, false, 'claude'));
     assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' });
   });
@@ -604,8 +607,9 @@ test('deactivate then reactivate round-trips, and the user prose never moves', (
     assert.ok(cm.includes('<!-- BEGIN GENESEED -->'));
     assert.ok(cm.includes('keep'));
     assert.ok(geneseedCmds(readJson(cfg, 'settings.json')).length > 0, 'hooks were not re-wired');
-    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' },
-      'the depth cap was not re-wired');
+    assert.deepEqual(readJson(cfg, 'settings.json').env,
+      { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2', GENESEED_LLM: 'claude -p --model haiku' },
+      'the depth cap and the learn command were not re-wired');
     assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')), 'the stash was not cleaned up');
   });
 });
@@ -1432,8 +1436,9 @@ test('an OpenClaude project emit keeps the repo root clean and excludes ITS glob
     const want = path.resolve(path.join(openclaudeConfigDir(), 'CLAUDE.md'))
       .split(path.sep).join('/');
     assert.deepEqual(s.claudeMdExcludes, [want]);
-    // No depth cap: OpenClaude's source has no such variable (checked on 0.31).
-    assert.ok(!('env' in s), JSON.stringify(s.env));
+    // No depth cap: OpenClaude's source has no such variable (checked on 0.31). Only the learn command:
+    // OpenClaude has no tier default, so `light` is the session model and no `--model` is written (spec Q2).
+    assert.deepEqual(s.env, { GENESEED_LLM: 'openclaude -p' });
 
     const ctx = hookCmds(s).filter((c) => c.includes(' context '));
     assert.ok(ctx.length > 0 && ctx.every((c) => c.includes('--host openclaude')),

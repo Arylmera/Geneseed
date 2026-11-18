@@ -7,10 +7,10 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { claimer, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../hosts/native.mjs';
+import { claimer, learnModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
-  managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
+  CLAUDE_ENV, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   unwireClaudeEnv, unwireClaudeExcludes, unwireClaudeListing, unwireClaudeSettings, wireClaudeEnv,
   wireClaudeExcludes, wireClaudeListing,
 } from '../hosts/settings.mjs';
@@ -221,6 +221,23 @@ export function emitClaudeRender(cfg, job) {
   };
 }
 
+/** The `env` key the hook's learn reads its model command from (`js/hosts/hooks-learn.mjs`). */
+export const LEARN_ENV_KEY = 'GENESEED_LLM';
+
+/**
+ * The command the emit writes into `env.GENESEED_LLM` for `learn` (spec 2026-11-18-learn-model-row, D4):
+ * `<cli> -p --model <model>`, or `<cli> -p` for `session` (the user's default model), with `<cli>` the
+ * host's own (`claude`, `openclaude`). null writes nothing: `off`, and Bob (`from: 'n/a'`). Pure.
+ * The lean flags are NOT here: learn appends them at run time, to a command whose first word is the CLI.
+ */
+export function learnEnvCommand(learn, host, map = {}, env = {}) {
+  const cli = host === 'openclaude' ? 'openclaude' : host === 'claude' ? 'claude' : null;
+  const { model, from } = learnModel(learn, map, env, host);
+  if (!cli || from === 'off' || from === 'n/a') return null;
+  // `GENESEED_LLM` is split on whitespace: a model name holding one cannot ride in it.
+  return model && !/\s/.test(model) ?`${cli} -p --model ${model}` : `${cli} -p`;
+}
+
 /**
  * `_build_global._claude_wire_py` — the files the Claude-shaped emits do NOT own: the
  * CLAUDE.md/AGENTS.md managed block and settings(.local).json.
@@ -312,10 +329,21 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   managed.settings_hooks = managedHooks;
   // The subagent depth cap, Claude Code only (`CLAUDE_ENV` says why). The record is what this
   // install wrote, prior plus new, so uninstall never takes a key the user set themselves.
-  if (host === 'claude') {
+  if (host === 'claude' || host === 'openclaude') {
+    // Claude only for the depth cap; both hosts for the learn model (`learnEnvCommand`). The record is
+    // what Geneseed owns on file after the merge (`wireClaudeEnv`'s replace-if-ours form), so the model
+    // can change on a rebuild and a value the user set never lands in it.
     const priorEnv = oldSf === settingsName && isDict(get(old, 'settings_env')) ? old.settings_env : {};
-    const env = { ...priorEnv, ...wireClaudeEnv(settingsPath) };
+    /** @type {Record<string, string>} */
+    const want = host === 'claude' ? { ...CLAUDE_ENV } : {};
+    const llm = learnEnvCommand(gates.learn, host, loadTierMap(cfgDir, () => {}), process.env);
+    // A shell that already names the command is the user's (D5): nothing is written unless an earlier
+    // build did, and then the value on file is still ours to change or remove.
+    if (llm && !(process.env.GENESEED_LLM && !Object.hasOwn(priorEnv, LEARN_ENV_KEY))) want[LEARN_ENV_KEY] = llm;
+    const env = wireClaudeEnv(settingsPath, want, priorEnv);
     if (Object.keys(env).length) managed.settings_env = env;
+  }
+  if (host === 'claude') {
     // The skill-listing budget of `--context-window` (`CONTEXT_WINDOWS` says why and why Claude
     // Code only). The record is what this install owns on file, so a value can change on a rebuild.
     const priorListing = oldSf === settingsName && isDict(get(old, 'settings_listing')) ? old.settings_listing : {};

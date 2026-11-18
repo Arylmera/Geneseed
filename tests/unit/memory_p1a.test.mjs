@@ -373,14 +373,35 @@ test('D12: learn is dormant without $GENESEED_LLM and active with it, and status
 test('D12: learn is judged per installed host, and reads the settings env a Claude hook runs under', () => {
   assert.equal(learnState({}, [{ host: 'opencode' }]), 'opencode: active (session model)');
   assert.equal(learnState({}, [{ host: 'bob' }]), 'bob: n/a (Bob sends no transcript)');
-  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{ GENESEED_LLM: 'claude -p' }] }]), 'claude: active');
+  // A command nobody recorded is the user's (spec D5/D9), so the two rows that read 'active' say who set it.
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{ GENESEED_LLM: 'claude -p' }] }]), 'claude: active (set by you)');
   assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [null, { OTHER: '1' }] }]),
     'claude: dormant ($GENESEED_LLM unset)');
-  assert.equal(learnState({ GENESEED_LLM: 'claude -p' }, [{ host: 'openclaude', settingsEnv: [] }]), 'openclaude: active');
+  assert.equal(learnState({ GENESEED_LLM: 'claude -p' }, [{ host: 'openclaude', settingsEnv: [] }]),
+    'openclaude: active (set by you)');
   // Two installs of one host that disagree show both states; hosts keep their order.
   assert.equal(learnState({}, [
     { host: 'opencode' },
     { host: 'claude', settingsEnv: [{ GENESEED_LLM: 'x' }] },
     { host: 'claude', settingsEnv: [] },
-  ]), 'opencode: active (session model) · claude: active / dormant ($GENESEED_LLM unset)');
+  ]), 'opencode: active (session model) · claude: active (set by you) / dormant ($GENESEED_LLM unset)');
+});
+
+// D9, the four states a Claude-family install reads as: Geneseed wired it (the manifest recorded the
+// value, and the value on file still equals it), the user set it, the install was built --learn off, or
+// nothing names a command.
+test('D9: learn says who set the command: Geneseed (with the model), the user, off, or nobody', () => {
+  const one = (inst) => learnState({}, [{ host: 'claude', ...inst }]);
+  const ours = 'claude -p --model haiku';
+  assert.equal(one({ settingsEnv: [{ GENESEED_LLM: ours }], recorded: ours, learn: 'light' }), 'claude: active (haiku)');
+  assert.equal(one({ settingsEnv: [{ GENESEED_LLM: 'claude -p' }], recorded: 'claude -p', learn: 'session' }),
+    'claude: active (session model)');
+  // The user edited the file after the build: the value no longer equals the record.
+  assert.equal(one({ settingsEnv: [{ GENESEED_LLM: 'ollama run x' }], recorded: ours, learn: 'light' }),
+    'claude: active (set by you)');
+  // The shell names it and the record is empty.
+  assert.equal(learnState({ GENESEED_LLM: 'llm -m x' }, [{ host: 'claude', settingsEnv: [], recorded: null, learn: 'light' }]),
+    'claude: active (set by you)');
+  assert.equal(one({ settingsEnv: [{}], recorded: null, learn: 'off' }), 'claude: off');
+  assert.equal(one({ settingsEnv: [{}], recorded: null, learn: 'light' }), 'claude: dormant ($GENESEED_LLM unset)');
 });

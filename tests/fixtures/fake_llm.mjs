@@ -47,6 +47,17 @@ if (echo) {
     'utf8'));
 }
 
+//     FAKE_LLM_LOG    file each call appends its argv to, one JSON array per line (the call count and the flags)
+//     FAKE_LLM_DELAY_MS   milliseconds to wait before answering (a slow model, for the detached worker)
+const log = process.env.FAKE_LLM_LOG;
+if (log) {
+  fs.mkdirSync(path.dirname(log), { recursive: true });
+  fs.appendFileSync(log, `${JSON.stringify(process.argv.slice(2))}
+`);
+}
+const delay = Number(process.env.FAKE_LLM_DELAY_MS || 0);
+if (delay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+
 const src = process.env.FAKE_LLM_OUT;
 if (src && fs.existsSync(src) && fs.statSync(src).isFile()) {
   fs.writeSync(1, fs.readFileSync(src));

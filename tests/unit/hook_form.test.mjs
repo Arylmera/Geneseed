@@ -743,7 +743,9 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
       // The activity view's verb takes the same `; exit 0` tail and, like context, no onFailure:
       // on UserPromptSubmit a block would erase the user's prompt.
       UserPromptSubmit: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
-      SessionEnd: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
+      // SessionEnd runs `learn` too: the distil starts there, and the entry records the session end for the
+      // activity view after every verb alike (D12).
+      SessionEnd: [h(learn)],
       // A sub-agent's start runs `context` (the user's rules, spec 2026-11-08), same tail.
       SubagentStart: [h(context)],
     });

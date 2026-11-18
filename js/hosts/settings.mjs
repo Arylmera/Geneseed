@@ -1064,11 +1064,13 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // (its `compact` source) re-seeds context AFTER, this captures memory BEFORE. Same
     // `|| exit 0`: never block.
     PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
-    // The activity view's turn start and session end (js/hosts/activity.mjs) — the two events no
-    // other verb runs on. Never `onFailure: 'block'`: on UserPromptSubmit a block erases the
+    // The activity view's turn start (js/hosts/activity.mjs) and, on SessionEnd below, its session end. Never `onFailure: 'block'`: on UserPromptSubmit a block erases the
     // user's prompt, and the `activity` verb decides nothing.
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: activity }] }],
-    SessionEnd: [{ hooks: [{ type: 'command', command: activity }] }],
+    // `learn`, not `activity`: the entry's `trackActivity` records every learn event alike, so the
+    // session end is still recorded, and `learn` starts the session's one distil here, in a detached
+    // worker (js/hosts/hooks-learn.mjs: a SessionEnd hook is killed when the session ends).
+    SessionEnd: [{ hooks: [{ type: 'command', command: learn }] }],
     // A sub-agent's start: `context` reads the event name and injects the user's rules, which no
     // sub-agent gets from SessionStart (spec 2026-11-08, agent loadout). The Activity garden's
     // branch at launch still records, since `trackActivity` runs after every verb. Never on Bob
@@ -1394,7 +1396,13 @@ export const CLAUDE_ENV = Object.freeze({ CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: 
  * value, is theirs and stays. Returns the `{key: value}` pairs actually written, which the
  * manifest records so uninstall removes only those.
  */
-export function wireClaudeEnv(p, want = CLAUDE_ENV) {
+/**
+ * @param {string} p
+ * @param {Record<string, string>} [want]
+ * @param {Record<string, string> | null} [recorded]
+ */
+export function wireClaudeEnv(p, want = CLAUDE_ENV, recorded = null) {
+  if (isDict(recorded)) return reconcileClaudeEnv(p, want, recorded);
   const loaded = readSettingsForMerge(p, 'Its "env" keys were not wired.');
   if (!loaded) return {};
   const [config, hadComments] = loaded;
@@ -1423,6 +1431,67 @@ export function wireClaudeEnv(p, want = CLAUDE_ENV) {
     return {};
   }
   return added;
+}
+
+/**
+ * The replace-if-ours form of `wireClaudeEnv` (spec 2026-11-18-learn-model-row, D5), taken when the
+ * caller passes what the manifest recorded. A value Geneseed owns can change (`GENESEED_LLM` follows the
+ * `--learn` choice), so ownership is the record checked against the file, as `wireClaudeListing` does it:
+ * - a key in `want` that is absent from the file is written and recorded;
+ * - a key on file with exactly the recorded value is Geneseed's: replaced by `want`'s;
+ * - any other key on file is the user's, even one equal to `want` with no record: untouched, unrecorded
+ *   (and said on stderr when it differs from `want`'s, so the user learns why the choice did not apply);
+ * - a recorded key `want` no longer names is removed while it still holds the recorded value.
+ * Returns the `{key: value}` pairs Geneseed owns on file afterwards, which the manifest records.
+ * A commented file is never rewritten: the wanted changes are printed for a hand merge.
+ */
+function reconcileClaudeEnv(p, want, recorded) {
+  const wanted = want || {};
+  const loaded = readSettingsForMerge(p, 'Its "env" keys were not wired.');
+  if (!loaded) return { ...recorded };
+  const [config, hadComments] = loaded;
+  if (has(config, 'env') && !isDict(config.env)) {
+    process.stderr.write(`[geneseed] WARN: "env" in ${path.basename(p)} is not an object — `
+      + `NOT rewriting it. Add to it by hand once it is one: ${jsonDumpsCompact(wanted)}\n`);
+    return { ...recorded };
+  }
+  const env = has(config, 'env') ? config.env : {};
+  const ours = (k) => has(recorded, k) && has(env, k) && env[k] === recorded[k];
+  const next = { ...env };
+  const record = {};
+  for (const k of new Set([...Object.keys(recorded), ...Object.keys(wanted)])) {
+    if (has(wanted, k)) {
+      if (!has(env, k) || ours(k)) { next[k] = wanted[k]; record[k] = wanted[k]; }
+      else if (env[k] !== wanted[k]) {
+        process.stderr.write(`[geneseed] "env.${k}" in ${path.basename(p)} is set by you (${jsonDumpsCompact(env[k])}) `
+          + `— kept, not replaced by ${jsonDumpsCompact(wanted[k])}. Remove it and rebuild to let Geneseed set it.\n`);
+      }
+    } else if (ours(k)) {
+      delete next[k];
+    }
+  }
+  const owned = () => Object.fromEntries(Object.keys(recorded).filter(ours).map((k) => [k, env[k]]));
+  const changed = Object.keys({ ...env, ...next }).some((k) => has(env, k) !== has(next, k) || env[k] !== next[k]);
+  if (!changed) return record;
+  const config2 = { ...config };
+  if (Object.keys(next).length) config2.env = next; else delete config2.env;
+  if (hadComments) {
+    const add = Object.fromEntries(Object.entries(record).filter(([k, v]) => env[k] !== v));
+    const drop = Object.keys(env).filter((k) => !has(next, k));
+    process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
+      + '(your edits are kept). Merge its "env" keys by hand: set '
+      + `${jsonDumpsCompact(add)}${drop.length ? `, remove ${drop.join(', ')}` : ''}\n`);
+    return owned();
+  }
+  try {
+    atomicWriteJson(p, config2);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    process.stderr.write(`[geneseed] WARN: could not write ${p} (${e.message}) — its "env" keys were not `
+      + `wired. Set them by hand: ${jsonDumpsCompact(wanted)}\n`);
+    return owned();
+  }
+  return record;
 }
 
 /** Remove each recorded `env` key while it still holds the recorded value; drop an empty `env`. */
