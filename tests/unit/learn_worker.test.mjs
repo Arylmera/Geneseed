@@ -6,7 +6,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { wireClaudeEnv, unwireClaudeEnv } from '../../js/hosts/settings.mjs';
@@ -23,8 +22,8 @@ const KEY = 'GENESEED_LLM';
 const HAIKU = 'claude -p --model haiku';
 
 function withDir(fn) {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'learn-a2-'));
-  try { return fn(d); } finally { fs.rmSync(d, { recursive: true, force: true }); }
+  const sb = makeSandbox('learn-a2-');
+  try { return fn(sb.path); } finally { sb.cleanup(); }
 }
 const readEnv = (p) => JSON.parse(fs.readFileSync(p, 'utf8')).env;
 function quietly(fn) {

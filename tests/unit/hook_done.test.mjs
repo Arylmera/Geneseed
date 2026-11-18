@@ -961,12 +961,14 @@ test('learn on SubagentStop: the worker\'s own root and list judge its turn', ()
   assert.equal(parentOnly.ledger, '');
 });
 
-test('learn on SubagentStop: a block returns before the agent lesson is distilled', () => {
+// Spec 2026-11-18-learn-model-row, D8: a sub-agent's stop calls no model, blocked or allowed. Its lesson is
+// queued (an allowed stop only) and distilled by the session's one run, which tests/unit/learn_worker.test.mjs drives.
+test('learn on SubagentStop: no model runs at the stop, blocked or allowed', () => {
   const blocked = subagentStop({ rows: [prompt('brief'), editWorker], llm: true });
   assert.equal(JSON.parse(blocked.out).decision, 'block');
   assert.equal(blocked.lesson, false, 'a blocked sub-agent got a lesson written');
   const proven = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint')], llm: true });
-  assert.equal(proven.lesson, true, `the allowed sub-agent learned nothing: ${proven.err}`);
+  assert.equal(proven.lesson, false, `the allowed sub-agent called the model at its stop: ${proven.err}`);
 });
 
 test('learn on SubagentStop: an inferred check is a stderr line and a ledger entry, never stdout', () => {

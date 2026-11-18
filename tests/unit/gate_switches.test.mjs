@@ -252,7 +252,7 @@ test('the hook commands carry --no-secrets-gate / --no-done-gate only when off',
         `${host}: ${secretGate.map((c) => c.command).join(' | ')}`);
       const learn = off.filter((c) => / learn /.test(c.command));
       assert.deepEqual(learn.map((c) => c.event).sort(),
-        host === 'bob' ? ['Stop'] : ['PreCompact', 'Stop', 'SubagentStop'], `${host}: learn events`);
+        host === 'bob' ? ['Stop'] : ['PreCompact', 'SessionEnd', 'Stop', 'SubagentStop'], `${host}: learn events`);
       // Before `|| exit 0`, or the shell would read the flag as a second command.
       assert.ok(learn.every((c) => / --no-done-gate \|\| exit 0$/.test(c.command)), learn.map((c) => c.command).join(' | '));
       // Each switch reaches only its own verb.
