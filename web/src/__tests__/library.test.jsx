@@ -7,7 +7,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // entry from the URL, the lifecycle badges) is pinned here, beside what the Library always
 // did (forget a memory fact, never fetch across kinds).
 vi.mock('../api/index.js', () => ({
-  api: { catalog: vi.fn(), item: vi.fn(), memoryDelete: vi.fn(), usage: vi.fn(), loadout: vi.fn() },
+  api: {
+    catalog: vi.fn(),
+    item: vi.fn(),
+    memoryDelete: vi.fn(),
+    usage: vi.fn(),
+    loadout: vi.fn(),
+    agentModels: vi.fn(),
+    agentModelsSave: vi.fn(),
+  },
 }))
 
 // Every confirm answers yes (hooks/useConfirm.jsx; its own dialog is tested elsewhere).
@@ -290,6 +298,98 @@ describe('Library', () => {
     expect(screen.getByRole('link', { name: /Smallest Viable Diff/ }).getAttribute('href')).toBe(
       '#/item/law/craft.6',
     )
+  })
+
+  // The agent's model (GET /api/agent-models): its tier from the source, the model it resolves
+  // to on this install and why, and a pin. Claude Code installs only; elsewhere the badge alone.
+  const MODELS = {
+    claude: true,
+    tiers: 'auto',
+    file: { path: '/x/agent-overrides.json', problem: null },
+    map: {},
+    defaults: { standard: 'sonnet', light: 'haiku' },
+    warnings: [],
+    agents: [
+      { name: 'reviewer', tier: 'strong', pin: null, model: null, from: 'inherit' },
+      { name: 'tester', tier: 'light', pin: null, model: 'haiku', from: 'default' },
+    ],
+  }
+
+  it('shows the tier badge and the model an agent resolves to, with no pin set', async () => {
+    api.agentModels.mockResolvedValue(MODELS)
+    render(<Library section="agents" selected="reviewer" overview={overview({})} />)
+    expect(await screen.findByText('strong tier')).toBeTruthy()
+    expect(screen.getByTestId('agent-model-effective').textContent).toMatch(
+      /^runs on your session model/,
+    )
+    expect(screen.getByLabelText('pin a model for reviewer').value).toBe('')
+  })
+
+  it('names the model, and where it came from, for a light agent', async () => {
+    api.agentModels.mockResolvedValue(MODELS)
+    render(<Library section="agents" selected="tester" overview={overview({})} />)
+    expect(await screen.findByText('light tier')).toBeTruthy()
+    expect(screen.getByTestId('agent-model-effective').textContent).toMatch(
+      /^runs on haiku \(the tier default\)/,
+    )
+  })
+
+  it('pins a model with the one endpoint, and clears it by sending null', async () => {
+    api.agentModels.mockResolvedValue(MODELS)
+    api.agentModelsSave.mockImplementation(async (body) => ({
+      ...MODELS,
+      agents: [
+        {
+          name: 'reviewer',
+          tier: 'strong',
+          pin: body.agents.reviewer,
+          model: body.agents.reviewer,
+          from: 'pin',
+        },
+      ],
+    }))
+    render(<Library section="agents" selected="reviewer" overview={overview({})} />)
+    const input = await screen.findByLabelText('pin a model for reviewer')
+    const save = screen.getByRole('button', { name: 'Save pin' })
+    expect(save.disabled).toBe(true)
+    fireEvent.change(input, { target: { value: ' opus ' } })
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(api.agentModelsSave).toHaveBeenCalledWith({ agents: { reviewer: 'opus' } }, undefined),
+    )
+    expect(await screen.findByText(/changes at the next rebuild/)).toBeTruthy()
+    expect(screen.getByTestId('agent-model-effective').textContent).toMatch(
+      /^runs on opus \(your pin\)/,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Clear pin' }))
+    await waitFor(() =>
+      expect(api.agentModelsSave).toHaveBeenLastCalledWith(
+        { agents: { reviewer: null } },
+        undefined,
+      ),
+    )
+  })
+
+  it('shows the tier alone on a host that is not Claude Code', async () => {
+    api.agentModels.mockResolvedValue({
+      claude: false,
+      tiers: 'off',
+      agents: [{ name: 'reviewer', tier: 'strong' }],
+    })
+    render(<Library section="agents" selected="reviewer" overview={overview({})} />)
+    expect(await screen.findByText('strong tier')).toBeTruthy()
+    expect(screen.queryByLabelText('pin a model for reviewer')).toBeNull()
+    expect(screen.queryByTestId('agent-model-effective')).toBeNull()
+  })
+
+  it('refuses to edit a file that does not parse, and says why', async () => {
+    api.agentModels.mockResolvedValue({
+      ...MODELS,
+      file: { path: '/x/agent-overrides.json', problem: 'agent-overrides.json is not valid JSON' },
+    })
+    render(<Library section="agents" selected="reviewer" overview={overview({})} />)
+    expect(await screen.findByText(/is not valid JSON/)).toBeTruthy()
+    expect(screen.getByLabelText('pin a model for reviewer').disabled).toBe(true)
   })
 
   it('forgets a memory fact via the delete control', async () => {

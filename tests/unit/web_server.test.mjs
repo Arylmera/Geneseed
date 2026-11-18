@@ -54,10 +54,10 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 33 (the Factories page added `/api/factories/catalog` and
+/** Every GET path the daemon answers — 34 (the console's model tiers added `/api/agent-models`; the Factories page added `/api/factories/catalog` and
  * `/api/factories/active`; the Installs page's Profiles tab added `/api/profiles`). Trailing `/`
  * marks a prefix route. */
-const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
+const GET_SURFACE = ['/api/activity', '/api/agent-models', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/factories/active', '/api/factories/catalog',
   '/api/fleet', '/api/installs', '/api/item/',
   '/api/jobs', '/api/jobs/', '/api/kits', '/api/loadout', '/api/loadout/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/migrate/preview',
@@ -65,10 +65,10 @@ const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/d
   '/api/ping', '/api/profile', '/api/profiles', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 17. `/api/mcp` left it when MCP became read-only, and
+/** Every POST path the daemon answers — 18 (`/api/agent-models` writes one install's model tiers and pins). `/api/mcp` left it when MCP became read-only, and
  * `/api/view` when the console's install selector was retired (each page names its install).
  * `/api/autostart` joined it when Settings began to write the login launcher (2026-11-08). */
-const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/autostart', '/api/default-install', '/api/excludes',
+const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/agent-models', '/api/autostart', '/api/default-install', '/api/excludes',
   '/api/install',
   '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/decide', '/api/rules/promote',
@@ -82,7 +82,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/autostart', '/api/
  * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
  * raise — so the column has to be checked as a column, below.
  */
-const EXPECT_409 = ['/api/autostart', '/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
+const EXPECT_409 = ['/api/agent-models', '/api/autostart', '/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
   '/api/rules/decide', '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */
@@ -541,6 +541,10 @@ test('the declared surface is the one the dispatcher uses', async () => {
     assert.equal(await hit('GET', '/api/profile'), 200,
       'a table GET must answer — the control, without which every refusal below is vacuous');
     assert.equal(await hit('GET', '/api/jobs'), 200, 'an inline GET must answer too');
+    assert.equal(await hit('GET', '/api/agent-models'), 200, 'GET /api/agent-models must answer on the default install');
+    // The probe's default install is not Claude Code, so the save is refused (409) before any file is read.
+    assert.equal(await hit('POST', '/api/agent-models', 'tok', '{"tiers": {"light": "x"}}'), 409,
+      'POST /api/agent-models must reach apiAgentModelsSave and refuse a host that is not Claude Code');
     // A 200 means the declaration and the table agree; anything else — an HTML 200 from the
     // SPA fallback included — means the route is declared and not dispatched. (The SPA fallback
     // cannot answer 200 here: this probe's dist root is 'nowhere', so a fall-through is a 404.)

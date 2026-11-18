@@ -98,6 +98,13 @@ const memoryDelete = (name, install) => postIn('/api/memory/delete', { name }, i
 const loadout = (agent, install) =>
   getIn(agent ? `/api/loadout/${encodeURIComponent(agent)}` : '/api/loadout', install)
 
+// The sub-agent models of one Claude Code install: each agent's tier, pin and the model it resolves to,
+// the `tiers` map and the Bedrock/Vertex alias warnings. The save merges into agent-overrides.json:
+// { tiers: { standard|light: model | '' | null }, agents: { <name>: model | '' | null } }, and
+// answers the fresh read plus `rebuild: true` (the model is written into the agent files at emit).
+const agentModels = (install) => getIn('/api/agent-models', install)
+const agentModelsSave = (body, install) => postIn('/api/agent-models', body, install)
+
 // ── Diff ────────────────────────────────────────────────────────────────────
 // Drift from source: read the deployed-vs-source diff, and restore (discard
 // local edits for) selected files. Restore is synchronous — it returns
@@ -260,6 +267,8 @@ export const api = {
   catalog,
   item,
   loadout,
+  agentModels,
+  agentModelsSave,
   memoryDelete,
   diff,
   restore,
