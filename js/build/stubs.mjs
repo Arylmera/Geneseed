@@ -18,7 +18,7 @@ import { jsonDumpsIndent } from '../lib/json.mjs';
 import { NOTES_DIRS, WIKI_NAMES, renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
-import { MEMORY_SEED, alwaysOnCandidates, draftAlwaysOn, migrateMemoryIndex } from '../hosts/memory-files.mjs';
+import { MEMORY_SEED, alwaysOnCandidates, draftAlwaysOn, holdsFlatFacts, migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
@@ -352,10 +352,13 @@ export function ensureSharedTier() {
  */
 function ensureTierMemory(tier) {
   try {
-    recordOwnWrites(tier.root, () => {
+    // Logged only when there is something to migrate: a seed or a topic map writes nothing, and a
+    // log entry for a no-op would make a second emit differ from the first.
+    const migrate = () => {
       draftAlwaysOn(tier, alwaysOnCandidates(tier.memory));
       ensureMemoryStore(tier.memory);
-    });
+    };
+    if (holdsFlatFacts(tier.memory)) recordOwnWrites(tier.root, migrate); else migrate();
   } catch (e) {
     process.stderr.write(`[geneseed] WARN could not migrate the shared memory index: ${e.message}; `
       + 'the next emit retries\n');

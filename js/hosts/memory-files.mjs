@@ -307,7 +307,7 @@ export function migrateMemoryIndex(memDir) {
  * store document or to a fact that is gone is carried by the migration (D4) and is no fact to move,
  * so a migrated index that carries one is not flat, and the next emit finds nothing to do.
  */
-function holdsFlatFacts(memDir) {
+export function holdsFlatFacts(memDir) {
   const lines = readLines(path.join(memDir, 'MEMORY.md'));
   if (!lines) return false;
   const slugs = new Set([...existingSlugs(memDir)].map((s) => s.toLowerCase()));
