@@ -139,6 +139,54 @@ describe('Library', () => {
     expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
   })
 
+  // The rail's "Showing" scope (Option E): all installs, or one. Picking an install keeps the rows
+  // it holds plus the skills its marker excludes (their chip brings them back), counts the kind on
+  // screen from that list and the other kinds from `counts.byInstall`, hides the row dots (the
+  // scope already names the install), and is remembered across visits.
+  it('scopes the lists and the rail counts to one install', async () => {
+    const CL = 'claude:global:/cl'
+    const OC = 'opencode:global:/oc'
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { id: CL, host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+        { id: OC, host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+      ],
+    }))
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items:
+          section === 'skills'
+            ? [
+                { name: 'both', klass: 'design', installs: [CL, OC], ships: { [CL]: 'on', [OC]: 'on' } },
+                { name: 'cl-only', klass: 'design', installs: [CL], ships: { [CL]: 'on', [OC]: 'absent' } },
+                { name: 'oc-gone', klass: 'design', installs: [CL], ships: { [CL]: 'on', [OC]: 'excluded' } },
+              ]
+            : [],
+      }),
+    )
+    const counts = { skills: 3, agents: 9, byInstall: { [CL]: { skills: 3, agents: 7 }, [OC]: { skills: 2, agents: 4 } } }
+    try {
+      localStorage.removeItem('geneseed-library-scope')
+      render(<Library section="skills" overview={overview(counts)} />)
+      await waitFor(() => expect(document.querySelectorAll('.lib-scope-opt')).toHaveLength(3))
+      const names = () => [...document.querySelectorAll('a[href^="#/item/skill/"]')].map((a) => a.getAttribute('href').split('/').pop())
+      await waitFor(() => expect(names()).toEqual(['both', 'cl-only', 'oc-gone']))
+      expect(document.querySelectorAll('.lr-dots').length).toBeGreaterThan(0)
+      fireEvent.click(document.querySelectorAll('.lib-scope-opt input')[2])
+      await waitFor(() => expect(names()).toEqual(['both', 'oc-gone']))
+      expect(kinds().slice(0, 2)).toEqual([
+        ['Skills', '2', 'page'],
+        ['Agents', '4', null],
+      ])
+      expect(document.querySelectorAll('.lr-dots')).toHaveLength(0)
+      expect(localStorage.getItem('geneseed-library-scope')).toBe(OC)
+    } finally {
+      localStorage.removeItem('geneseed-library-scope')
+      delete api.installs
+    }
+  })
+
   // Every kind lists every install, so no list head names one.
   it('names no install over a setup-file list', async () => {
     api.installs = vi.fn(async () => ({

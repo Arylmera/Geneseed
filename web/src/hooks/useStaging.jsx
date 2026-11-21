@@ -1,8 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
 // What the switches have STAGED but not applied — kit sets per install, doctrine rules per
-// install — held ONCE for the whole console. App mounts the provider around the shell, so a
-// staged change survives a page change, a remount and any refetch that does not touch it.
+// install, excluded skills per install (the Library chips) — held ONCE for the whole console.
+// App mounts the provider around the shell, so a staged change survives a page change, a
+// remount and any refetch that does not touch it.
 //
 // ⚠ RECONCILE ON READ, NEVER RESET ON CHANGE. Each entry keeps the `base` it was staged
 // against (the install's own value, as a sorted key). A reader honours the entry only while
@@ -24,7 +25,7 @@ export const sortedKey = (v) => [...v].sort().join(',')
 const dirtyIn = (m) => [...m.values()].some((e) => !e.applied && sortedKey(e.value) !== e.base)
 
 function useStore(activeId, finish) {
-  const [maps, setMaps] = useState(() => ({ kits: new Map(), rules: new Map() }))
+  const [maps, setMaps] = useState(() => ({ kits: new Map(), rules: new Map(), skills: new Map() }))
   const [applying, setApplying] = useState(null) // { kind, key } | null
   // Settled during render on the EVENT's identity (React's "adjust state on prop change").
   const [seen, setSeen] = useState(finish)
@@ -44,7 +45,7 @@ function useStore(activeId, finish) {
     }
   }
 
-  const anyDirty = dirtyIn(maps.kits) || dirtyIn(maps.rules)
+  const anyDirty = dirtyIn(maps.kits) || dirtyIn(maps.rules) || dirtyIn(maps.skills)
   useEffect(() => {
     if (!anyDirty) return undefined
     const onLeave = (e) => {

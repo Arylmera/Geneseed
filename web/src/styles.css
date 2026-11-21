@@ -3109,6 +3109,18 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .lib-title { display: flex; flex-direction: column; gap: 2px; /* off-scale: 2px hairline, below the 4px grid */ padding: 0 var(--sp-2); font-size: var(--fs-sm); }
 .lib-title h1.h { font-size: 24px; /* off-scale: 24px between --fs-xl and --fs-2xl */ margin: 0; }
 .lib-kinds .stackbar { margin: 0 var(--sp-2); }
+/* The rail's "Showing" scope (Library.jsx): all installs, or one, each with its count. */
+.lib-scope { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: var(--sp-1);
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); min-width: 0; }
+.lib-scope-h { float: left; width: 100%; padding: var(--sp-1) var(--sp-2) var(--sp-2);
+  font-size: var(--fs-2xs); color: var(--text-3); letter-spacing: .06em; text-transform: uppercase; }
+.lib-scope-opt { display: flex; align-items: center; gap: var(--sp-2); min-height: 34px; padding: 0 var(--sp-2);
+  border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--text-2); cursor: pointer; }
+.lib-scope-opt:hover { background: var(--surface-2); color: var(--text); }
+.lib-scope-opt.on { background: var(--surface-3); color: var(--text); font-weight: 600; }
+.lib-scope-opt input { margin: 0; accent-color: var(--accent); }
+.lib-scope-opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lib-scope-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kind-list { display: flex; flex-direction: column; gap: 2px; /* off-scale: 2px hairline, below the 4px grid */ }
 .kind-list a { display: flex; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2);
   border-radius: var(--r-sm); color: var(--text-2); }
@@ -3921,6 +3933,48 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .lr-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%;
   background: var(--cc, var(--text-3)); }
 .lr-dot.off { background: none; box-shadow: inset 0 0 0 1px var(--line-3); }
+/* A dot staged on that install but not applied: a dashed ring in the install's colour. */
+.lr-dot.staged { background: none; box-sizing: border-box; border: 1.5px dashed var(--cc, var(--text-3)); }
+
+/* The Library's "Ships to" chips (components/SkillShips.jsx): one per install. Filled dot = it
+   ships there; hollow = excluded; dashed = staged; dim = not switchable (kit off, not shipped). */
+.ships-to { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ships-to-h { font-size: var(--fs-2xs); color: var(--text-3); letter-spacing: .06em; text-transform: uppercase; }
+.ships-to-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.ship-chip { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 36px;
+  padding: 0 var(--sp-3); border-radius: 999px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+button.ship-chip:hover:not(:disabled) { border-color: var(--line-3); background: var(--surface-3); }
+/* A chip that cannot switch is a label (its title stays readable), not a button, and it must not
+   LOOK like one: no pill, no fill, so a read-only agent chip never reads as a skill's switch. */
+.ship-chip.fixed { cursor: default; border-color: transparent; background: none; padding-inline: var(--sp-1); }
+.ship-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ship-chip:disabled { cursor: default; }
+.ship-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--cc, var(--text-3)); }
+.ship-state { font-size: var(--fs-xs); color: var(--text-2); }
+.ship-excluded, .ship-kit-off, .ship-absent { background: none; color: var(--text-2); }
+.ship-excluded .ship-dot, .ship-kit-off .ship-dot, .ship-absent .ship-dot {
+  background: none; box-sizing: border-box; border: 1.5px solid var(--cc, var(--text-3)); }
+.ship-kit-off, .ship-absent { opacity: .7; }
+.ship-turning-off, .ship-turning-on { border-style: dashed; border-color: var(--warn); background: none; }
+.ship-turning-off .ship-dot { background: none; box-sizing: border-box; border: 1.5px dashed var(--cc, var(--text-3)); }
+.ship-turning-off .ship-state, .ship-turning-on .ship-state { color: var(--warn-text); }
+/* Always on (a protected skill, a core agent): a label like any fixed chip, greyed, with a
+   padlock in the install's colour where the dot would be. */
+.ship-chip.locked { color: var(--text-2); }
+.ship-lock { width: 13px; height: 13px; flex: none; color: var(--cc, var(--text-3)); }
+
+/* The staged skill changes, one row per install, pinned under the Library. */
+/* Sticks 12px above the console dock's 42px head (`.console`, fixed at the bottom), and above
+   the phone tabbar on a phone. */
+.skill-apply { position: sticky; bottom: calc(42px + 12px); z-index: 2; display: flex; flex-direction: column; gap: var(--sp-2);
+  margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--accent-line);
+  border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-pop); }
+.skill-apply-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.skill-apply-n { font-weight: 600; font-size: var(--fs-sm); }
+.skill-apply-what { font-size: var(--fs-xs); color: var(--text-2); min-width: 0; overflow-wrap: anywhere; }
+.skill-apply-hint { margin-right: auto; }
+@media (max-width: 720px) { .skill-apply { bottom: calc(64px + 42px + 12px); } }
 .lib-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin-top: var(--sp-2);
   font-size: var(--fs-2xs); color: var(--text-3); }
 .lib-legend > span { display: inline-flex; align-items: center; gap: 6px; }

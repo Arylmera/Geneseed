@@ -172,7 +172,17 @@ breadcrumb starts at the page: it names no install.
 `InstallPicker`, always labelled *Install:*, sits right above the heading of the view it acts on
 (under the tabs on a tabbed page, over the h1 on a page with none), and starts on the default install; with one active install it is not shown. A form or popover that
 acts on its own install holds the same control: the new-rule form and a
-Library entry with several copies. The Personal page names no harness for what the harnesses share:
+Library entry with several copies. A skill or an agent has no copy picker. Its copies come from one
+source, so its page shows the **Ships to** chips instead, one for each install. A skill's chips
+switch it off or on there ([exclusions](concepts/exclusions.md)). An agent's chips only say where it
+ships, because no build option excludes an agent. A padlock marks an entry that is always on: a
+protected skill, or a core agent. A chip that cannot switch has no pill around it, so it does not
+look like a button.
+
+The Library rail has a **Showing** list: **All installs**, or one install. With one install picked,
+every kind lists only what that install holds, and each count in the rail is that install's. A skill
+the install excludes stays in its list, so its chip can bring it back. The row dots are hidden,
+because the scope already names the install. The choice is kept in this browser. The Personal page names no harness for what the harnesses share:
 every global install reads one set of rules, one profile and one memory store in the shared tier
 (`~/.config/geneseed`), so Rules, Profile and Memory list each once. Its header states that scope
 once, a list head or profile card says `shared`, and a project install keeps its own, named by its

@@ -34,7 +34,8 @@ import path from 'node:path';
 
 import { emitGlobalInto } from '../build/driver.mjs';
 import {
-  CONTEXT_WINDOWS, ROOT, TIERS_CHOICES, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
+  CONTEXT_WINDOWS, ROOT, TIERS_CHOICES, discoverNames, knownRuleIds, knownSkillIds, linkedSkillIds,
+  loadKits, PACK_ORDER,
 } from '../build/source.mjs';
 import { diffCollect, drifted, renderMemo, withStdoutSwallowed } from '../inspect/diff.mjs';
 import { SESSION_FILES } from '../hosts/hooks-context.mjs';
@@ -133,6 +134,32 @@ function bodyDoctrines(body) {
 function bodyExcludeRules(body) {
   return bodyList(body, 'excludeRules', knownRuleIds, knownRuleIds,
     (n) => n.trim().replace(/[ \t]+/, '.'));
+}
+
+/**
+ * A request body's `excludeSkills` — the Library's install chips. It REPLACES the install's
+ * excluded skills, as `kits` replaces its kits: `[]`/`'none'` give `{ ids: [] }` (re-admit every
+ * skill), an omitted key gives `null` (keep the install's own `Excluded skills:` answer).
+ *
+ * Closed here, not in the job: `parseExcludeSkills` refuses an unknown or a protected name with
+ * `die(2)`, which inside a console job is a failed rebuild after the user already clicked Apply.
+ * So an unknown name (not in `knownSkillIds`, which a personal skill is not either) and a skill
+ * the harness links to by path (`linkedSkillIds`) are each an `{ error }` naming it, and no job
+ * starts. Sorted through `knownSkillIds` for the marker's stability.
+ */
+function bodyExcludeSkills(body) {
+  if (bget(body, 'excludeSkills') === null) return null;
+  const ids = bodyList(body, 'excludeSkills', knownSkillIds);
+  if (ids === null) {
+    return { error: `unknown skill in ${formatRepr(bget(body, 'excludeSkills'))} — `
+      + 'only a skill this Geneseed ships can be excluded' };
+  }
+  const linked = ids.length ? linkedSkillIds() : [];
+  const locked = ids.filter((n) => linked.includes(n));
+  if (locked.length) {
+    return { error: `${locked.join(', ')} cannot be excluded — the harness links to it by path` };
+  }
+  return { ids };
 }
 
 /**
@@ -805,6 +832,10 @@ export function apiInstallCmd(state, body) {
         + [...loadKits().keys()].join(', ') };
     }
   } catch (e) { return { error: String(e?.message ?? e) }; }
+  // The Library's chips send the whole excluded set for this install; an omitted key keeps it.
+  const skillsBody = bodyExcludeSkills(body);
+  if (skillsBody?.error) return { error: skillsBody.error };
+  const excludeSkills = skillsBody?.ids ?? excludedSkillsOfDir(root, host);
   // D11: the shared tier is a project install's option; a global install owns it.
   const sharedTier = scope === 'global' ? false : bodySharedTier(body, root, host);
   if (scope === 'global' && bget(body, 'sharedTier') === true) {
@@ -812,7 +843,7 @@ export function apiInstallCmd(state, body) {
   }
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates,
     kits ?? migratedKitsOfDir(root, host), sharedTier, bodyContextWindow(body, root, host, scope),
     bodyTiers(body, root, host), learnOfDir(root, host));
   // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
