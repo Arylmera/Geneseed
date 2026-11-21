@@ -91,8 +91,9 @@ const noteUserLine = (id, status, summary) => ({ type: 'user',
 // opening on this preamble — and on several versions no `queued_command` copy beside it.
 const HOST_PREAMBLE = '[SYSTEM NOTIFICATION - NOT USER INPUT]\n'
   + 'This is an automated background-task event, NOT a message from the user.\n\n';
-const notePreambleLine = (id, status, summary, { preamble = HOST_PREAMBLE, origin = true } = {}) => ({
-  type: 'user', isMeta: true, ...(origin ? { origin: { kind: 'task-notification', producer: 'session-task' } } : {}),
+const notePreambleLine = (id, status, summary, { preamble = HOST_PREAMBLE, origin = true, meta = true } = {}) => ({
+  type: 'user', ...(meta ? { isMeta: true } : {}),
+  ...(origin ? { origin: { kind: 'task-notification', producer: 'session-task' } } : {}),
   message: { role: 'user', content: preamble + noteText(id, status, summary) } });
 
 test('doneDecide: a background launch passes only on a completed, exit-0 notification', () => {
@@ -168,6 +169,24 @@ test('doneDecide: a background launch passes only on a completed, exit-0 notific
     const l = launch();
     assert.deepEqual(doneDecide(jsonl(side([prompt('brief'), edit(), l.rows, line(l.id)])), C, R, R, true, true), owed, what);
   }
+  // Only a user line takes the preamble path: the same text elsewhere is the agent's or a tool's.
+  const elsewhere = [
+    ['in an assistant text block', (id) => ({ type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: HOST_PREAMBLE + noteText(id, 'completed', ok) }] } })],
+    ['in an attachment that is no queued_command', (id) => ({ type: 'attachment',
+      attachment: { type: 'hook_additional_context', prompt: HOST_PREAMBLE + noteText(id, 'completed', ok) } })],
+    ['in a tool result', (id) => ({ type: 'user', origin: { kind: 'task-notification' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tx', content: HOST_PREAMBLE + noteText(id, 'completed', ok) }] } })],
+  ];
+  for (const [what, line] of elsewhere) {
+    const l = launch();
+    assert.deepEqual(doneDecide(jsonl(side([prompt('brief'), edit(), l.rows, line(l.id)])), C, R, R, true, true), C, what);
+  }
+  // A preamble line opens no turn, even without `isMeta`: as a prompt it would cut the turn after
+  // the edit, and a notification for another run would leave nothing owed.
+  const l = launch();
+  const other = notePreambleLine('toolu_other', 'completed', ok, { meta: false });
+  assert.deepEqual(doneDecide(jsonl(prompt('go'), edit(), l.rows, other), C, R), C, 'no isMeta: still no turn opening');
   for (const [text, notified, owed] of moved) {
     const [u, r] = bash('npm run lint');
     const id = lastId();
@@ -1280,6 +1299,22 @@ test('learn on SubagentStop: a worker waiting on its background suite is not blo
   assert.equal(r.out, '');
   assert.match(r.ledger, /"verb":"done-gate-pending","rule":"law-3"/);
   assert.match(r.err, /\[done-gate\] pending — the turn ends while its proof still runs in the background: npm run lint;/);
+});
+
+// A worker that writes in two projects (its worktree and the parent) owes both lists. Pending only
+// when every root's every owed check is a pending run: one never-run check in either root blocks.
+test('learn on SubagentStop: pending across two roots, and one never-run check that still blocks', () => {
+  const launch = once(() => bgBash('npm run lint'));
+  const editParent = (w) => edit(path.join(w, '..', '..', '..', 'p.js'));
+  const run = (parentChecks) => subagentStops({ parentChecks,
+    stops: [{ rows: [prompt('brief'), editWorker, editParent, launch] }] })[0];
+  const both = run('npm run lint\n');
+  assert.equal(both.out, '', 'both roots pending: no block');
+  assert.match(both.ledger, /"verb":"done-gate-pending"/);
+  const mixed = run('make check\n');
+  const verdict = JSON.parse(mixed.out);
+  assert.equal(verdict.decision, 'block');
+  assert.match(verdict.reason, /: make check/);
 });
 
 test('learn on SubagentStop: the cap counts per sub-agent', () => {
