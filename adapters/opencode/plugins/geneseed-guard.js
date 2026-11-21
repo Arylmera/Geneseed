@@ -169,6 +169,87 @@ const CARRIER_TEXT = carrierText()
 const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, "m").test(CARRIER_TEXT)
 const DELETION_GATE_OFF = gateOff("Deletion gate")
 const SECRETS_GATE_OFF = gateOff("Secrets gate")
+
+// THE RELAY CEILING, the OpenCode half (js/hosts/hooks-relay.mjs is the original and says why).
+// A Foreman task worker (a child session whose agent is `developer`) past the ceiling of the
+// install's context window may only commit and hand off with `STATUS: RELAY`. Its context is the
+// last assistant message's tokens as the host reports them (V1 `message.updated`, V2
+// `session.step.ended`), tracked per session in `GeneseedGuard`: OpenCode has no transcript file
+// to read. The window is the carrier's `Context window:` line, read once at load (a rebuild that
+// changes it takes an OpenCode restart). The ceilings, the words and the commit test are twins.
+const RELAY_CEILINGS = Object.freeze({ '200k': 120000, '250k': 150000, '1m': 300000 });
+const RELAY_DEFAULT_WINDOW = '200k';
+function relayReason({ context, ceiling }) {
+  return `Relay ceiling: your context is ${Math.round(context / 1000)}k tokens, past ${ceiling / 1000}k, `
+    + 'and every turn re-reads all of it. Hand off now: commit your work in progress in your own '
+    + 'worktree (git add / git commit still run), then end with `STATUS: RELAY` and a handoff note '
+    + '(the failing tests, what you tried, the next step). Do not run the checks first: the next '
+    + 'worker owes them, and the parent re-runs them before any merge.';
+}
+// ---- relay segments twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries a copy
+// (tests/twins.mjs). What the relay lets a worker run past its ceiling, and the segment classes
+// the git gate shares with it; edit here, then `node tests/twins.mjs --write`.
+// No newline, backtick, or `$(` substitution anywhere — these can smuggle a second command (or
+// a shared-branch target) past every check below, so the command is refused before it is even
+// split. `<`/`>` are refused too: a redirect can both hide a second effect and, as the review
+// found, trail off the end of an otherwise-whitelisted push (`HEAD:main>/dev/null`). A single
+// `&` — not doubled into `&&` — is refused too: a shell runs `a & b` as TWO commands just like
+// `a && b`, and the review found it unparsed by the splitter below, which only recognised the
+// doubled form. `(?<!&)&(?!&)` matches a lone `&` without also matching either half of `&&`.
+const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/;
+
+// The only three git shapes a loop's own automation ever needs: adding unquoted paths,
+// committing via `-F`/`--file` (so the message text, which may contain anything, never has to
+// be quoted on this command line at all — see `js/loop/cli.mjs`'s LOOP_COMMIT_MSG), and
+// read-only inspection. The token class `[\w./:@^~=+,-]` excludes quotes, braces, `!`, `*`,
+// `$` and `&` — a brace or glob expansion (`{a,b}`, `*`) is exactly how a shell can turn one
+// whitelisted-looking token into several unknown ones, so no pattern's path/arg tokens may
+// contain them. The SAME class is the `-F`/`--file` path, not the looser `[^\s'"]+` this once
+// was: with that loose class, `git commit -F {m,--amend}` brace-expands to `git commit -F m
+// --amend` and `git commit -F m*` glob-expands to whatever matches — either turns a commit of
+// the loop's own message file into an amend of the last one. `ARG_RE` already accepts a drive
+// letter (`C:/…`) via its `:`, so tightening it here costs nothing the loop's own writer uses.
+const ARG_RE = '[\\w./:@^~=+,-]+';
+const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`);
+const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`);
+
+// A Foreman worker's local commit or merge: `git commit`/`git merge` with no global option
+// (`-C`, `-c`, `--git-dir`, `--work-tree` could aim it at another tree), its arguments plain
+// `ARG_RE` tokens plus at most one quoted message (`-m`, `-am`, `--message`). Nothing else is
+// quoted, so a quoted separator only splits the command into a segment that fails.
+const SEG_LOCAL_RE = new RegExp(`^git\\s+(?:commit|merge)(?:\\s+${ARG_RE})*`
+  + `(?:\\s+(?:-[a-zA-Z]*m|--message)\\s+(?:"[^"]*"|'[^']*'))?(?:\\s+${ARG_RE})*$`);
+const SEG_CD_RE = new RegExp(`^cd\\s+(${ARG_RE})$`);
+
+// What a shell can run inside an argument: PowerShell's `(...)`, `@(...)`, `$(...)`, `$var`,
+// `{...}` blocks and backtick escapes; bash's `$(...)`, `${...}` and backticks. Refused anywhere,
+// quoted or not, so a message can never carry a second command.
+const SUBSHELL_CHARS_RE = /[()@${}`]/;
+
+/**
+ * What a worker past the relay ceiling may still run (`./hooks-relay.mjs`): the commit of its work
+ * in progress, and nothing that grows the context further. The same segment classes the worktree
+ * pass reads above, so the set is one the git gate already trusts: `git add`, a read-only look, a
+ * `git commit` (`SEG_LOCAL_RE`, merge excluded), after at most one leading `cd <path>`. No unsafe or
+ * subshell character, so `git commit -m x; npm test` cannot ride along. Whether the commit itself
+ * passes Consent Before Push is still the rest of `gitDecide`'s call.
+ */
+function relayMayRun(command) {
+  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command) || SUBSHELL_CHARS_RE.test(command)) return false;
+  const segments = command.split(/&&|\|\||[;|]/).map((x) => x.trim()).filter(Boolean);
+  if (segments.length && SEG_CD_RE.test(segments[0])) segments.shift();
+  return segments.length > 0 && segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg)
+    || (/^git\s+commit\b/.test(seg) && SEG_LOCAL_RE.test(seg)));
+}
+// ---- relay segments twin: END
+const RELAY_WINDOW_LINE = (/^Context window:[ \t]*(\S+?)[ \t]*\r?$/m.exec(CARRIER_TEXT) || [])[1]
+const RELAY_CEILING = RELAY_CEILINGS[Object.hasOwn(RELAY_CEILINGS, RELAY_WINDOW_LINE ?? "") ? RELAY_WINDOW_LINE : RELAY_DEFAULT_WINDOW]
+// The context of an assistant message's tokens: input plus cache read and write, as
+// geneseed-activity.js' `contextOf` reads them. Null when it says nothing yet.
+const relayContextOf = (t) => {
+  const n = (t?.input || 0) + (t?.cache?.read || 0) + (t?.cache?.write || 0)
+  return n > 0 ? n : null
+}
 // `--no-ownership-gate` (ruling D25): the ownership first-write gate below stands down.
 const OWNERSHIP_GATE_OFF = gateOff("Ownership gate")
 // `--no-external-gate`: `protectedCheck`, `gateConfig` and `nativeAskFile` below all answer no, so the
@@ -2642,6 +2723,20 @@ export const GeneseedGuard = async (ctx) => {
   // What it cannot: the hook names no agent, so every agent's ruleset must leave the prompt in place.
   const editAsks = new Set()
   let everyEditApproved = false
+  // The relay ceiling's view of each session: whether it has a parent (a sub-agent's child
+  // session), its agent, and the context of its last assistant message. Fed by `event` below (V2:
+  // by `setupV2`'s stream); bounded, because an instance can outlive many sessions.
+  const relaySessions = new Map()
+  const relaySeen = (sid, patch) => {
+    if (!sid) return
+    relaySessions.set(sid, { ...relaySessions.get(sid), ...patch })
+    if (relaySessions.size > 500) relaySessions.delete(relaySessions.keys().next().value)
+  }
+  const relayDueOf = (sid) => {
+    const s = sid && relaySessions.get(sid)
+    if (!s || !s.child || s.agent !== "developer" || !(s.context > RELAY_CEILING)) return null
+    return { context: s.context, ceiling: RELAY_CEILING }
+  }
   const hostPrompts = async (tool, p, cwd) => {
     if (!NATIVE_EDIT_TOOLS.has(tool)) return false
     if (ctx?.hostAsks) return true
@@ -2695,8 +2790,18 @@ export const GeneseedGuard = async (ctx) => {
           if ((e.permission ?? e.type) === "edit") editAsks.add(e.id)
         } else if (event?.type === "permission.replied" && (e.reply ?? e.response) === "always"
           && editAsks.has(e.requestID ?? e.permissionID)) everyEditApproved = true
-        else if (event?.type === "session.created") await watch(e.info?.id)
-        else if (event?.type === "session.idle") await compare(e.sessionID)
+        else if (event?.type === "session.created" || event?.type === "session.updated") {
+          const info = e.info ?? {}
+          if (info.parentID ?? info.parentId) relaySeen(info.id, { child: true })
+          if (info.agent) relaySeen(info.id, { agent: info.agent })
+          if (event.type === "session.created") await watch(info.id)
+        } else if (event?.type === "session.idle") await compare(e.sessionID)
+        else if (event?.type === "message.updated" && e.info?.role === "assistant" && !e.info.summary) {
+          // V1's assistant message names its agent `mode`; a compaction summary's tokens are the
+          // conversation it replaces, not the context now.
+          const n = relayContextOf(e.info.tokens)
+          relaySeen(e.info.sessionID, { ...(n ? { context: n } : {}), ...(e.info.mode ? { agent: e.info.mode } : {}) })
+        }
       } catch (err) { log(`change report error (ignored): ${err?.message ?? err}`) }
     },
     // A native edit that ran went past the host's prompt: approved, so its new stamp joins every
@@ -2798,6 +2903,14 @@ export const GeneseedGuard = async (ctx) => {
         const nested = depth > 0
         const writes = hasAny(tool, WRITE_TOOLS)
         return [
+          // A task worker past the relay ceiling writes nothing more and runs only its commit
+          // (`relayMayRun`); a read passes, as on Claude Code where only shells and writes are gated.
+          ["relay", async () => {
+            const due = relayDueOf(input?.sessionID)
+            if (!due) return
+            const command = hasAny(tool, SHELL_TOOLS) ? pickCommand(args) : ""
+            if (writes || NATIVE_EDIT_TOOLS.has(tool) || (command && !relayMayRun(command))) await deny(relayReason(due), "relay")
+          }],
           ["paths", async () => {
             if (!writes) return
             // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
@@ -3051,6 +3164,13 @@ async function setupV2(ctx) {
           const sessionID = ev?.data?.sessionID
           if (ev?.type === "session.execution.started") await report("session.created", { info: { id: sessionID } })
           else if (/^session\.execution\.(?:succeeded|failed|interrupted)$/.test(ev?.type ?? "")) await report("session.idle", { sessionID })
+          // The relay ceiling's inputs, in V1's shape (geneseed-activity.js `toV1Events` reads the
+          // same fields): a session's parent and agent, and each finished step's tokens.
+          else if (ev?.type === "session.created") {
+            await report("session.updated", { info: { id: sessionID, parentID: ev.data?.parentID, agent: ev.data?.agent } })
+          } else if (ev?.type === "session.step.ended") {
+            await report("message.updated", { info: { role: "assistant", sessionID, tokens: ev.data?.tokens } })
+          }
         }
       })().catch((err) => log(`change report stream ended: ${err?.message ?? err}`))
     }
