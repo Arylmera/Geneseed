@@ -783,6 +783,19 @@ export const CONTEXT_WINDOWS = Object.freeze({
   '1m': Object.freeze({ skillListingMaxDescChars: 120 }),
 });
 export const DEFAULT_CONTEXT_WINDOW = '200k';
+/**
+ * The smart zone of each `--context-window`: how full a context may get before the agent hands
+ * off, and the size a plan slice or a worker's ticket aims to stay under (`{{SMART_ZONE}}`, in
+ * the handoff and plan skills). Its own table, NOT a key of `CONTEXT_WINDOWS`: every key there is
+ * written into the user's Claude Code settings.
+ *
+ * WHY NOT A FIXED FRACTION. Attention degrades with the tokens in play, not with the share of the
+ * window they fill (Dex Horthy's smart and dumb zones; Matt Pocock grows wary near 150k even on a
+ * 1M window). So the 1M window buys room, not a proportionally larger zone: `200k` stops at half,
+ * well before Claude Code's auto-compaction; `1m` at 250k, a quarter. The agent cannot read its
+ * exact count, so the value is an order of magnitude to estimate against, not a meter.
+ */
+export const SMART_ZONES = Object.freeze({ '200k': '100k', '1m': '250k' });
 /** The carrier marker, written only when the value is not the default (the kits line's contract). */
 export const CONTEXT_WINDOW_MARKER = 'Context window';
 
