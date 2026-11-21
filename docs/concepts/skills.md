@@ -56,11 +56,12 @@ The skill *bodies* are read only when used. The *descriptions* are listed to the
 
 Claude Code builds the skill list under a character budget: the model's context window, times about 3 characters per token, times `skillListingBudgetFraction` (default 0.01). That is about 6 000 characters on a 200k-token model and 30 000 on a 1M one. Its bundled skills always keep their text. When the list is over budget, the other skills that are used least lose their description and show as a bare name, and the agent no longer knows when to use them. A fresh install on a 200k model lost all of them.
 
-`geneseed build --context-window 200k|1m` (default `200k`) tells the build which model the install is for. On a Claude Code emit it writes two keys into the settings file Geneseed already merges (`settings.json`, or `settings.local.json` for a project):
+`geneseed build --context-window 200k|250k|1m` (default `200k`) tells the build which model the install is for. On Claude Code, OpenClaude and OpenCode it also sets the ceiling past which a Foreman task worker must hand off: 120k, 150k and 300k tokens ([Foreman mode](foreman-mode.md)). On a Claude Code emit it writes two keys into the settings file Geneseed already merges (`settings.json`, or `settings.local.json` for a project):
 
 | `--context-window` | `skillListingMaxDescChars` | `skillListingBudgetFraction` | Budget at 3 characters per token |
 | --- | --- | --- | --- |
 | `200k` | 80 | 0.013 | 7 800 |
+| `250k` | 80 | 0.0104 | 7 800 |
 | `1m` | 120 | not set (default 0.01) | 30 000 |
 
 `skillListingMaxDescChars` cuts *every* skill's description to that length, Claude Code's own and other plugins' included, so each one costs less. Simulated on a fresh install (the 14 bundled skills and 46 Geneseed skills, no usage yet):

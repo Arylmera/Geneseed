@@ -511,8 +511,9 @@ A hidden part is not off. It keeps working, and a link, a bookmark or a search r
   `#/harnesses` and `#/themes` both still resolve here, so old links and bookmarks keep
   working. *Make default* on an active row sets the default install (above), and a per-repo
   install's panel has the **Shared tier** switch, with its benefit and cost beside it. A Claude
-  Code install's panel has the **Context window** picker (`200k`/`1m`, `--context-window`), with
-  a line that says what it writes into `settings.json`; no other host reads those keys.
+  Code, OpenCode or OpenClaude install's panel has the **Context window** picker
+  (`200k`/`250k`/`1m`, `--context-window`), with a line that says the relay ceiling it sets and,
+  on Claude Code, what it writes into `settings.json`.
   - The **Voice** card is the former Themes tab, kept as a REFERENCE rather than a second
     control: a collapsed row that opens to every shipped voice with its tagline, the
     deployed one pinned first and marked. It is the one place you can read what a voice

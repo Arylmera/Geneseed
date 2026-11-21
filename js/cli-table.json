@@ -241,7 +241,7 @@
           ],
           "dest": "context_window",
           "metavar": null,
-          "help": "the model context window the install is built for: 200k|1m (default: 200k). On Claude Code it sets the skill-listing budget in settings.json so every skill keeps a description; other hosts record it and write nothing",
+          "help": "the model context window the install is built for: 200k|250k|1m (default: 200k). On Claude Code it sets the skill-listing budget in settings.json so every skill keeps a description; on Claude Code, OpenClaude and OpenCode it sets the relay ceiling a task worker hands off at (120k, 150k, 300k)",
           "choices": null,
           "default": null,
           "required": false,
