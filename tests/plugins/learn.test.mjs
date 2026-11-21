@@ -71,7 +71,7 @@ test("writeMemories: refuses reserved stems and case variants of a stored slug",
   const chunk = (name) => `---\nname: ${name}\ndescription: d\n---\nbody`
   const output = ["MEMORY", "memory", "Readme", "User-Prefs", "fresh", "FRESH"].map(chunk).join("\n---FILE---\n")
   const written = await GeneseedLearn.writeMemories(output, memDir, new Set(["user-prefs"]))
-  assert.deepEqual(written, { created: ["fresh"], updated: [], archived: [] })
+  assert.deepEqual(written, { created: ["fresh"], updated: [], archived: [], skipped: [] })
   assert.equal(await fs.readFile(path.join(memDir, "user-prefs.md"), "utf8"), "original\n")
   // The stored fact's flat line moves into its topic file as it was; the new one joins it.
   assert.equal(await fs.readFile(path.join(memDir, "topics", "misc.md"), "utf8"),
@@ -151,7 +151,7 @@ test("writeMemories: the plugin matches the harness on update, archive and mixed
   const b = await seedStore()
   const res = await GeneseedLearn.writeMemories(reply, a, new Set(existing))
   assert.deepEqual(res, harnessWrite(reply, b, new Set(existing)))
-  assert.deepEqual(res, { created: ["mid"], updated: ["Zeta"], archived: ["gone"] })
+  assert.deepEqual(res, { created: ["mid"], updated: ["Zeta"], archived: ["gone"], skipped: [] })
   const plugin = await snapshot(a)
   assert.deepEqual(plugin, await snapshot(b))
   assert.equal(plugin["Zeta.md"], "---\nname: zeta\ndescription: Z2\ntopic: t\n---\nmerged\n")
@@ -584,7 +584,10 @@ test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnProm
   const m = src.match(/const MAX_STORED_CHARS = \d+\nfunction buildPrompt\(notes, facts\) \{[\s\S]*?\n\}\n/)
   assert.ok(m, "MAX_STORED_CHARS + buildPrompt not found in geneseed-learn.js")
   // The head is the plugin's own literal either way: learnPromptHead() extracts it from this file.
-  const twin = new Function("LEARN_PROMPT_HEAD", `${m[0]}; return buildPrompt`)(learnPromptHead())
+  // buildPrompt picks its facts with the copied memory-search block (held equal to the original by tests/twins.mjs).
+  const search = src.slice(src.indexOf("// ---- memory-search twin: BEGIN"), src.indexOf("// ---- memory-search twin: END"))
+  assert.ok(search.length > 100, "memory-search block not found in geneseed-learn.js")
+  const twin = new Function("LEARN_PROMPT_HEAD", `${search}\n${m[0]}; return buildPrompt`)(learnPromptHead())
   const fact = (desc, topic) => ({ desc, topic })
   // 200 lines of ~70 chars run well past MAX_STORED_CHARS (8000), so the cap and the
   // "more stored facts not shown" line are both exercised.
@@ -599,3 +602,150 @@ test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnProm
   for (const [label, notes, facts] of rows) assert.equal(twin(notes, facts), buildLearnPrompt(notes, facts), label)
   assert.match(buildLearnPrompt("n", many), /more stored facts not shown/, "the cap row must reach the cap")
 })
+
+// ---- O8: each transcript region is distilled once (D4, D6) ----------------------------------------
+// Before: every 60 s quiet window re-mined the whole session from turn 1, so 3 turns made 3 distils that each held turn 1.
+const turnText = (n) => `turn ${n}: ${String.fromCharCode(96 + n).repeat(120)}`
+const asV1 = (texts) => texts.map((text, i) => ({ info: { role: i % 2 ? "assistant" : "user", providerID: "p", modelID: "m" }, parts: [{ type: "text", text }] }))
+const asV2 = (texts) => texts.map((text, i) => (i % 2 ? { type: "assistant", content: [{ type: "text", text }], model: { providerID: "p", id: "m" } } : { type: "user", text }))
+const until = async (fn) => { for (let i = 0; i < 200 && !fn(); i += 1) await new Promise((r) => setTimeout(r, 25)); return fn() }
+/** What a prompt says before and after its NEW TURNS mark: [context part, new part]. */
+const windowOf = (prompt) => {
+  const notes = prompt.slice(prompt.indexOf("\nNOTES:\n") + 8)
+  const at = notes.indexOf("NEW TURNS (distil from these):\n")
+  return at < 0 ? ["", notes] : [notes.slice(0, at), notes.slice(at)]
+}
+
+test("cursor V1: 3 turns -> each distil holds only the new turns, the 2 messages before them as marked context", async () => {
+  const { mod, restore } = await sandboxPlugin()
+  try {
+    const texts = []
+    const prompts = []
+    let fail = false
+    const client = { session: {
+      get: async () => ({ data: {} }),
+      messages: async () => asV1(texts),
+      create: async () => ({ id: "tmp" }),
+      delete: async () => {},
+      prompt: async ({ body }) => { if (fail) throw new Error("model down"); prompts.push(body.parts[0].text); return { parts: [{ type: "text", text: "NOTHING" }] } },
+    } }
+    const hooks = await mod.server({ client, directory: process.cwd() })
+    const turn = async (n, want) => {
+      texts.push(turnText(n * 2 - 1), turnText(n * 2))
+      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+      await until(() => prompts.length >= want || fail)
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    await turn(1, 1)
+    await turn(2, 2)
+    await turn(3, 3)
+    assert.equal(prompts.length, 3, "one distil per turn")
+    const [c1, n1] = windowOf(prompts[0])
+    assert.equal(c1, "", "the first distil has no context and no marks")
+    assert.ok(n1.includes(turnText(1)) && n1.includes(turnText(2)))
+    const [c2, n2] = windowOf(prompts[1])
+    assert.ok(c2.includes(turnText(1)) && c2.includes(turnText(2)), "context: the 2 messages before the cursor")
+    assert.ok(n2.includes(turnText(3)) && n2.includes(turnText(4)) && !n2.includes(turnText(1)), "new: only turns 3-4")
+    const [c3, n3] = windowOf(prompts[2])
+    assert.ok(c3.includes(turnText(3)) && c3.includes(turnText(4)) && !c3.includes(turnText(1)), "context moved on with the cursor")
+    assert.ok(n3.includes(turnText(5)) && !n3.includes(turnText(3)) && !n3.includes(turnText(1)))
+    // A distil that fails leaves its region for the next one: the cursor moves only after success.
+    fail = true
+    await turn(4, 3)
+    fail = false
+    await turn(5, 4)
+    const [, n5] = windowOf(prompts[3])
+    assert.ok(n5.includes(turnText(7)) && n5.includes(turnText(9)), "the failed region (turn 4, and 5) is mined by the next distil")
+    // New text under MIN_NOTES_CHARS is no distil.
+    texts.push("ok", "thanks")
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+    await new Promise((r) => setTimeout(r, 200))
+    assert.equal(prompts.length, 4, "a trivial tail runs no model")
+  } finally { restore() }
+})
+
+test("cursor V2: the same windows through setup() and generate.text", async () => {
+  const { mod, restore } = await sandboxPlugin()
+  try {
+    const texts = []
+    const prompts = []
+    const queue = []
+    let wake = null
+    const controller = { aborted: false }
+    const ctx = {
+      location: { directory: process.cwd() },
+      session: { get: async () => ({}), context: async () => asV2(texts) },
+      generate: { text: async ({ prompt }) => { prompts.push(prompt); return { text: "NOTHING" } } },
+      event: { subscribe: () => ({ async *[Symbol.asyncIterator]() {
+        while (!controller.aborted) { if (queue.length) { yield queue.shift(); continue } await new Promise((r) => { wake = r }) }
+      } }) },
+    }
+    const cleanup = await mod.setup(ctx)
+    const turn = async (n) => {
+      texts.push(turnText(n * 2 - 1), turnText(n * 2))
+      queue.push({ type: "session.execution.succeeded", data: { sessionID: "top" } })
+      wake?.()
+      await until(() => prompts.length >= n)
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    await turn(1)
+    await turn(2)
+    await turn(3)
+    assert.equal(prompts.length, 3)
+    const [c2, n2] = windowOf(prompts[1])
+    assert.ok(c2.includes(turnText(2)) && n2.includes(turnText(3)) && !n2.includes(turnText(1)))
+    const [c3, n3] = windowOf(prompts[2])
+    assert.ok(c3.includes(turnText(4)) && !c3.includes(turnText(1)) && n3.includes(turnText(6)) && !n3.includes(turnText(3)))
+    controller.aborted = true
+    wake?.()
+    cleanup()
+  } finally { restore() }
+})
+
+test("retrieval + guard through the plugin: a just-written fact is listed with 1200 stored, a restated one is skipped", async () => {
+  const { mod, d, restore } = await sandboxPlugin()
+  try {
+    const mem = path.join(d, "memory")
+    for (let i = 0; i < 1200; i += 1) {
+      const slug = `fact-${String(i).padStart(4, "0")}`
+      await fs.writeFile(path.join(mem, `${slug}.md`), `---\nname: ${slug}\ndescription: filler lesson ${i} on subject ${i % 31}\n---\nbody ${i}\n`)
+    }
+    const old = new Date(Date.now() - 3600_000)
+    for (const f of await fs.readdir(mem)) await fs.utimes(path.join(mem, f), old, old)
+    const said = "A prompt never rides the command line because cmd.exe reads percent signs inside quotes"
+    const reply = `---\nname: zz-stdin\ndescription: ${said}\ntopic: windows\n---\nSend it over stdin.`
+    const prompts = []
+    let out = reply
+    const texts = [turnText(1), turnText(2)]
+    const client = { session: {
+      get: async () => ({ data: {} }), messages: async () => asV1(texts), create: async () => ({ id: "tmp" }), delete: async () => {},
+      prompt: async ({ body }) => { prompts.push(body.parts[0].text); return { parts: [{ type: "text", text: out }] } },
+    } }
+    const hooks = await mod.server({ client, directory: process.cwd() })
+    // An idle that arrives while a distil runs is dropped, so the next distil starting proves the previous one ended
+    // (1200 facts take a while under load: no fixed sleep decides it).
+    const distilTo = async (n) => {
+      for (let i = 0; i < 400 && prompts.length < n; i += 1) {
+        await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+        await new Promise((r) => setTimeout(r, 75))
+      }
+      assert.ok(prompts.length >= n, `distil ${n} ran`)
+    }
+    await distilTo(1)
+    // The next distil, on new turns, must see the fact the first wrote although it sorts last of 1201.
+    texts.push(turnText(3), turnText(4))
+    out = `---
+name: zz-stdin-again
+description: ${said}
+topic: windows
+---
+Send it over stdin.`
+    await distilTo(2)
+    assert.ok(prompts[1].includes(`- zz-stdin — ${said}`), "the fact just written is in the next prompt")
+    texts.push(turnText(5), turnText(6))
+    await distilTo(3) // the second distil has ended
+    assert.ok(fsSyncExists(path.join(mem, "zz-stdin.md")), "the first fact was written")
+    assert.ok(!fsSyncExists(path.join(mem, "zz-stdin-again.md")), "a restated fact is skipped by the guard")
+  } finally { restore() }
+})
+import { existsSync as fsSyncExists } from "node:fs"

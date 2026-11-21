@@ -54,7 +54,7 @@ test("learn plugin: a store document is no fact, and the index rebuild matches t
     const output = ["ARCHIVE-INDEX", "TODO", "fresh"].map(chunk).join("\n---FILE---\n")
     const viaCore = coreWriteMemories(output, a, new Set(["kept"]))
     const viaPlugin = await GeneseedLearn.writeMemories(output, b, new Set(["kept"]))
-    assert.deepEqual(viaCore, { created: ["fresh"], updated: [], archived: [] })
+    assert.deepEqual(viaCore, { created: ["fresh"], updated: [], archived: [], skipped: [] })
     assert.deepEqual(viaPlugin, viaCore)
     const [left, right] = [await snapshot(a), await snapshot(b)]
     assert.deepEqual(right, left)
