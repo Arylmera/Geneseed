@@ -124,6 +124,7 @@
   "codebase-design": [
     { "query": "Where should the seam go between the order service and the payment gateway so it is testable?", "should_trigger": true },
     { "query": "Record the decision to use event sourcing for orders as an ADR", "should_trigger": true },
+    { "query": "Audit this repo's architecture and tell me which modules to deepen first", "should_trigger": true },
     { "query": "Fix the null pointer in OrderService.java line 42", "should_trigger": false }
   ],
   "bruno": [
