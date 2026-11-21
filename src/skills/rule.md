@@ -129,7 +129,8 @@ Arm auto-merge on a PR I open, only when the forge has required checks.
 - Before any further push to a PR with auto-merge armed, disarm it first, then classify, review and arm again on the new head.
 ```
 
-`sensitive` never arms, whatever its line says. `docs-tests` accepts `auto | human | reviewer |
+`sensitive` never arms, whatever its line says, and nor does a PR whose Merge danger is a
+one-way door (the [ship {{SKILL}}](ship.md) holds both). `docs-tests` accepts `auto | human | reviewer |
 never`, `normal` accepts `human | reviewer | never`; any other value counts as `human`. `human`
 waits for one approving review on the forge. The last line is part of the fixed text: the rule is
 loaded every session, so every path that pushes sees it. `reviewer` is for a solo repo, where the
