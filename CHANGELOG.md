@@ -8,6 +8,60 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.2.0] — 2026-11-21
+
+### Added
+
+- **Changelog fragments.** A pull request no longer edits `CHANGELOG.md`. It adds `changes/<slug>.<type>.md`, and the release folds every fragment into the version's section with `node tests/changelog.mjs --fold <version>`. Parallel PRs no longer conflict on `[Unreleased]`. The `pr-title` check now fails a `feat`, `fix`, `perf` or breaking PR that adds no fragment, unless it carries the `no-changelog` label. Six of the 19 PRs before 6.1.0 had no entry. `changes/README.md` has the format.
+- **A `crew-lead` agent leads every pipeline crew.** The pipeline skill used to start its crew lead
+  as a general-purpose agent, with the lead's rules retyped into each brief: 48 of the 154
+  general-purpose dispatches in a month here. The lead is now a named seat. Its spec holds the
+  rules (compose the crew, run the hand-offs, never end with a member unresolved, return one
+  proven envelope), and its runs land in the agent outcome ledger and the feedback notes, which
+  see only named agents. A host with no named agents still uses its general-purpose one.
+
+### Changed
+
+- **The council is an opt-in kit.** The `council` skill, seven of its seats (`advocate`,
+  `pragmatist`, `visionary`, `framer`, `empiricist`, `operator`, `historian`) and the OpenCode
+  `council` workflow are now the `council` kit, off for a new install. The seats took about half of
+  the agent list each session. `skeptic`, `steward` and `user-advocate` stay core, because the
+  factories' review panel and the architecture-decision loop seat them. An install built before the
+  kit keeps the council: while it still owns a council member, its next rebuild turns the kit on and
+  says so in one line. A kit manifest may now list `workflows`, copied only with the kit on.
+- **Test-first now reaches the work that is delegated.** Cover and Verify named the develop skill
+  for a bug fix's reproducing test, but most code here is written by dispatched developer workers
+  (281 runs in a month against 2 develop runs), and their procedure said only "explore, implement
+  and test". The doctrine now says the develop skill drives the test-first step whether you write
+  the code or a worker does, and the developer's task-worker procedure runs it: the pinning test
+  for new behaviour, and for a bug fix the reproducing test, seen red before the fix.
+- **The reviewer takes the lessons its runs kept noting.** Its spec now says to run mutations,
+  builds and servers in a copy outside the reviewed tree, to leave other worktrees out of
+  reference greps, and to probe a path or spawn guard on the real filesystem and launch shape.
+  Each came back two or three times in the reviewer's feedback notes. A report template the brief
+  prescribes now replaces the default findings shape, so a plan-execution flow can hand its task
+  reviews to the reviewer and keep its own format.
+
+### Fixed
+
+- **The done gate no longer blocks a turn that only waits on its background proof.** When every
+  owed check is a background run still running, the turn ends with a `done-gate-pending` ledger
+  line (and, on a main turn, a warning naming the checks), and the run is judged when its
+  notification resumes the agent: green passes, red blocks. Before, the block was followed by the
+  cap in nearly every case: 230 blocks against 237 caps in a month of one machine's ledger. A
+  sub-agent the host does not resume ends unjudged, as it did one stop later under the cap.
+- **A sub-agent's green background run is credited again.** In a sub-agent's transcript Claude Code
+  writes the task notification behind a `[SYSTEM NOTIFICATION - NOT USER INPUT]` preamble, which
+  the gate did not read, so the worker owed a suite that had passed.
+- **The developer agent runs its proof unpiped.** Its procedure now says that a pipe hides the
+  exit code from the done gate, and to redirect output to a file instead.
+- **Agents return their report inline, never as a file.** The parallel-agents Rite asked each unit
+  to write its report to a file and reply with the path, but the read-only agents (reviewer,
+  researcher, security, explorer, architect, performance) have no write tool, and the host may
+  refuse a sub-agent's write outside its worktree. Six feedback notes recorded the clash. The Rite
+  now asks for the report inline, and every agent spec says to answer inline when a brief names a
+  file. Installs need a rebuild to pick it up.
+
 ## [6.1.0] — 2026-11-21
 
 ### Added
