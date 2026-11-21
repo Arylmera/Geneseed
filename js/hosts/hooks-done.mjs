@@ -59,7 +59,10 @@
  *     `<status>completed</status>` and `completed (exit code 0)` (`notificationText`); any other
  *     status or code leaves it owed. Before this, 76 of 112 accepted passes in 30 days of real
  *     transcripts here were launches. The pass is still placed by the CALL: a launch before the
- *     last edit proves nothing, even when it completes after it.
+ *     last edit proves nothing, even when it completes after it. A stop whose EVERY owed check is
+ *     such a pending run is not blocked (`done-gate-pending`): a block there was followed by the
+ *     cap, and the continuation the notification starts, when the host resumes the agent, judges
+ *     the run (`doneGate`).
  *
  * READ FROM THE END. Only the current turn matters, so the transcript is read
  * backward in growing windows (`tailReader`) until the turn's opening prompt is inside one; a
@@ -250,7 +253,17 @@ const FEEDBACK_OPENS = ['Stop hook feedback', 'SubagentStop hook feedback', REAS
  * `queued_command` attachment (`attachment.prompt`, a string; 174 of them here are objects, not
  * notifications) and as a `type: "user"` line holding the same text. `queue-operation` lines carry
  * it a third time and are not read.
+ *
+ * In a SUB-AGENT's transcript the user line opens on the host's preamble instead
+ * (`[SYSTEM NOTIFICATION - NOT USER INPUT]…`, then the tag), carries `origin.kind:
+ * "task-notification"`, and on several versions has no `queued_command` copy beside it (615 such
+ * lines here, Claude Code 2.1.292 to 2.1.328, 2026-11). Read as no notification, a green background
+ * suite in a worker was never credited. So a user line whose tag follows a preamble counts when the
+ * host marks it: its `origin`, or that preamble's own opening. The text from the tag on is returned,
+ * so `notified` reads the same block either way. Only the host writes a user line, so neither mark
+ * is the agent's text.
  */
+const HOST_PREAMBLE = '[SYSTEM NOTIFICATION';
 function notificationText(obj) {
   let t = null;
   if (obj.type === 'attachment') {
@@ -261,7 +274,11 @@ function notificationText(obj) {
     t = typeof c === 'string' ? c
       : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null;
   }
-  return typeof t === 'string' && t.trimStart().startsWith(NOTE_OPEN) ? t : null;
+  if (typeof t !== 'string') return null;
+  if (t.trimStart().startsWith(NOTE_OPEN)) return t;
+  const at = obj.type === 'user' ? t.indexOf(`\n${NOTE_OPEN}`) : -1;
+  const marked = (obj.origin && obj.origin.kind === 'task-notification') || t.trimStart().startsWith(HOST_PREAMBLE);
+  return at >= 0 && marked ? t.slice(at + 1) : null;
 }
 
 /**
@@ -654,11 +671,31 @@ export function doneGate(meta, args, install, read = tailReader()) {
       return said.length || weakened.length ? advise(...said) : null;
     };
     if (!owed.length) return settle();
-    const active = meta.stop_hook_active === true;
-    const capPath = install ? capFile(install, meta) : null;
     // The owed checks whose proof is a background run still pending, or one that reported a failure.
     const bg = owed.flatMap((r) => [...backgroundOwed(turn, r.checks, new Set(r.missing), lastEditId(turn, [r.root], at), r.root, at)]
       .map(([l, st]) => [`${tag(r)}${l}`, st]));
+    // PENDING ONLY. Every owed check is a background run with no completion yet. A block here was
+    // followed by the cap in nearly every case (230 blocks against 237 caps in a month of this
+    // machine's ledger; 67 of 80 replayed worker blocks were this, 2026-11): the agent waited by
+    // ending its turn again. The stop ends, saves no cap state, and when the run's notification
+    // resumes the agent, that continuation judges the proof: green passes, red blocks. When the host
+    // does not resume it (a sub-agent not woken, a `-p` run that exits), the turn ends unjudged, as
+    // it did one stop later under the cap; the parent re-runs a worker's proof before any merge.
+    // A main Stop tells the user.
+    const pendingLabels = new Set(bg.filter(([, st]) => st === 'pending').map(([l]) => l));
+    if (owed.every((r) => r.missing.every((m) => pendingLabels.has(`${tag(r)}${m}`)))) {
+      recordGate(install, 'done-gate-pending', 'law-3');
+      err(`[done-gate] pending — the turn ends while its proof still runs in the background: ${list(owed)}; `
+        + 'it is judged when the run completes.\n');
+      const said = inferredSaid();
+      if (!sub) {
+        said.unshift(`Geneseed done gate — ${who} ends while these checks from ${DONE_LIST} still run `
+          + `in the background: ${list(owed)}. They are judged when the run completes.`);
+      }
+      return said.length || weakened.length ? advise(...said) : null;
+    }
+    const active = meta.stop_hook_active === true;
+    const capPath = install ? capFile(install, meta) : null;
     const verdict = bg.map(([l, st]) => `${l}=${st}`).sort().join('\n');
     // Without an install or a session id there is nowhere to count: one block per turn, as before.
     const record = capPath ? readCap(capPath) : null;

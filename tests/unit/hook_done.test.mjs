@@ -86,6 +86,15 @@ const noteAttachment = (id, status, summary) => ({ type: 'attachment',
   attachment: { type: 'queued_command', prompt: noteText(id, status, summary), commandMode: 'task-notification' } });
 const noteUserLine = (id, status, summary) => ({ type: 'user',
   message: { role: 'user', content: noteText(id, status, summary) } });
+// The same notification as Claude Code writes it into a SUB-AGENT's transcript (2.1.292 to 2.1.328,
+// 615 such lines here, 2026-11): a user line, `isMeta`, `origin.kind: "task-notification"`, its text
+// opening on this preamble — and on several versions no `queued_command` copy beside it.
+const HOST_PREAMBLE = '[SYSTEM NOTIFICATION - NOT USER INPUT]\n'
+  + 'This is an automated background-task event, NOT a message from the user.\n\n';
+const notePreambleLine = (id, status, summary, { preamble = HOST_PREAMBLE, origin = true, meta = true } = {}) => ({
+  type: 'user', ...(meta ? { isMeta: true } : {}),
+  ...(origin ? { origin: { kind: 'task-notification', producer: 'session-task' } } : {}),
+  message: { role: 'user', content: preamble + noteText(id, status, summary) } });
 
 test('doneDecide: a background launch passes only on a completed, exit-0 notification', () => {
   const C = ['npm run lint'];
@@ -141,6 +150,43 @@ test('doneDecide: a background launch passes only on a completed, exit-0 notific
     // An ordinary result that only mentions the words later is a finished run.
     ['ok: the Command was moved to the background docs page', false, []],
   ];
+  // A sub-agent's notification behind the host's preamble, with no `queued_command` copy. Each row:
+  // what it shows, the line, the checks owed. Before the fix the gate never saw it, so a green
+  // background suite in a worker was never credited (3 of 80 real blocks replayed, 2026-11).
+  const preambled = [
+    ['the preamble, origin and isMeta as recorded: a completed exit-0 run passes',
+      (id) => notePreambleLine(id, 'completed', ok), []],
+    ['the known preamble without the origin field still passes',
+      (id) => notePreambleLine(id, 'completed', ok, { origin: false }), []],
+    ['the host origin with another preamble wording still passes',
+      (id) => notePreambleLine(id, 'completed', ok, { preamble: 'Background event:\n\n' }), []],
+    ['a failed run behind the preamble owes it',
+      (id) => notePreambleLine(id, 'failed', 'Background command "npm run lint" failed with exit code 1'), C],
+    ['neither the origin nor the known preamble: text before the tag is no notification',
+      (id) => notePreambleLine(id, 'completed', ok, { preamble: 'see this:\n', origin: false }), C],
+  ];
+  for (const [what, line, owed] of preambled) {
+    const l = launch();
+    assert.deepEqual(doneDecide(jsonl(side([prompt('brief'), edit(), l.rows, line(l.id)])), C, R, R, true, true), owed, what);
+  }
+  // Only a user line takes the preamble path: the same text elsewhere is the agent's or a tool's.
+  const elsewhere = [
+    ['in an assistant text block', (id) => ({ type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: HOST_PREAMBLE + noteText(id, 'completed', ok) }] } })],
+    ['in an attachment that is no queued_command', (id) => ({ type: 'attachment',
+      attachment: { type: 'hook_additional_context', prompt: HOST_PREAMBLE + noteText(id, 'completed', ok) } })],
+    ['in a tool result', (id) => ({ type: 'user', origin: { kind: 'task-notification' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tx', content: HOST_PREAMBLE + noteText(id, 'completed', ok) }] } })],
+  ];
+  for (const [what, line] of elsewhere) {
+    const l = launch();
+    assert.deepEqual(doneDecide(jsonl(side([prompt('brief'), edit(), l.rows, line(l.id)])), C, R, R, true, true), C, what);
+  }
+  // A preamble line opens no turn, even without `isMeta`: as a prompt it would cut the turn after
+  // the edit, and a notification for another run would leave nothing owed.
+  const l = launch();
+  const other = notePreambleLine('toolu_other', 'completed', ok, { meta: false });
+  assert.deepEqual(doneDecide(jsonl(prompt('go'), edit(), l.rows, other), C, R), C, 'no isMeta: still no turn opening');
   for (const [text, notified, owed] of moved) {
     const [u, r] = bash('npm run lint');
     const id = lastId();
@@ -628,13 +674,34 @@ test('groupPasses: --prefix, -C and --test-concurrency are normalized away, noth
   }
 });
 
-test('learn on Stop: a pending background run spelled with --prefix is named as still running', () => {
-  // `backgroundOwed` reads the same normalized match: without it, the block would not name it.
+test('learn on Stop: a pending background run spelled with --prefix is read as pending', () => {
+  // `backgroundOwed` reads the same normalized match: without it, the run would read as never run,
+  // and the stop would be blocked instead of ending as pending.
   const r = project({ transcriptRows: [prompt(), editIn, (proj) => bgBash(`npm --prefix ${proj} run lint`)] });
   assert.equal(r.rc, 0, r.err);
-  const verdict = JSON.parse(r.out);
+  assert.doesNotMatch(r.out, /"decision"/);
+  assert.match(r.ledger, /"verb":"done-gate-pending","rule":"law-3"/);
+  assert.match(r.err, /\[done-gate\] pending — the turn ends while its proof still runs in the background: npm run lint;/);
+});
+
+// A stop whose every owed check is a background run still pending cannot be helped by a block:
+// the agent can only wait by ending its turn, so the next stop hit the cap (230 blocks against 237
+// caps in a month of this machine's ledger, 2026-11). It ends, and the run's notification starts
+// the continuation where the proof is judged. The user still hears of it on a main Stop.
+test('learn on Stop: only pending background proof ends the turn, says so, and blocks nothing', () => {
+  const r = project({ transcriptRows: [prompt(), editIn, bgBash('npm run lint')] });
+  assert.equal(r.rc, 0, r.err);
+  const said = JSON.parse(r.out);
+  assert.equal(said.decision, undefined, 'no block');
+  assert.equal(said.systemMessage, 'Geneseed done gate — this turn ends while these checks from '
+    + '.geneseed/done-checks.txt still run in the background: npm run lint. They are judged when the run completes.');
+  assert.doesNotMatch(r.ledger, /"verb":"done-gate"[,}]/);
+  // A check never run beside the pending one still blocks, and the reason names the pending one.
+  const mixed = project({ checks: 'npm run lint\nnode --test\n', transcriptRows: [prompt(), editIn, bgBash('npm run lint')] });
+  const verdict = JSON.parse(mixed.out);
   assert.equal(verdict.decision, 'block');
-  assert.match(verdict.reason, /Still running in the background, with no completion seen: npm run lint;/);
+  assert.match(verdict.reason, /have not passed since the last edit: npm run lint; node --test\./);
+  assert.match(verdict.reason, /Still running in the background, with no completion seen: npm run lint; a launch is no pass\./);
 });
 
 test('learn on Stop: inferred checks are advisory — a systemMessage, never a block', () => {
@@ -1155,8 +1222,8 @@ test('learn on Stop: a stale entry the sweep cannot remove does not lose the cap
 });
 
 /** What each Stop of a sequence did: the block's reason, 'cap', or the stderr when neither. */
-const outcomes = (runs) => runs.map((r) => (r.out ? JSON.parse(r.out).reason
-  : r.ledger.includes('done-gate-cap') ? 'cap' : `none: ${r.err}`));
+const outcomes = (runs) => runs.map((r) => (r.out && JSON.parse(r.out).reason ? JSON.parse(r.out).reason
+  : r.ledger.includes('done-gate-cap') ? 'cap' : r.ledger.includes('done-gate-pending') ? 'pending' : `none: ${r.err}`));
 
 // An unattended session: notifications drive continuations of one human turn. Three early blocks
 // must not spend the cap for the rest of it — a notification since the last block starts a new count.
@@ -1174,42 +1241,80 @@ test('learn on Stop: a notification starts a new continuation, with its own cap'
   assert.deepEqual(got, ['block', 'block', 'block', 'block', 'cap']);
 });
 
-// A background proof that changes verdict with no new edit: pending at the first block, failed
-// later. The failure must block, and each reason must say what the background run is doing.
-test('learn on Stop: a background run that fails after the cap blocks again, and the reason says so', () => {
+// A background proof that changes verdict with no new edit: pending at the first stop, failed
+// later. Pending ends the stop with no block; the failure, seen in the continuation its
+// notification starts, blocks, and its reason says what the background run did.
+test('learn on Stop: a pending background run ends the stop, and its failure blocks later', () => {
   const e0 = once(editWorker);
   const launch = once(() => bgBash('npm run lint'));
   const failed = once((w) => noteAttachment(launch(w)[0].message.content[0].id, 'failed',
     'Background command "lint" failed with exit code 1'));
+  const passed = once((w) => noteAttachment(launch(w)[0].message.content[0].id, 'completed',
+    'Background command "lint" completed (exit code 0)'));
   const p1 = { uuid: 'p1', ...prompt('one') };
   const [first, second, third] = outcomes(subagentStops({ event: 'Stop', stops: [
     { rows: [p1, e0, launch] },
-    { rows: [p1, e0, launch], active: true },
-    { rows: [p1, e0, launch, failed], active: true },
+    { rows: [p1, e0, launch] },
+    { rows: [p1, e0, launch, failed] },
   ] }));
-  assert.match(first, /Still running in the background, with no completion seen: npm run lint; a launch is no pass\./);
-  assert.doesNotMatch(first, /reported a failure/);
-  assert.equal(second, 'cap', 'no new edit and no new verdict ends the turn');
+  assert.equal(first, 'pending');
+  assert.equal(second, 'pending', 'still pending: still no block, with no cap spent');
   assert.match(third, /Run in the background and reported a failure: npm run lint\./);
   assert.doesNotMatch(third, /Still running/);
+  // The same run completing green ends the continuation with nothing owed and nothing said.
+  const [green] = subagentStops({ event: 'Stop', stops: [{ rows: [p1, e0, launch, passed] }] });
+  assert.equal(green.out, '');
+  assert.doesNotMatch(green.ledger, /done-gate/);
 });
 
 // The loop the turn ceiling ends: a red suite relaunched in the background with no edit. Each
-// failure is a notification (a new continuation) and each relaunch turns the verdict back to
-// pending, so both re-arm the block. Ten blocks over the turn, then the eleventh Stop ends it.
+// failure is a notification (a new continuation) and blocks; a relaunch's stop is pending and
+// blocks nothing. Ten blocks over the turn, then the eleventh failure's Stop ends it.
 test('learn on Stop: a relaunched red suite stops at the turn ceiling', () => {
   const e0 = once(editWorker);
   const p1 = { uuid: 'p1', ...prompt('one') };
-  const launches = Array.from({ length: 6 }, () => once(() => bgBash('npm run lint')));
+  const launches = Array.from({ length: 11 }, () => once(() => bgBash('npm run lint')));
   const fails = launches.map((l) => once((w) => noteAttachment(l(w)[0].message.content[0].id, 'failed',
     'Background command "lint" failed with exit code 1')));
-  // Stop k sees: the edit, then launch 1, fail 1, launch 2, fail 2, ... — one more step each Stop.
-  const steps = launches.flatMap((l, i) => [l, fails[i]]);
-  const stops = Array.from({ length: 11 }, (_, k) => ({ rows: [p1, e0, ...steps.slice(0, k + 1)], active: k > 0 }));
+  // Stop k sees: the edit, then launch 1, fail 1, ..., launch k, fail k — and, after fail k, the
+  // stop of launch k+1, still pending.
+  const upTo = (k) => launches.slice(0, k).flatMap((l, i) => [l, fails[i]]);
+  const stops = Array.from({ length: 11 }, (_, i) => [
+    { rows: [p1, e0, ...upTo(i + 1)], active: i > 0 },
+    { rows: [p1, e0, ...upTo(i + 1), ...(launches[i + 1] ? [launches[i + 1]] : [])] },
+  ]).flat().slice(0, 21);
   const runs = subagentStops({ event: 'Stop', stops });
   const got = outcomes(runs).map((o) => (o.startsWith('Geneseed') ? 'block' : o));
-  assert.deepEqual(got, [...Array(10).fill('block'), 'cap']);
-  assert.match(runs[10].err, /\[done-gate\] total ceiling reached \(10 blocks this turn\) — turn ends with unproven checks: npm run lint/);
+  assert.deepEqual(got, [...Array(10).fill(['block', 'pending']).flat(), 'cap']);
+  assert.match(runs[20].err, /\[done-gate\] total ceiling reached \(10 blocks this turn\) — turn ends with unproven checks: npm run lint/);
+});
+
+// The case the replay of 80 real worker blocks found most (2026-11): a worker launches its suite in
+// the background, as the repo asks, and stops to wait for it. Nobody sees a sub-agent's
+// systemMessage, so the pending stop is a stderr line and a ledger entry, and stdout stays empty.
+test('learn on SubagentStop: a worker waiting on its background suite is not blocked', () => {
+  const launch = once(() => bgBash('npm run lint'));
+  const [r] = subagentStops({ stops: [{ rows: [prompt('brief'), editWorker, launch] }] });
+  assert.equal(r.rc, 0, r.err);
+  assert.equal(r.out, '');
+  assert.match(r.ledger, /"verb":"done-gate-pending","rule":"law-3"/);
+  assert.match(r.err, /\[done-gate\] pending — the turn ends while its proof still runs in the background: npm run lint;/);
+});
+
+// A worker that writes in two projects (its worktree and the parent) owes both lists. Pending only
+// when every root's every owed check is a pending run: one never-run check in either root blocks.
+test('learn on SubagentStop: pending across two roots, and one never-run check that still blocks', () => {
+  const launch = once(() => bgBash('npm run lint'));
+  const editParent = (w) => edit(path.join(w, '..', '..', '..', 'p.js'));
+  const run = (parentChecks) => subagentStops({ parentChecks,
+    stops: [{ rows: [prompt('brief'), editWorker, editParent, launch] }] })[0];
+  const both = run('npm run lint\n');
+  assert.equal(both.out, '', 'both roots pending: no block');
+  assert.match(both.ledger, /"verb":"done-gate-pending"/);
+  const mixed = run('make check\n');
+  const verdict = JSON.parse(mixed.out);
+  assert.equal(verdict.decision, 'block');
+  assert.match(verdict.reason, /: make check/);
 });
 
 test('learn on SubagentStop: the cap counts per sub-agent', () => {
