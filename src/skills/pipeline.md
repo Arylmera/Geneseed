@@ -14,7 +14,7 @@ The parent does not run the relay itself. Each hand-off it ran would pull it bac
 
 ## Crew floors
 
-The minimum roster per task type. The crew lead chooses the crew from the whole {{AGENT}} roster: any {{AGENT}} the task genuinely needs — security, architect, performance, reviewer, docs, historian, researcher, or any other — in any order the task needs. The floor is the least it may dispatch, never the most.
+The minimum roster per task type. The crew lead chooses the crew from the whole {{AGENT}} roster: any {{AGENT}} the task genuinely needs — security, architect, performance, reviewer, docs, researcher, or any other — in any order the task needs. The floor is the least it may dispatch, never the most.
 
 | Task type | Floor |
 |---|---|

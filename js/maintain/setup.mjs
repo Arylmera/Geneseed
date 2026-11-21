@@ -59,6 +59,7 @@ import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../inspect/cost.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
+import { migrateCouncilKit } from './kit-migration.mjs';
 import {
   claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults, installState,
   contextWindowOfDir, readJsonMaybe, sharedTierOfDir, themeFiles, tiersOfDir, learnOfDir,
@@ -367,7 +368,18 @@ export function collectSetupLines(kitMap = null) {
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
   // Kits on stay on (spec A3); `kitsOfDir` already dropped a retired one. Asked after the install
   // mode: a kit a plugin can replace defaults by what that host's plugin store holds.
-  const kits = askKits(inst.kits, kitMap, (EMIT_HOST_SCOPE.get(emit) ?? [])[0] ?? null);
+  // A global install built before the council kit keeps the council (`migrateCouncilKit`), so the
+  // wizard pre-selects it there, or accepting the defaults would prune it. A project install's root
+  // is asked later, so its pre-selection reads only its kit line.
+  const [emitHost, emitScope] = EMIT_HOST_SCOPE.get(emit) ?? [];
+  let instKits = inst.kits ?? [];
+  if (emitScope === 'global') {
+    try {
+      instKits = migrateCouncilKit({ host: emitHost, scope: 'global', root: HOSTS.find((h) => h.host === emitHost).configDir(),
+        kits: instKits, knownKits: [...(kitMap ?? loadKits()).keys()] });
+    } catch { /* a broken manifest is the build's to report, as above */ }
+  }
+  const kits = askKits(instKits, kitMap, emitHost ?? null);
   const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS,
     inst.footprint || 'lean');
   let out = null;

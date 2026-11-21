@@ -35,7 +35,7 @@ const { linkedSkillIds, loadKits } = await import('../../js/build/source.mjs');
 const MEMBERS = ['brainstorm', 'debug', 'geneseed-code-review', 'plan', 'review-response'];
 
 // Every skill both hosts write with the kit off, partials (`_x.md`) left out.
-const OPENCODE_OFF = ['adhd', 'brick-forge', 'bruno', 'codebase-design', 'commit', 'council', 'daydream', 'deck',
+const OPENCODE_OFF = ['adhd', 'brick-forge', 'bruno', 'codebase-design', 'commit', 'daydream', 'deck',
   'dependencies', 'develop', 'diagram-design', 'document-project', 'explain-changes', 'factory', 'factory-forge',
   'forge-mcp', 'fresh-eyes', 'frontend-design', 'geneseed', 'git-history', 'handoff', 'ingest', 'learn-mode', 'loop',
   'ownership', 'parallel-agents', 'pipeline', 'ponytail', 'profile', 'prose', 'prototype', 'react-view-transitions',

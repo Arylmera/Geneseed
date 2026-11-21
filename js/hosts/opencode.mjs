@@ -410,12 +410,12 @@ export function writePonytailCommand(commandDir, claim = (_dest) => true) {
  * `claim` — see `writeTheme`. A file the claim refuses is skipped: not copied, not counted,
  * not pushed into `owned`, exactly as a declined native-layer write is.
  */
-function copyJsDir(srcDir, dst, owned, prefix, claim = (_dest) => true) {
+function copyJsDir(srcDir, dst, owned, prefix, claim = (_dest) => true, skip = new Set()) {
   let n = 0;
   if (existsSync(srcDir) && statSync(srcDir).isDirectory()) {
     mkdirSync(dst, { recursive: true });
     const files = readdirSync(srcDir)
-      .filter((name) => name.endsWith('.js'))
+      .filter((name) => name.endsWith('.js') && !skip.has(name.slice(0, -'.js'.length)))
       .map((name) => path.join(srcDir, name))
       .sort(comparePaths);
     for (const js of files) {
@@ -434,7 +434,12 @@ export function copyPlugins(cfg, dst, owned = null, claim = (_dest) => true) {
   return copyJsDir(cfg.pluginSrc, dst, owned, 'plugins', claim);
 }
 
-/** `_build_emit._copy_workflows`. */
+/**
+ * `_build_emit._copy_workflows`. A workflow a kit claims (`workflows` in its manifest) is copied
+ * only with that kit on: it seats the kit's agents, which a kit-off install does not have. Not
+ * copied, it is not owned either, so the prune removes it from an install whose kit went off.
+ */
 export function copyWorkflows(cfg, dst, owned = null, claim = (_dest) => true) {
-  return copyJsDir(cfg.workflowSrc, dst, owned, 'workflows', claim);
+  const off = kitMembers(new Map([...loadKits(cfg.src)].filter(([k]) => !(cfg.kits ?? []).includes(k)))).workflows;
+  return copyJsDir(cfg.workflowSrc, dst, owned, 'workflows', claim, off);
 }

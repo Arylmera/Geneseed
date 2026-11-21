@@ -179,16 +179,9 @@ Active packs: {{DOCTRINES_LIST}}{{EXCLUDED_RULES_LINE}}{{GATE_LINES}}
 | [explorer]({{DIR_AGENTS}}/explorer.md) | you must sweep many files for an answer but only want the conclusion |
 | [researcher]({{DIR_AGENTS}}/researcher.md) | a question needs the open web — fetched, cross-checked, and returned as sourced findings, not pages |
 | [memory-curator]({{DIR_AGENTS}}/memory-curator.md) | the {{MEMORY}} store needs bulk curation |
-| [advocate]({{DIR_AGENTS}}/advocate.md) | a council debate needs the strongest case **for** the motion argued in isolation |
-| [skeptic]({{DIR_AGENTS}}/skeptic.md) | a council debate needs a devil's advocate to attack the motion's failure modes |
-| [pragmatist]({{DIR_AGENTS}}/pragmatist.md) | a council debate needs the cost, effort, and complexity weighed against the payoff |
-| [steward]({{DIR_AGENTS}}/steward.md) | a council debate needs the long-term architecture, debt, and maintainability defended |
-| [visionary]({{DIR_AGENTS}}/visionary.md) | a council debate needs the bold, transformative version argued against incrementalism |
-| [user-advocate]({{DIR_AGENTS}}/user-advocate.md) | a council debate needs the voice of whoever consumes the outcome |
-| [framer]({{DIR_AGENTS}}/framer.md) | a council debate needs the problem framing itself pressure-tested |
-| [empiricist]({{DIR_AGENTS}}/empiricist.md) | a council debate needs every claim held to evidence, for and against |
-| [operator]({{DIR_AGENTS}}/operator.md) | a council debate needs the production/runtime reality — reliability, on-call — weighed |
-| [historian]({{DIR_AGENTS}}/historian.md) | a council debate needs precedent — what was tried before and how it went |
+| [skeptic]({{DIR_AGENTS}}/skeptic.md) | a plan, design or motion needs a devil's advocate to attack its failure modes |
+| [steward]({{DIR_AGENTS}}/steward.md) | a review or debate needs the long-term architecture, debt, and maintainability defended |
+| [user-advocate]({{DIR_AGENTS}}/user-advocate.md) | a review or debate needs the voice of whoever consumes the outcome |
 <!-- CATALOG:else -->
 Your host's tool inventory lists every {{AGENT}} it can dispatch. Read the spec in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/) before dispatching one whose output
 contract you do not already know.
@@ -208,18 +201,11 @@ push, and never merge outside their own branch, so the push stays with you ({{DO
 content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
 workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
 the same shape model-driven via the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md).
-
-Ten of them — `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`,
-`user-advocate`, `framer`, `empiricist`, `operator`, `historian` — are the standing
-**council**: read-only debate seats that each argue one assigned stance. They are rarely
-dispatched alone; the [council {{SKILL}}]({{DIR_SKILLS}}/council.md) convenes the
-subset that productively clashes on a given motion.
 <!-- LEAN:else -->
 Dispatched {{AGENTS}} commit only in their worktree, never push, never merge outside
 their own branch, so the push stays with you ({{DOCTRINE:consent-before-push}}), and an unfulfilled contract returns as a stated gap, never invented content. A
 multi-part goal goes through the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md)
-(or the [workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md) where the host has a workflow tool);
-the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/council.md).
+(or the [workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md) where the host has a workflow tool).
 <!-- LEAN:end -->
 
 ---
@@ -262,7 +248,6 @@ the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/cou
 | [deck]({{DIR_SKILLS}}/deck.md) | a presentation, slides or a deck with no file format named — one offline HTML file |
 | [handoff]({{DIR_SKILLS}}/handoff.md) | context filling, or passing work to another agent or session |
 | [roast-me]({{DIR_SKILLS}}/roast-me.md) | you want your own ask, plan or idea torn apart, brutally and actionably (code goes to code review) |
-| [council]({{DIR_SKILLS}}/council.md) | a decision, change, or discussion needs debating from several points of view before committing |
 | [workflow]({{DIR_SKILLS}}/workflow.md) | deterministic, code-driven orchestration of subagents (fan-out, find→verify, phased handoff) and the host exposes a workflow tool |
 | [pipeline]({{DIR_SKILLS}}/pipeline.md) | the user asks for a crew, or foreman mode needs several specialists (analyst → developer → tester) on one, isolated in its own worktree and merged on mechanical proof |
 | [loop]({{DIR_SKILLS}}/loop.md) | the user asks to run a loop |

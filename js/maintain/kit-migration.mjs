@@ -22,8 +22,8 @@ import path from 'node:path';
 import { readText } from '../lib/fs.mjs';
 import { versionIsNewer } from '../build/version.mjs';
 import { HOSTS, VERSION_MARKER, isGlobalInstall } from '../hosts/hosts.mjs';
-import { kitAwareOfDir, kitsOfDir } from '../hosts/installs.mjs';
-import { loadKits } from '../build/source.mjs';
+import { claudeCfg, claudeReadManifest, kitAwareOfDir, kitsOfDir } from '../hosts/installs.mjs';
+import { kitMembers, loadKits } from '../build/source.mjs';
 import { describeDetection, detectSuperpowers } from './plugin-detect.mjs';
 
 /** The first release where the five Rites are a kit. A build older than this carried them as core. */
@@ -68,6 +68,38 @@ export function migrateSuperpowersKit({ host, scope, root, kits, notify = null, 
 }
 
 /**
+ * `kits`, plus `council` when this install still owns a council member. Before the kit, the council
+ * skill and seven of its seats shipped in every install, so an install whose `Active kits:` line
+ * does not name the kit would lose them on its next rebuild.
+ *
+ * Read off what the install OWNS (its manifest's `owned`), never off a release number: a build made
+ * after the kit but before the release that names it still stamps the older release, and a version
+ * gate would turn the kit back on at every rebuild after the user turned it off. A build after the
+ * kit settles it either way: with the kit on it names it, with the kit off it prunes the members, so
+ * the next read owns none. Any member counts (the skill, a seat, the OpenCode workflow), so an
+ * install that excluded the skill alone still keeps its seats.
+ * @param {{ host: string, scope: string, root: string, kits: string[], notify?: ((line: string) => void) | null, knownKits?: string[] }} a
+ */
+export function migrateCouncilKit({ host, scope, root, kits, notify = null, knownKits = [] }) {
+  if (kits.includes('council') || !knownKits.includes('council')) return kits;
+  const kit = loadKits().get('council');
+  if (!kit) return kits;
+  const m = kitMembers(new Map([['council', kit]]));
+  const owned = claudeReadManifest(claudeCfg(root, scope, host || 'claude')).owned;
+  if (!Array.isArray(owned)) return kits;
+  const hit = owned.find((r) => {
+    if (typeof r !== 'string') return false;
+    const sp = r.split('/');
+    const name = (sp[1] ?? '').replace(/\.(md|js)$/, '');
+    return (sp[0] === 'agents' && m.agents.has(name)) || (sp[0] === 'workflows' && m.workflows.has(name))
+      || (sp[0] === 'skills' && m.skills.has(name));
+  });
+  if (!hit) return kits;
+  notify?.(`council kit: on — this install still holds ${hit} from before the kit existed, so it keeps the council`);
+  return [...kits, 'council'].sort();
+}
+
+/**
  * The WARN `doctor` and `status` give one install about its workflow provider, or null when it
  * has exactly one. Two states are wrong, and a plugin is only ever read from a file, so each
  * line names what was read (see `plugin-detect.mjs`):
@@ -102,8 +134,10 @@ export function providerWarning({ host, scope, root, kits, detectRoots = {} }) {
 export function migratedKitsOfDir(dir, host = null, notify = null) {
   let scope = 'project';
   try { if (isGlobalInstall(host, dir)) scope = 'global'; } catch { /* cannot tell: a project */ }
-  return migrateSuperpowersKit({
+  const knownKits = [...loadKits().keys()];
+  const kits = migrateSuperpowersKit({
     host: host ?? '', scope, root: dir, kits: kitsOfDir(dir, host, notify), notify,
-    knownKits: [...loadKits().keys()], aware: kitAwareOfDir(dir, host),
+    knownKits, aware: kitAwareOfDir(dir, host),
   });
+  return migrateCouncilKit({ host: host ?? '', scope, root: dir, kits, notify, knownKits });
 }

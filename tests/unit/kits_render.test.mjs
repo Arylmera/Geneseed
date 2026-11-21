@@ -27,6 +27,7 @@ import { emitOpencodeRender } from '../../js/build/emit-opencode.mjs';
 import { renderAll } from '../../js/build/render.mjs';
 import { SRC, makeCfg } from '../../js/build/source.mjs';
 import { hostCatalogsNatively } from '../../js/hosts/hosts.mjs';
+import { copyWorkflows } from '../../js/hosts/opencode.mjs';
 import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import { restoreProcessHome, sandboxProcessHome, withSandbox } from '../helpers/sandbox.mjs';
 
@@ -227,6 +228,31 @@ for (const [name, rules] of BAD_RULES) {
       fs.writeFileSync(file, JSON.stringify(m));
       assert.throws(() => renderAll({ ...makeCfg({ kits: ['fx'] }), src }, 'neutral'),
         { message: "src/kits/fx.json has no 'rules' path" });
+    });
+  });
+}
+
+// A kit's OpenCode workflow (`workflows` in its manifest) seats the kit's agents, so it is copied
+// only with the kit on; a workflow no kit claims is copied either way. Both are planted beside the
+// fixture: `fx-wf.js`, claimed by `fx`, and `free.js`, claimed by nobody.
+for (const [name, kits, want] of [
+  ['kit off: only the unclaimed workflow is copied and owned', [], ['workflows/free.js']],
+  ['kit on: the kit workflow is copied and owned too', ['fx'], ['workflows/free.js', 'workflows/fx-wf.js']],
+]) {
+  test(`copyWorkflows, ${name}`, async () => {
+    await withSandbox('gskitw-', (d) => {
+      const src = kitSrc(d);
+      const file = path.join(src, 'kits/fx.json');
+      fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), workflows: ['fx-wf'] }));
+      const wfSrc = path.join(d, 'wf');
+      fs.mkdirSync(wfSrc);
+      for (const n of ['fx-wf.js', 'free.js']) fs.writeFileSync(path.join(wfSrc, n), 'export default async () => {}\n');
+      const owned = [];
+      const dst = path.join(d, 'out');
+      const n = copyWorkflows({ ...makeCfg({ kits }), src, workflowSrc: wfSrc }, dst, owned);
+      assert.deepEqual(owned, want);
+      assert.equal(n, want.length);
+      assert.deepEqual(fs.readdirSync(dst).sort(), want.map((w) => w.slice('workflows/'.length)));
     });
   });
 }

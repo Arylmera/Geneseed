@@ -5,7 +5,8 @@
 //      blank line and directly above its tier line (or above `## When to dispatch` when it has none).
 //      The line is stripped from every output.
 //   2. A marker only steps a seat DOWN from the session: `low` and `medium` are the only levels.
-//      Exploration reads, so explorer is `low`; the ten council seats, docs and memory-curator
+//      Exploration reads, so explorer is `low`; the council seats (three core, seven in the opt-in
+//      council kit), docs and memory-curator
 //      argue, write prose or tidy, so they are `medium`. A verification seat (reviewer, tester,
 //      security, performance) and a writer of code (developer) carry no marker and inherit the
 //      session's effort, where effort pays (Matt Pocock: spend effort on checking the work).
@@ -28,8 +29,10 @@ const sandboxes = [];
 after(() => { for (const sb of sandboxes) sb.cleanup(); restoreProcessHome(); });
 
 const LOW = ['explorer'];
-const MEDIUM = ['advocate', 'docs', 'empiricist', 'framer', 'historian', 'memory-curator', 'operator',
-  'pragmatist', 'skeptic', 'steward', 'user-advocate', 'visionary'];
+const MEDIUM = ['docs', 'memory-curator', 'skeptic', 'steward', 'user-advocate'];
+// The seven seats of the opt-in council kit: their sources sit in src/agents beside the core seats,
+// but a default build does not emit them; only the kit does.
+const KIT_MEDIUM = ['advocate', 'empiricist', 'framer', 'historian', 'operator', 'pragmatist', 'visionary'];
 const UNMARKED = ['developer', 'performance', 'researcher', 'reviewer', 'security', 'tester'];
 
 test('splitEffort removes the whole line and nothing else; a quoted or high marker declares nothing', () => {
@@ -49,7 +52,7 @@ test('the marked seats are the table above, and no rendered agent carries the li
     if (effort) seen[effort].push(f.slice(0, -3));
   }
   assert.deepEqual(seen.low.sort(), LOW);
-  assert.deepEqual(seen.medium.sort(), MEDIUM);
+  assert.deepEqual(seen.medium.sort(), [...MEDIUM, ...KIT_MEDIUM].sort());
   for (const { rel, text } of renderAll(makeCfg(), 'neutral').items) {
     // The template quotes the marker in a code span, as the tier test also exempts it.
     if (text !== null && rel.startsWith('agents/') && !rel.startsWith('agents/_')) assert.doesNotMatch(text, /<!--\s*effort:/, rel);
@@ -70,10 +73,10 @@ test('an effort marker out of place fails the authoring check', () => {
   ]) assert.match(effortMarkerProblem(text), re, why);
 });
 
-function emitAgents(opts) {
+function emitAgents(opts, kits = []) {
   const sb = makeSandbox('gst-eff-');
   sandboxes.push(sb);
-  writeNativeLayer(renderAll(makeCfg(), 'neutral').items, path.join(sb.path, 'agents'), path.join(sb.path, 'skills'),
+  writeNativeLayer(renderAll(makeCfg({ kits }), 'neutral').items, path.join(sb.path, 'agents'), path.join(sb.path, 'skills'),
     {}, { src: makeCfg().src, ...opts });
   return path.join(sb.path, 'agents');
 }
@@ -84,11 +87,16 @@ test('Claude Code writes the marked effort and nothing for an unmarked seat', ()
   for (const a of LOW) assert.equal(effortOf(dir, a), 'low', a);
   for (const a of MEDIUM) assert.equal(effortOf(dir, a), 'medium', a);
   for (const a of UNMARKED) assert.equal(effortOf(dir, a), null, a);
+  assert.ok(!fs.existsSync(path.join(dir, 'advocate.md')), 'a council-kit seat is in a default build');
+  const kit = emitAgents({ host: 'claude' }, ['council']);
+  for (const a of KIT_MEDIUM) assert.equal(effortOf(kit, a), 'medium', a);
 });
 
 test('Bob and OpenCode write no effort line', () => {
   for (const opts of [{ host: 'claude', bobDialect: true }, { host: 'opencode' }]) {
     const dir = emitAgents(opts);
+    const kit = emitAgents(opts, ['council']);
     for (const a of [...LOW, ...MEDIUM]) assert.equal(effortOf(dir, a), null, `${JSON.stringify(opts)} ${a}`);
+    for (const a of KIT_MEDIUM) assert.equal(effortOf(kit, a), null, `${JSON.stringify(opts)} kit ${a}`);
   }
 });

@@ -6,7 +6,7 @@
 host exposes a workflow tool. The shapes: a fan-out across independent units, a staged
 find→verify pipeline, a fresh-context handoff between phases, or a loop that accumulates
 to a target. When the host has no workflow tool, use [parallel-agents](parallel-agents.md)
-or [council](council.md) instead — those are *model-driven*; this {{SKILL}} is
+or the council {{SKILL}} (council kit) instead — those are *model-driven*; this {{SKILL}} is
 *code-driven*.
 
 ## What it is
@@ -23,7 +23,7 @@ work is worth a crew: a one-file tweak or a question never is.
 |---|---|---|---|
 | OpenCode | `workflow` (the `geneseed-workflow` plugin) | **saved only** — `<name>.js` in `.opencode/workflows/` per repo or `<config>/workflows/` global (`GENESEED_WORKFLOWS_DIR` overrides); nothing inline is eval'd | none — call it when the shape fits |
 | Claude Code | `Workflow` (native) | a saved `.claude/workflows/<name>` by `name`, **or** an inline `script` you author | **required** — the tool refuses unless the user opted in for this task ("use a workflow", "ultracode", a skill that says so) |
-| Bob, OpenClaude | none | — | fall back to [parallel-agents](parallel-agents.md) / [council](council.md) |
+| Bob, OpenClaude | none | — | fall back to [parallel-agents](parallel-agents.md) / council (council kit) |
 | any, under Orca | Orca orchestration (`orca skills get orchestration`) | tasks, not scripts — each task spec names its target, change, ownership and acceptance | the user asked to supervise or coordinate workers |
 
 Both runtimes speak the same primitives — `agent()`, `parallel()`, `pipeline()`,
@@ -39,7 +39,7 @@ carries the script API — load it before writing one).
   verify as soon as that dimension returns, no barrier).
 - **research-plan-implement** — three clean phases, each in its own child context,
   carrying only the distilled output of the prior phase.
-- **council** — the [council](council.md) debate on rails: seat the stance {{AGENTS}},
+- **council** (only with the council kit on) — the council debate on rails: seat the stance {{AGENTS}},
   gather positions in parallel, chair synthesises, dissent preserved.
 - **dispatch** — decompose a multi-domain goal, route each subtask to its owning
   capability {{AGENT}}, converge (model-driven fallback: [parallel-agents](parallel-agents.md)).

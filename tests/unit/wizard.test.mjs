@@ -185,13 +185,13 @@ function wizardJobs() {
     // Every sequence below carries a FOURTH answer, between mode and the install mode: the
     // Doctrine-packs gate. It is the one question with two levels, so the count of answers a
     // run consumes is no longer fixed — `all` costs one line and `choose` costs six.
-    // The shipped tree has six kits, ci-pipelines, docker, react, spring-boot, superpowers and terminal-tools, so six
+    // The shipped tree has seven kits, ci-pipelines, council, docker, react, spring-boot, superpowers and terminal-tools, so seven
     // Kits questions (one yes/no each) sit between the install mode and the footprint: every answer string
-    // below carries six lines for them (an empty line keeps the default, `no` on a fresh install, except the
+    // below carries seven lines for them (an empty line keeps the default, `no` on a fresh install, except the
     // superpowers kit, which defaults by detection; `wizard-files` types `2`, the `no` option, for each).
-    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\n\n'],
-    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\nn\n'],
-    // The same six empty lines and an `n` on a tree with NO kit: the Kits question is not asked, so
+    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\n\n\n'],
+    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n\n\n\n\n\nn\n'],
+    // The same six empty lines (the old kit-less count) and an `n` on a tree with NO kit: the Kits question is not asked, so
     // the `n` lands on the confirm and the wizard is declined. Were the question still asked, the `n`
     // would be spent on it and the run would end confirmed.
     ['wizard-no-kit', [['collect_setup_lines', [NO_KIT_SRC]]], '\n\n\n\n\n\nn\n'],
@@ -199,20 +199,20 @@ function wizardJobs() {
     // answer. `1` at the packs gate is `all`, the same answer an empty line gives.
     // The shared-tier question follows the repo root, for a per-repo install only; the empty line takes
     // its default, `no`, so this job's result is what it was before the question existed.
-    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n\n\n\n\n\n\n1\n/tmp/somerepo\n\ny\n'],
+    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n\n\n\n\n\n\n\n1\n/tmp/somerepo\n\ny\n'],
     // The same walk answering `2` (yes) to the shared-tier question: the selection carries it and the plan line says it.
-    ['wizard-project-tier', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n\n\n\n\n\n\n1\n/tmp/somerepo\n2\ny\n'],
+    ['wizard-project-tier', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n\n\n\n\n\n\n\n1\n/tmp/somerepo\n2\ny\n'],
     // `files`, the other arm: one answer, `out` only, `root` left null. This is also the
     // per-pack arm — `choose`, then five y/n — and the subset it keeps is NON-CONTIGUOUS
     // (rigor and process, skipping craft, ops and comms), so a port that dropped the filter and kept
     // a prefix, a suffix or the whole list answers differently from one that reads each y/n.
     ['wizard-files', [['collect_setup_lines', []]],
-      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n7\n2\n2\n2\n2\n2\n2\nfull\n\ny\n'],
+      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n7\n2\n2\n2\n2\n2\n2\n2\nfull\n\ny\n'],
     // Every pack declined. A real configuration (invariants and ontology only), and the only
     // input that reaches `--doctrines none` — the spelling an empty list has to take, because
     // an empty `--doctrines ` is a usage error at the driver.
     ['wizard-no-packs', [['collect_setup_lines', []]],
-      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n\n\n\n\n\n\n'],
+      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n\n\n\n\n\n\n\n'],
     // EOF before the first question. Every reader returns its default, which is the PRE-SELECTED
     // one — so this is the case that fails if `installedDefaults` stopped answering posture, mode
     // or footprint.
@@ -597,7 +597,7 @@ test('the Kits question is asked only when the tree ships a kit', () => {
   const kitMenus = (text) => text.split(/\r?\n/).filter((l) => l.startsWith('Kit ')).map((l) => l.split(' ')[1]);
   assert.deepEqual(runs()['wizard-no-kit'].results, [null]);
   assert.deepEqual(kitMenus(runs()['wizard-no-kit'].text), [], 'a tree with no kit still asked a Kit question');
-  assert.deepEqual(kitMenus(runs()['wizard-declined'].text), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools'],
+  assert.deepEqual(kitMenus(runs()['wizard-declined'].text), ['ci-pipelines', 'council', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools'],
     'the shipped tree did not ask once per kit');
 });
 

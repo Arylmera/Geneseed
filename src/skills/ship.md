@@ -92,9 +92,8 @@ request or merge the branch.
    head branches*) and recommend turning it on if not.
    If shipping triggers a production deploy, confirm a tested rollback or
    fix-forward path and a retained previous artifact *before* deploying — there must
-   be a way back ({{LAW:deletion-is-deliberate}}); dispatch the
-   [operator {{AGENT}}](../{{DIR_AGENTS}}/operator.md) when the runtime surface is
-   non-trivial.
+   be a way back ({{LAW:deletion-is-deliberate}}); when the runtime surface is
+   non-trivial and the council kit is on, dispatch its `operator` {{AGENT}}.
 
 ## Done when
 - The diff passed review with no `blocking` finding, and the PR is open (or the branch is merged) with a Summary / Evidence / Merge danger
