@@ -9,9 +9,13 @@ name: pr-title
 # `pull_request` runs only on the default types (opened, synchronize, reopened), so the fix
 # started no run and a re-run replayed the old title from the recorded event (#455). Giving ci
 # `edited` would re-run its whole matrix on every title or description edit.
+#
+# The same job holds the CHANGELOG FRAGMENT gate, because it reads the same title: a feat, fix or
+# perf PR (or a breaking one) must add `changes/<slug>.<type>.md`, or carry the `no-changelog`
+# label (tests/changelog.mjs says why). `labeled`/`unlabeled` re-run it when that label moves.
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -25,6 +29,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The PR's merge commit and its first parent (the base tip): the fragment gate reads
+          # the files the PR adds from that one diff.
+          fetch-depth: 2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -35,3 +43,8 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$TITLE" | npx --no-install commitlint
+      - name: changelog fragment
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node tests/changelog.mjs --gate

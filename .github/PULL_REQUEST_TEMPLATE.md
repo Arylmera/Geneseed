@@ -16,6 +16,7 @@
 
 ## Impact
 
+- [ ] `feat`/`fix`/`perf` or breaking → a fragment in `changes/<slug>.<type>.md` (never `CHANGELOG.md`; see `changes/README.md`), or the `no-changelog` label
 - [ ] New tracked file → a SHIPS/WITHHELD row in `tests/unit/package_manifest.test.mjs`
 - [ ] `web/src/` changed → `web/dist/` rebuilt and committed
 - [ ] `src/` changed → installs need a re-emit (`geneseed rebuild-all`); say so in the release notes
