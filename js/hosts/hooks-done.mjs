@@ -59,7 +59,9 @@
  *     `<status>completed</status>` and `completed (exit code 0)` (`notificationText`); any other
  *     status or code leaves it owed. Before this, 76 of 112 accepted passes in 30 days of real
  *     transcripts here were launches. The pass is still placed by the CALL: a launch before the
- *     last edit proves nothing, even when it completes after it.
+ *     last edit proves nothing, even when it completes after it. A stop whose EVERY owed check is
+ *     such a pending run is not blocked (`done-gate-pending`): the agent can wait only by ending
+ *     its turn, and the notification starts the continuation that judges the run.
  *
  * READ FROM THE END. Only the current turn matters, so the transcript is read
  * backward in growing windows (`tailReader`) until the turn's opening prompt is inside one; a
@@ -668,11 +670,28 @@ export function doneGate(meta, args, install, read = tailReader()) {
       return said.length || weakened.length ? advise(...said) : null;
     };
     if (!owed.length) return settle();
-    const active = meta.stop_hook_active === true;
-    const capPath = install ? capFile(install, meta) : null;
     // The owed checks whose proof is a background run still pending, or one that reported a failure.
     const bg = owed.flatMap((r) => [...backgroundOwed(turn, r.checks, new Set(r.missing), lastEditId(turn, [r.root], at), r.root, at)]
       .map(([l, st]) => [`${tag(r)}${l}`, st]));
+    // PENDING ONLY. Every owed check is a background run with no completion yet: a block cannot
+    // help, because the agent can only wait by ending its turn, so the next stop met the cap (230
+    // blocks against 237 caps in a month of this machine's ledger; 67 of 80 replayed worker blocks
+    // were this, 2026-11). The stop ends, saves no cap state, and the run's notification starts the
+    // continuation where the proof is judged: green passes, red blocks. A main Stop tells the user.
+    const pendingLabels = new Set(bg.filter(([, st]) => st === 'pending').map(([l]) => l));
+    if (owed.every((r) => r.missing.every((m) => pendingLabels.has(`${tag(r)}${m}`)))) {
+      recordGate(install, 'done-gate-pending', 'law-3');
+      err(`[done-gate] pending — the turn ends while its proof still runs in the background: ${list(owed)}; `
+        + 'it is judged when the run completes.\n');
+      const said = inferredSaid();
+      if (!sub) {
+        said.unshift(`Geneseed done gate — ${who} ends while these checks from ${DONE_LIST} still run `
+          + `in the background: ${list(owed)}. They are judged when the run completes.`);
+      }
+      return said.length || weakened.length ? advise(...said) : null;
+    }
+    const active = meta.stop_hook_active === true;
+    const capPath = install ? capFile(install, meta) : null;
     const verdict = bg.map(([l, st]) => `${l}=${st}`).sort().join('\n');
     // Without an install or a session id there is nowhere to count: one block per turn, as before.
     const record = capPath ? readCap(capPath) : null;

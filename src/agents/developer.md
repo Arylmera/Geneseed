@@ -41,7 +41,10 @@
    write only what the approved decisions cover; on a choice none of them covers, stop and
    return `blocked: decision needed` with the options. Never run the ownership setup.
 2. Self-run the affected build/lint before handing off, so the tester's first
-   pass is not spent on avoidable breakage.
+   pass is not spent on avoidable breakage. Run each proof command whole and unpiped:
+   a pipe (`| head`, `| Select-Object -Last 8`) exits with its last stage, so the done
+   gate reads the check as not run. To cut its output, redirect it to a file
+   (`> out.txt 2>&1`) and read the count line from the file.
 3. On a loop iteration, address the tester's findings directly — do not
    re-implement from scratch unless the findings say the approach itself is wrong.
 4. Report exactly what changed; never invent a fix for a gap you could not
