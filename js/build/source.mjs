@@ -752,9 +752,11 @@ export const GATE_SWITCHES = [
 ];
 
 /**
- * `--context-window 200k|1m`: the model context the install is built for, and the Claude Code
- * settings it writes for the skill listing. ONE table, so the flag, the carrier marker, the
- * rebuild argv, the profile and the console read the same two values.
+ * `--context-window 200k|250k|1m`: the model context the install is built for, and the Claude
+ * Code settings it writes for the skill listing. ONE table, so the flag, the carrier marker, the
+ * rebuild argv, the profile and the console read the same values. The relay ceiling a task
+ * worker hands off at follows the same value (js/hosts/hooks-relay.mjs `RELAY_CEILINGS`, gated
+ * against this table's keys both ways).
  *
  * WHY. Claude Code builds its skill listing under a character budget: context window x bytes
  * per token (3, or 4 for some older models) x `skillListingBudgetFraction` (default 0.01). That
@@ -771,6 +773,8 @@ export const GATE_SWITCHES = [
  *   (7 800 characters) keeps all of them with twenty third-party skills beside them. The
  *   fraction is a ceiling, not a cost: a listing that fits uses only its own length, so the
  *   extra 1 800 characters (about 600 tokens, 0.3 % of the window) are spent only when filled.
+ * - `250k` (added 2026-11-21: the work machine's OpenCode models have 250k windows): the `200k`
+ *   cap, with the fraction scaled to the same 7 800 characters (250k x 3 x 0.0104).
  * - `1m`: a fresh install fits even at the default cap (11 482 of 30 000), so the fraction stays
  *   at its default. The cap 120 is for a machine with many skills: this laptop's 143-skill
  *   listing (47 617 characters) fits whole at 19 427 with it, where today 53 lose their text.
@@ -780,6 +784,7 @@ export const GATE_SWITCHES = [
  */
 export const CONTEXT_WINDOWS = Object.freeze({
   '200k': Object.freeze({ skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.013 }),
+  '250k': Object.freeze({ skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.0104 }),
   '1m': Object.freeze({ skillListingMaxDescChars: 120 }),
 });
 export const DEFAULT_CONTEXT_WINDOW = '200k';

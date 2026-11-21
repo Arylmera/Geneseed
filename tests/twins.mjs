@@ -59,6 +59,11 @@ export const TWINS = [
   ['block', 'loss', 'js/hosts/loss.mjs', plugin('guard')],
   ['block', 'gate text', 'js/hosts/hooks-prims.mjs', plugin('guard')],
   ['block', 'shell-write', 'js/hosts/hooks.mjs', plugin('guard')],
+  // The relay ceiling (js/hosts/hooks-relay.mjs): what a worker past it may run, the ceilings, the words.
+  ['block', 'relay segments', 'js/hosts/hooks.mjs', plugin('guard')],
+  ['line', 'RELAY_CEILINGS', 'js/hosts/hooks-relay.mjs', plugin('guard')],
+  ['line', 'RELAY_DEFAULT_WINDOW', 'js/hosts/hooks-relay.mjs', plugin('guard')],
+  ['decl', 'relayReason', 'js/hosts/hooks-relay.mjs', plugin('guard')],
   ['block', 'test-weakening', 'js/hosts/hooks-prims.mjs', plugin('context')],
   ['block', 'rules preamble', 'js/hosts/hooks-context.mjs', plugin('context')],
   ['decl', 'runsUnpiped', 'js/hosts/hooks-done.mjs', plugin('context')],

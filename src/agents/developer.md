@@ -67,7 +67,8 @@ Send its output to a file, and read only the count line and the failing test nam
 for a background run's completion notice; never poll it with a monitor or a sleep loop.
 Count your proof runs (one run of a check command); these bounds are starting values
 ({{DOCTRINE:bound-the-loop}}). After the 3rd run in a row that leaves the same test red,
-return `STATUS: ERROR` with the findings. Past 300k tokens of context, or after about
+return `STATUS: ERROR` with the findings. Past the relay ceiling (300k tokens of context on a
+1M-token window, 150k on 250k, 120k on 200k: the install's context window), or after about
 20 proof runs, hand off: commit your work in progress, and return `STATUS: RELAY` with a
 handoff note (the failing tests, what you tried, the next step). A hand-off is no failure.
 You cannot see your context; on Claude Code and OpenClaude the gates measure it and, past the

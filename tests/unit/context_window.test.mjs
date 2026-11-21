@@ -1,11 +1,12 @@
-// `--context-window 200k|1m` — the model context an install is built for, and the Claude Code
+// `--context-window 200k|250k|1m` — the model context an install is built for, and the Claude Code
 // skill-listing settings it writes (`CONTEXT_WINDOWS`, js/build/source.mjs, says why and why
 // these values).
 //
 // Written out, not recorded. The properties this file holds:
-//   1. the flag takes `200k` or `1m` only; `200k` is the default
+//   1. the flag takes `200k`, `250k` or `1m` only; `200k` is the default
 //   2. a Claude Code emit writes the listing keys into the settings file it already merges:
 //        200k -> skillListingMaxDescChars 80, skillListingBudgetFraction 0.013
+///        250k -> skillListingMaxDescChars 80, skillListingBudgetFraction 0.0104 (the same 7 800 characters)
 //        1m   -> skillListingMaxDescChars 120, no fraction
 //      and records exactly what it wrote in `managed.settings_listing`
 //   3. ownership: a rebuild in another window updates or removes only the keys it owns (the
@@ -59,6 +60,7 @@ const KEYS = ['skillListingMaxDescChars', 'skillListingBudgetFraction'];
 /** The listing keys a settings object holds, absent ones left out. */
 const listing = (s) => Object.fromEntries(KEYS.filter((k) => Object.hasOwn(s, k)).map((k) => [k, s[k]]));
 const W200K = { skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.013 };
+const W250K = { skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.0104 };
 const W1M = { skillListingMaxDescChars: 120 };
 
 /** A claude-global emit into its own config dir. */
@@ -70,15 +72,16 @@ function claudeGlobal(cfg, ...flags) {
 
 // ---- 1. the flag ------------------------------------------------------------------------------------
 
-test('the flag takes 200k or 1m, and refuses anything else by name', () => {
+test('the flag takes 200k, 250k or 1m, and refuses anything else by name', () => {
   const r = build('--emit', 'claude', '--out', sandbox('gscw-bad-'), '--context-window', '128k');
   assert.equal(r.value, 2);
-  assert.match(r.err, /argument --context-window: invalid choice: '128k' \(choose from '200k', '1m'\)/);
+  assert.match(r.err, /argument --context-window: invalid choice: '128k' \(choose from '200k', '250k', '1m'\)/);
 });
 
-test('the two values are the table the docs state', () => {
-  assert.deepEqual(Object.keys(CONTEXT_WINDOWS), ['200k', '1m']);
+test('the three values are the table the docs state', () => {
+  assert.deepEqual(Object.keys(CONTEXT_WINDOWS), ['200k', '250k', '1m']);
   assert.deepEqual({ ...CONTEXT_WINDOWS['200k'] }, W200K);
+  assert.deepEqual({ ...CONTEXT_WINDOWS['250k'] }, W250K);
   assert.deepEqual({ ...CONTEXT_WINDOWS['1m'] }, W1M);
 });
 
@@ -98,6 +101,14 @@ test('a 1m claude-global emit writes 120 and no fraction, and marks the carrier'
   assert.deepEqual(listing(readJson(cfg, 'settings.json')), W1M);
   assert.deepEqual(readJson(cfg, '.geneseed-manifest.json').managed.settings_listing, W1M);
   assert.match(read(cfg, 'CLAUDE.md'), /^Context window: 1m$/m);
+});
+
+test('a 250k claude-global emit writes 80 and the scaled fraction, and marks the carrier', () => {
+  const cfg = sandbox('gscw-g250-');
+  claudeGlobal(cfg, '--context-window', '250k');
+  assert.deepEqual(listing(readJson(cfg, 'settings.json')), W250K);
+  assert.deepEqual(readJson(cfg, '.geneseed-manifest.json').managed.settings_listing, W250K);
+  assert.match(read(cfg, 'CLAUDE.md'), /^Context window: 250k$/m);
 });
 
 test('a claude project emit writes the keys into settings.local.json, the file it merges', () => {
@@ -296,7 +307,7 @@ test('profile save reads the value back, and the diff names it', () => {
 
 test('an unknown value in a profile is refused, naming the valid ones', () => {
   const p = { ...loadProfile('starter').profile, contextWindow: '128k' };
-  assert.deepEqual(profileProblems(p), ["'contextWindow': invalid value '128k' (valid: '200k', '1m')"]);
+  assert.deepEqual(profileProblems(p), ["'contextWindow': invalid value '128k' (valid: '200k', '250k', '1m')"]);
 });
 
 // ---- 7. a project install beside the user level ------------------------------------------------------
