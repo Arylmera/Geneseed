@@ -680,7 +680,7 @@ function keyParts(key) {
  * links to by path (`linkedSkillIds`), so the UI renders it and never computes it. An install
  * whose carrier cannot be read counts as excluding nothing, as `orSkip` skips an unreadable list.
  */
-function skillShipping(fleet, owner) {
+function skillShipping(fleet, owner, linked = linkedSkillIds()) {
   const views = fleet.filter((v) => v.install !== null).map((v) => {
     const { host, root } = keyParts(v.install);
     let excluded = [];
@@ -689,7 +689,7 @@ function skillShipping(fleet, owner) {
     return { key: v.install, excluded, kits };
   });
   const known = new Set(knownSkillIds());
-  const locked = new Set(linkedSkillIds());
+  const locked = new Set(linked);
   const of = (name, installs) => {
     const kit = owner.get(`skill:${name}`) ?? null;
     const ships = {};
@@ -736,7 +736,7 @@ function agentShipping(fleet, owner) {
  * `fleet` defaults to `state` alone, which answers as one install did before the console
  * listed the fleet; the `/api/catalog/` route passes every active install for `FLEET_SECTIONS`.
  */
-export function apiCatalog(state, section, fleet = [{ install: null, state }], owner = kitOwners()) {
+export function apiCatalog(state, section, fleet = [{ install: null, state }], owner = kitOwners(), linked = undefined) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
   let items;
   if (section === 'agents') {
@@ -745,7 +745,7 @@ export function apiCatalog(state, section, fleet = [{ install: null, state }], o
       source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null, installs,
       ...ship(e.name, installs) }));
   } else if (section === 'skills') {
-    const ship = skillShipping(fleet, owner);
+    const ship = skillShipping(fleet, owner, linked);
     items = fleetEntries(fleet, 'skills').map(({ e, installs }) => ({ name: e.name, title: e.name, desc: e.desc,
       source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null, installs,
       ...ship.of(e.name, installs) }));
@@ -810,16 +810,21 @@ export function fleetCounts(state, fleet = [{ install: null, state }]) {
  * the scope is that one install. Computed as the catalog over a fleet of that install alone, so a
  * count is the size of the list the scoped page shows — the same rule as `fleetCounts`. That list
  * is the rows that install holds, plus (skills) the ones its marker excludes, which keep a row so
- * their chip can bring them back. Keyed by fleet key; an unreadable install is skipped.
+ * their chip can bring them back. Keyed by fleet key.
+ *
+ * An install whose inventory cannot be read has NO entry, as `fleetCounts` skips it: each
+ * section's `orSkip` would otherwise swallow the error and report it as an install holding
+ * nothing. The source scan (`linkedSkillIds`, a walk of `src`) runs once for the pass, not once
+ * per install.
  */
 export function installCounts(state, fleet = []) {
   const owner = kitOwners();
+  const linked = linkedSkillIds();
   const out = {};
   for (const v of fleet.filter((x) => x.install !== null)) {
-    try {
-      const listed = (sec) => apiCatalog(state, sec, [v], owner).items.length;
-      out[v.install] = { skills: listed('skills'), agents: listed('agents'), wiki: listed('wiki'), config: listed('config') };
-    } catch { /* as orSkip: the others still count */ }
+    try { void v.state.inventory; } catch { continue; }
+    const listed = (sec) => apiCatalog(state, sec, [v], owner, linked).items.length;
+    out[v.install] = { skills: listed('skills'), agents: listed('agents'), wiki: listed('wiki'), config: listed('config') };
   }
   return out;
 }

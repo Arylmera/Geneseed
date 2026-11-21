@@ -80,7 +80,10 @@ test('a narrowed install still counts every rule its page lists', () => {
 });
 
 // One bad install must not take `/api/overview` down for the others: a retired theme fails its
-// inventory, a loop file holding `null` fails its catalogue. Both are real, not stubs.
+// inventory, a loop file holding `null` fails its catalogue. Both are real, not stubs. The fleet
+// counts equal the good fleet's. The per-install counts (`byInstall`, the Library's "Showing"
+// scope) skip the install whose inventory fails (`retired` has no entry), but `nulled` reads its
+// Library fine, so it has an entry, the same as the install its state copies (fleet[1]).
 test('an install that cannot be read is skipped, and the rest count', () => {
   const sb = makeSandbox('counts-');
   try {
@@ -93,10 +96,13 @@ test('an install that cannot be read is skipped, and the rest count', () => {
     const nulled = { install: 'claude:project:/nulled', state: { ...fleet[1].state, root: path.join(sb.path, 'nulled') } };
     assert.throws(() => loadCatalog({ projectRoot: nulled.state.root }), 'the fixture must really be broken');
 
-    const good = machineCounts(fleet[0].state, fleet);
-    const counts = machineCounts(fleet[0].state, [retired, ...fleet, nulled]);
+    const { byInstall: goodBy, ...good } = machineCounts(fleet[0].state, fleet);
+    const { byInstall, ...counts } = machineCounts(fleet[0].state, [retired, ...fleet, nulled]);
     assert.ok(good.skills > 0 && good.loops > 0);
     assert.deepEqual(counts, good);
+    assert.deepEqual(Object.keys(byInstall), [...fleet.map((v) => v.install), nulled.install]);
+    for (const v of fleet) assert.deepEqual(byInstall[v.install], goodBy[v.install]);
+    assert.deepEqual(byInstall[nulled.install], goodBy[fleet[1].install]);
     assert.equal(apiCatalog(fleet[0].state, 'skills', [retired, ...fleet]).items.length, good.skills);
   } finally { sb.cleanup(); }
 });
