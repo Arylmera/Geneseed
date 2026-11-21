@@ -10,7 +10,7 @@ import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { claimer, learnModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
-  CLAUDE_ENV, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
+  CLAUDE_ENV, CLAUDE_MEMORY, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   unwireClaudeEnv, unwireClaudeExcludes, unwireClaudeListing, unwireClaudeSettings, wireClaudeEnv,
   wireClaudeExcludes, wireClaudeListing,
 } from '../hosts/settings.mjs';
@@ -319,6 +319,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
     unwireClaudeEnv(path.join(cfgDir, oldSf), get(old, 'settings_env'));
     unwireClaudeListing(path.join(cfgDir, oldSf), get(old, 'settings_listing'));
+    unwireClaudeListing(path.join(cfgDir, oldSf), get(old, 'settings_memory'));
   }
   // The merge prunes recorded groups that are no longer canonical and returns the
   // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
@@ -350,6 +351,14 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     if (Object.keys(env).length) managed.settings_env = env;
   }
   if (host === 'claude') {
+    // ONE MEMORY HOME (CLAUDE_MEMORY). Claude Code's own auto memory is a second writer beside the
+    // Reliquary: every session wrote both stores and loaded both indexes (about 3k tokens for its
+    // MEMORY.md alone), and the facts drifted apart. So the install turns it off, recorded like the
+    // listing keys: a `false` the user set is theirs and stays unrecorded, and uninstall or
+    // deactivate removes ours while it still holds that value, which turns Claude's memory back on.
+    const priorMemory = oldSf === settingsName && isDict(get(old, 'settings_memory')) ? old.settings_memory : {};
+    const memory = wireClaudeListing(settingsPath, CLAUDE_MEMORY, priorMemory, 'native-memory');
+    if (Object.keys(memory).length) managed.settings_memory = memory;
     // The skill-listing budget of `--context-window` (`CONTEXT_WINDOWS` says why and why Claude
     // Code only). The record is what this install owns on file, so a value can change on a rebuild.
     const priorListing = oldSf === settingsName && isDict(get(old, 'settings_listing')) ? old.settings_listing : {};

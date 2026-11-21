@@ -2922,3 +2922,46 @@ test('--learn off bakes no model and records no command; a hostile tier model fa
     assert.equal(readJson(cfg, GLOBAL_MANIFEST).managed.learn_command, 'claude -p');
   });
 });
+
+// ONE MEMORY HOME (CLAUDE_MEMORY): a Claude Code install turns Claude's own auto memory off, so the Reliquary is the
+// only store a session writes and loads. The key is Geneseed's only while it holds the value Geneseed recorded:
+// uninstall and deactivate take that `false` away, which turns Claude's memory back on (the user's 2026-11-21 ask:
+// switching Geneseed off must not leave the agent with no memory at all), and a reactivate puts it back. A value the
+// user set is theirs: kept, unrecorded, and never removed.
+test('a Claude install turns native auto memory off, and uninstall or deactivate turns it back on', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    assert.equal(readJson(cfg, 'settings.json').autoMemoryEnabled, false);
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_memory, { autoMemoryEnabled: false });
+    captured(() => installDeactivate(cfg, 'claude', 'global'));
+    assert.equal(readJson(cfg, 'settings.json').autoMemoryEnabled, undefined, 'deactivate gives Claude its memory back');
+    captured(() => installReactivate(cfg, 'claude', 'global'));
+    assert.equal(readJson(cfg, 'settings.json').autoMemoryEnabled, false, 'reactivate turns it off again');
+    captured(() => uninstallGlobal(cfg, false, 'claude'));
+    assert.equal(readJson(cfg, 'settings.json').autoMemoryEnabled, undefined, 'uninstall gives Claude its memory back');
+  });
+  // The user's own value, either way, is theirs: the emit records nothing and the uninstall leaves it.
+  for (const mine of [true, false]) {
+    withDir((d) => {
+      const cfg = path.join(d, 'dotclaude');
+      fs.mkdirSync(cfg);
+      fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ autoMemoryEnabled: mine }));
+      globalEmit('claude', path.join(d, 'bundle'), cfg);
+      assert.equal(readJson(cfg, 'settings.json').autoMemoryEnabled, mine, `the user's ${mine} is kept`);
+      assert.equal(readJson(cfg, GLOBAL_MANIFEST).managed.settings_memory, undefined, 'and not recorded');
+      captured(() => uninstallGlobal(cfg, false, 'claude'));
+      assert.equal(readJson(cfg, 'settings.json').autoMemoryEnabled, mine, `the uninstall leaves the user's ${mine}`);
+    });
+  }
+});
+
+test('an OpenClaude install leaves autoMemoryEnabled alone (its auto memory is not verified)', () => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    projectEmit('openclaude', repo, undefined);
+    assert.equal(projectSettings(repo, '.openclaude').autoMemoryEnabled, undefined);
+  });
+});

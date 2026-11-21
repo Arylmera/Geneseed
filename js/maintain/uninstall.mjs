@@ -350,6 +350,8 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
   unwireClaudeExcludes(sf, managed.settings_excludes || []);
   unwireClaudeEnv(sf, managed.settings_env);
   unwireClaudeListing(sf, managed.settings_listing);
+  // `autoMemoryEnabled: false` goes while it holds our value, so Claude Code's own memory comes back on.
+  unwireClaudeListing(sf, managed.settings_memory);
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
   // supposedly-uninstalled repo could keep firing Geneseed's hooks. Loud, never fatal.
   settingsIntegrityCheck(sf, managed, 'absent');
@@ -1306,6 +1308,7 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   unwireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
   unwireClaudeListing(settingsFile(cfg, managed), managed.settings_listing);
+  unwireClaudeListing(settingsFile(cfg, managed), managed.settings_memory);
   // The same integrity check the uninstall path runs: a deactivate that silently failed to
   // unwire would leave hooks firing in a repo the user believes is off.
   settingsIntegrityCheck(settingsFile(cfg, managed), managed, 'absent');
@@ -1365,6 +1368,9 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
   // Only what the manifest records: a reactivate restores this install's own keys, never new ones.
   if (isDict(managed.settings_env)) wireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
   if (isDict(managed.settings_listing)) wireClaudeListing(settingsFile(cfg, managed), managed.settings_listing);
+  if (isDict(managed.settings_memory)) {
+    wireClaudeListing(settingsFile(cfg, managed), managed.settings_memory, {}, 'native-memory');
+  }
   cleanHostStash(cfg, host);
   return { ok: true, kind: host, moved };
 }
