@@ -3608,7 +3608,7 @@
         "(theme: neutral)",
         "~ AGENT.md   (edited in deployed — the source has moved; review to back-port, or restore)",
         "- .geneseed-version   (in source, not deployed — re-emit to add)",
-        "- workflows/council.js   (in source, not deployed — re-emit to add)",
+        "- workflows/review.js   (in source, not deployed — re-emit to add)",
         "Run with --full to see the line-level diffs"
       ],
       "expect_re": [
@@ -4052,7 +4052,7 @@
       ],
       "expect_files": [
         "repo/AGENT.md",
-        "repo/.opencode/agents/advocate.md"
+        "repo/.opencode/agents/skeptic.md"
       ],
       "id": "rebuild-all/a-per-repo-install-is-rebuilt-in-place",
       "steps": [
@@ -4207,7 +4207,7 @@
       ],
       "expect_files": [
         "repo/AGENT.md",
-        "repo/.opencode/agents/advocate.md"
+        "repo/.opencode/agents/skeptic.md"
       ],
       "id": "rebuild-all/one-broken-install-does-not-stop-the-rest",
       "steps": [
