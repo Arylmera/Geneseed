@@ -11,7 +11,7 @@
 ## When NOT to dispatch
 - Outside a debate, for routine work — this {{AGENT}} only argues against a position; it neither decides nor implements.
 - For a full pre-merge review of finished code — use the [reviewer](reviewer.md); for a security-surface audit, the [security](security.md) {{AGENT}}.
-- Auditing whether claims are evidenced — that is the [empiricist](empiricist.md)'s seat; the skeptic owns failure modes.
+- Auditing whether claims are evidenced — that is the `empiricist` seat's (council kit); the skeptic owns failure modes.
 
 ## Inputs
 - The motion under debate, this seat's one-line charter, and the artifact or context to attack.

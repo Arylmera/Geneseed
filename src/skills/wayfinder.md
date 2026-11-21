@@ -35,8 +35,8 @@ the destination can be named but the route to it cannot; the user says
      look or behave" is the question: the [prototype {{SKILL}}](prototype.md).
    - **grilling** (with the user, the default) — an interview through the
      [brainstorm {{SKILL}}](brainstorm.md), terms pinned with the
-     [codebase-design {{SKILL}}](codebase-design.md); a [council {{SKILL}}](council.md)
-     debate may inform it, never replace it.
+     [codebase-design {{SKILL}}](codebase-design.md); a council debate
+     (council kit) may inform it, never replace it.
    - **task** — work that decides nothing but blocks a decision (provision access,
      sign up to judge an API, move data to see its shape). Do it alone where you can,
      else hand the user an exact checklist; record what was done and the facts later

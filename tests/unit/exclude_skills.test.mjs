@@ -77,7 +77,7 @@ test('the flag refuses an unknown skill and a linked one, and normalises the res
   refuse('no-such-skill', /unknown skill 'no-such-skill'/);
   // Every linked skill is protected — the constitution would ship a dead link to it.
   for (const name of linkedSkillIds()) refuse(name, new RegExp(`'${name}' cannot be excluded`));
-  assert.ok(linkedSkillIds().includes('council'), 'the scan found none of the known links');
+  assert.ok(linkedSkillIds().includes('wayfinder'), 'the scan found none of the known links');
   const args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'adhd, daydream,adhd']);
   assert.deepEqual(args.excludeSkills, ['adhd', 'daydream'], 'not sorted and deduped');
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--exclude-skills', 'none']).excludeSkills, []);

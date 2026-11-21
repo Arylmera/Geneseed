@@ -250,11 +250,11 @@ test('a complete source passes the gate', () => {
 test('a missing skill aborts the build without writing anything', () => {
   withDir((d) => {
     const out = path.join(d, 'out');
-    const r = withoutSpec('src/skills/council.md',
+    const r = withoutSpec('src/skills/prose.md',
       (root) => emit(root, ['--emit', 'files', '--theme', 'neutral', '--out', out],
         path.join(d, 'home')));
     assert.notEqual(r.rc, 0, `the emit succeeded over a missing spec:\n${r.out.slice(-1500)}`);
-    assert.ok(/council/.test(r.out), `the refusal did not name the missing spec:\n${r.out}`);
+    assert.ok(/prose/.test(r.out), `the refusal did not name the missing spec:\n${r.out}`);
     // NOTHING EMITTED. "Refused" and "refused after writing half a bundle" are different
     // outcomes and only one of them is safe.
     assert.ok(!fs.existsSync(path.join(out, 'AGENT.md')),
@@ -269,22 +269,22 @@ test('a missing agent aborts a global emit and leaves the install intact', () =>
     fs.mkdirSync(cfg, { recursive: true });
     mustEmit(fixture(), ['--emit', 'opencode-global', '--theme', 'neutral'], home,
       { OPENCODE_CONFIG_DIR: cfg });
-    const operator = path.join(cfg, 'agents', 'operator.md');
-    const council = path.join(cfg, 'skills', 'council', 'SKILL.md');
-    assert.ok(fs.existsSync(operator), 'sanity: the first emit wrote no operator agent');
-    assert.ok(fs.existsSync(council), 'sanity: the first emit wrote no council skill');
+    const skeptic = path.join(cfg, 'agents', 'skeptic.md');
+    const prose = path.join(cfg, 'skills', 'prose', 'SKILL.md');
+    assert.ok(fs.existsSync(skeptic), 'sanity: the first emit wrote no skeptic agent');
+    assert.ok(fs.existsSync(prose), 'sanity: the first emit wrote no prose skill');
 
-    const r = withoutSpec('src/agents/operator.md',
+    const r = withoutSpec('src/agents/skeptic.md',
       (root) => emit(root, ['--emit', 'opencode-global', '--theme', 'neutral'], home,
         { OPENCODE_CONFIG_DIR: cfg }));
     assert.notEqual(r.rc, 0, `the global emit succeeded over a partial source:\n${r.out.slice(-1500)}`);
     // WRITE-BEFORE-DELETE PLUS THE GATE. This is the pair that matters: an emit that pruned
     // first and then refused would leave the user with neither the old install nor a new one,
     // from a source tree they never touched.
-    assert.ok(fs.existsSync(operator),
+    assert.ok(fs.existsSync(skeptic),
       'the refused emit deleted the previously-good agent — the install is now worse than '
       + 'before the command was run');
-    assert.ok(fs.existsSync(council), 'the refused emit deleted the previously-good skill');
+    assert.ok(fs.existsSync(prose), 'the refused emit deleted the previously-good skill');
   });
 });
 

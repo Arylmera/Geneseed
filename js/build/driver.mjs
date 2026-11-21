@@ -59,7 +59,7 @@ import { seedProtectedChecks } from '../hosts/geneseed-dir.mjs';
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg.
 import {
-  CONTEXT_WINDOWS, GATE_SWITCHES, ROOT, makeCfg,
+  CONTEXT_WINDOWS, GATE_SWITCHES, ROOT, loadKits, makeCfg,
 } from './source.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
@@ -67,6 +67,7 @@ import {
 // for a reader. See js/inspect/registry.mjs.
 import { registryRecord, registryRoots } from '../inspect/registry.mjs';
 import { installedDefaults, kitsOfDir } from '../hosts/installs.mjs';
+import { migrateCouncilKit } from '../maintain/kit-migration.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
@@ -837,7 +838,11 @@ function warnDroppedKits(args, out) {
     const global = args.emit.endsWith('-global');
     const host = global ? args.emit.slice(0, -'-global'.length) : (args.emit === 'files' ? null : args.emit);
     const target = global ? (args.cfgDir ?? HOSTS.find((h) => h.host === host).configDir()) : out;
-    for (const k of kitsOfDir(target, host).filter((x) => !args.kits.includes(x))) {
+    // An install built before the council kit has it on in effect (`migrateCouncilKit`), so a build
+    // without `--kits council` would drop the council: warn as for a kit its line names.
+    const had = migrateCouncilKit({ host: host ?? '', scope: global ? 'global' : 'project', root: target,
+      kits: kitsOfDir(target, host), knownKits: [...loadKits().keys()] });
+    for (const k of had.filter((x) => !args.kits.includes(x))) {
       process.stderr.write(`[geneseed] WARN: this install has kit ${k}; this build turns it off — `
         + `pass --kits ${k} to keep it
 `);

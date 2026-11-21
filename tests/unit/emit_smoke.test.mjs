@@ -338,8 +338,8 @@ const EXPECTED = {
 // — 3: learn-mode, teach, adhd) is the same story one level up: Bob gets NO
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
-const N_AGENTS = 21;   // 20 + crew-lead (2026-11-21)
-const N_SKILLS = 46;
+const N_AGENTS = 14;   // core only: the seven council-kit seats (advocate, pragmatist, visionary, framer, empiricist, operator, historian) are off in a default build
+const N_SKILLS = 45;   // the council skill is the opt-in council kit, off in a default build
 const N_ALIASES = 13;
 const N_USER_ONLY = 3;
 

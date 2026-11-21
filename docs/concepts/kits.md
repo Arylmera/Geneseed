@@ -65,6 +65,18 @@ Its rules gate each tool on its environment, read live state before acting, clos
 
 The sixth kit is `superpowers`: Geneseed's own, modified copies of five [obra/superpowers](https://github.com/obra/superpowers) skills (Jesse Vincent, MIT): `brainstorm`, `debug`, `plan`, `geneseed-code-review` and `review-response`. Unlike the others it is a stand-in: the official superpowers plugin offers the same skills, so an install has the kit or the plugin, never both. It is the one kit that core files link to, which the next section explains, and [its own page](superpowers-kit.md) covers what the plugin replaces, detection and the profiles.
 
+The seventh kit is `council`, the multi-viewpoint debate. It adds eight members and one OpenCode workflow:
+
+| Member | Kind | What it is for |
+|---|---|---|
+| `council` | skill | Convenes the seats that clash usefully on one motion, then returns a ruling with the strongest dissent kept |
+| `advocate`, `pragmatist`, `visionary`, `framer`, `empiricist`, `operator`, `historian` | agents | Read-only debate seats, each arguing one assigned stance |
+| `council` | OpenCode workflow | The same debate as code, through the `workflow` tool |
+
+Three seats stay core: `skeptic`, `steward` and `user-advocate`. The shipped factories' review panel and the architecture-decision loop seat them, so they must exist with the kit off. The kit is first-party.
+
+An install built before the kit existed keeps the council: while its manifest still owns a council member and its `Active kits:` line does not name the kit, a rebuild turns the kit on and prints one notice line. A build with the kit off prunes the members, so the kit stays off after that. A new install has the kit off.
+
 ### A kit that a plugin can replace
 
 A kit manifest may carry `replacedBy`. It is the only home of the member to plugin-skill mapping and of how each host spells a plugin skill:
@@ -88,6 +100,7 @@ geneseed build --emit claude-global --kits spring-boot
 geneseed build --emit claude-global --kits react,spring-boot
 geneseed build --emit claude-global --kits ci-pipelines,docker
 geneseed build --emit claude-global --kits terminal-tools
+geneseed build --emit claude-global --kits council
 geneseed build --emit claude-global --kits none
 ```
 

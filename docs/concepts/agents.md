@@ -31,7 +31,7 @@ An **agent** is a specialist the main session can hand a piece of work to. Each 
 
 ### The council
 
-Ten read-only debaters — `advocate`, `skeptic`, `pragmatist`, `steward`, `operator`, `visionary`, `framer`, `empiricist`, `historian`, `user-advocate` — each arguing one fixed stance. You do not call them one by one: the **council** [skill](skills.md) seats the ones that actually disagree on your question, runs bounded rounds of debate, and hands you a verdict with the strongest dissent kept verbatim. The council advises; it writes no code.
+Ten read-only debaters, each arguing one fixed stance. Three ship in every install, because the factories and loops seat them too: `skeptic`, `steward` and `user-advocate`. The other seven — `advocate`, `pragmatist`, `operator`, `visionary`, `framer`, `empiricist`, `historian` — and the **council** skill come with the opt-in [council kit](kits.md). With the kit on, you do not call them one by one: the **council** [skill](skills.md) seats the ones that actually disagree on your question, runs bounded rounds of debate, and hands you a verdict with the strongest dissent kept verbatim. The council advises; it writes no code.
 
 ### Specialists, not folder owners
 
@@ -41,7 +41,7 @@ In [foreman mode](foreman-mode.md) the session hands each task that would block 
 
 ### Model tiers
 
-Each agent source names a tier on a line of its own, `<!-- tier: strong|light -->`; an unmarked agent is `standard`. `strong` is the judgement seats (`reviewer`, `security`, `architect`, `performance`, and the kit seats `react-reviewer`, `spring-reviewer`, `spring-security`), `light` is the read-only seats (`explorer`, `researcher` and the ten council debaters), and the rest are `standard`. The line never reaches an install.
+Each agent source names a tier on a line of its own, `<!-- tier: strong|light -->`; an unmarked agent is `standard`. `strong` is the judgement seats (`reviewer`, `security`, `architect`, `performance`, and the kit seats `react-reviewer`, `spring-reviewer`, `spring-security`), `light` is the read-only seats (`explorer`, `researcher` and the council debaters), and the rest are `standard`. The line never reaches an install.
 
 By default nothing changes: every agent runs on your session model. A build with `--tiers auto` (recorded in the install, kept by `rebuild-all`) makes a **Claude Code** install write `model: sonnet` for `standard` agents and `model: haiku` for `light` ones; `strong` agents write no line and inherit. **OpenCode** (`model: provider/model`, a `#variant` suffix kept as written) and **OpenClaude** route too, but have no default model: a tier routes only once your `tiers` map names a model for it, because OpenCode has no alias and OpenClaude's `sonnet` and `haiku` mean the parent model on a provider that is not Anthropic. Bob takes no per-agent model and inherits.
 
@@ -51,7 +51,7 @@ The web console sets all of this on its **Build → Models** page, for any Claud
 
 ### Effort
 
-An agent source may also step its effort down, on a line of its own above its tier line: `<!-- effort: low|medium -->`. `explorer` is `low`; the ten council debaters, `docs` and `memory-curator` are `medium`. A **Claude Code** install writes it as `effort:` in the agent's frontmatter, with or without `--tiers`. Every other seat writes no line and runs at your session's effort: above all the seats that verify work (`reviewer`, `tester`, `security`, `performance`) and the one that writes code (`developer`), because checking the work is where effort pays. Only `low` and `medium` are allowed, so a marker never raises a seat above the level you chose. OpenCode and Bob write no effort line: OpenCode's nearest key, `variant`, names variants that depend on the provider, and your own `variant` override still applies there.
+An agent source may also step its effort down, on a line of its own above its tier line: `<!-- effort: low|medium -->`. `explorer` is `low`; the council debaters, `docs` and `memory-curator` are `medium`. A **Claude Code** install writes it as `effort:` in the agent's frontmatter, with or without `--tiers`. Every other seat writes no line and runs at your session's effort: above all the seats that verify work (`reviewer`, `tester`, `security`, `performance`) and the one that writes code (`developer`), because checking the work is where effort pays. Only `low` and `medium` are allowed, so a marker never raises a seat above the level you chose. OpenCode and Bob write no effort line: OpenCode's nearest key, `variant`, names variants that depend on the provider, and your own `variant` override still applies there.
 
 ### Agents learn too
 

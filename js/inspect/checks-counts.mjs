@@ -335,6 +335,22 @@ export function kitProblems(src = SRC) {
         if (registry !== null && !Object.hasOwn(registry, key)) problems.push(`[authoring] ${key} (kit '${kit}') has no row in registry.json`);
       }
     }
+    // A kit's OpenCode workflows (optional): saved scripts that seat its agents, copied only with the
+    // kit on. Each names a shipped `adapters/opencode/workflows/<name>.js` and belongs to one kit.
+    if (m.workflows !== undefined) {
+      if (!Array.isArray(m.workflows) || !m.workflows.every((w) => typeof w === 'string' && /^[a-z0-9-]+$/.test(w))) {
+        problems.push(`[authoring] ${at}: 'workflows' must be an array of workflow names (a-z, 0-9, -)`);
+      } else {
+        for (const w of m.workflows) {
+          const key = `workflows/${w}`;
+          if (owner.has(key)) problems.push(`[authoring] ${key} is in two kits: '${owner.get(key)}' and '${kit}'`);
+          else owner.set(key, kit);
+          if (!isFile(path.join(path.dirname(src), 'adapters', 'opencode', 'workflows', `${w}.js`))) {
+            problems.push(`[authoring] kit '${kit}' lists workflow '${w}', but adapters/opencode/workflows/${w}.js does not exist`);
+          }
+        }
+      }
+    }
     // A6: a kit's catalogue rows are its own members' — a core row here would show twice with the
     // kit on, or vanish with it off. Each row is `| [<m>]({{DIR_*}}/<m>.md) | <text> |`, one per member.
     for (const kind of ['skills', 'agents']) {

@@ -77,15 +77,20 @@ const NO_CLOUD = { CLAUDE_CODE_USE_BEDROCK: null, CLAUDE_CODE_USE_VERTEX: null,
 // ---- 1. the marker and the seats -------------------------------------------------------------------
 
 const STRONG = ['architect', 'performance', 'reviewer', 'security'];
-const LIGHT = ['advocate', 'empiricist', 'explorer', 'framer', 'historian', 'operator', 'pragmatist',
-  'researcher', 'skeptic', 'steward', 'user-advocate', 'visionary'];
+const LIGHT = ['explorer', 'researcher', 'skeptic', 'steward', 'user-advocate'];
+// The seven seats of the opt-in council kit are light too, but only a build with the kit on emits them.
+const KIT_LIGHT = ['advocate', 'empiricist', 'framer', 'historian', 'operator', 'pragmatist', 'visionary'];
 
-test('the seats are the spec table: four strong, twelve light, every other agent standard', () => {
+test('the seats are the spec table: four strong, five light by default (twelve with the council kit), every other agent standard', () => {
   const items = renderAll(makeCfg(), 'neutral').items.filter((i) => /^agents\/[^_][^/]*\.md$/.test(i.rel));
   const tierOf = (name) => items.find((i) => i.rel === `agents/${name}.md`).tier ?? 'standard';
   assert.deepEqual(items.filter((i) => i.tier === 'strong').map((i) => path.basename(i.rel, '.md')).sort(), STRONG);
   assert.deepEqual(items.filter((i) => i.tier === 'light').map((i) => path.basename(i.rel, '.md')).sort(), LIGHT);
   for (const name of ['developer', 'crew-lead', 'tester', 'docs', 'memory-curator']) assert.equal(tierOf(name), 'standard', name);
+  assert.ok(!items.some((i) => KIT_LIGHT.includes(path.basename(i.rel, '.md'))), 'a council-kit seat is in a default build');
+  const kit = renderAll(makeCfg({ kits: ['council'] }), 'neutral').items.filter((i) => /^agents\/[^_][^/]*\.md$/.test(i.rel));
+  assert.deepEqual(kit.filter((i) => i.tier === 'light').map((i) => path.basename(i.rel, '.md')).sort(),
+    [...LIGHT, ...KIT_LIGHT].sort());
 });
 
 test('the kit seats react-reviewer, spring-reviewer and spring-security are strong, like the core judgement seats', () => {
@@ -174,7 +179,7 @@ test('defaults with an empty map: standard sonnet, light haiku, strong none', ()
   const { dir } = emit({}, { tiers: tiers() });
   assert.deepEqual(['developer', 'tester', 'docs', 'memory-curator'].map((a) => modelOf(dir, a)),
     ['sonnet', 'sonnet', 'sonnet', 'sonnet']);
-  assert.deepEqual(['explorer', 'researcher', 'historian'].map((a) => modelOf(dir, a)), ['haiku', 'haiku', 'haiku']);
+  assert.deepEqual(['explorer', 'researcher', 'skeptic'].map((a) => modelOf(dir, a)), ['haiku', 'haiku', 'haiku']);
   assert.deepEqual(STRONG.map((a) => modelOf(dir, a)), [null, null, null, null]);
 });
 
@@ -203,7 +208,7 @@ test('with the option off an agent is its pre-marker text: the strip removes the
     assert.equal(lines[at + 1], '## When to dispatch', `${f}: the marker must sit directly above the heading`);
     assert.doesNotMatch(text, /<!--\s*tier:/, f);
   }
-  assert.equal(marked, STRONG.length + LIGHT.length + 3, 'the marked seats are the spec table plus the three kit seats');
+  assert.equal(marked, STRONG.length + LIGHT.length + KIT_LIGHT.length + 3, 'the marked seats are the spec table, the seven council-kit seats (their sources sit in src/agents) and the three other kit seats');
 });
 
 test('a tier marker anywhere but directly above "## When to dispatch" fails the authoring check', () => {

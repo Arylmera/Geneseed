@@ -167,6 +167,20 @@ const ROWS = [
   ['rules over the budget, counted rendered', { manifest: { rulesWordBudget: 10 } },
     ["[authoring] src/kits/fx/rules.md renders to 19 words, over kit 'fx' rulesWordBudget of 10"]],
   ['rules exactly at the budget', { manifest: { rulesWordBudget: 19 } }, []],
+  // `workflows`: an OpenCode workflow that seats the kit's agents, copied only with the kit on. It must
+  // name a shipped `adapters/opencode/workflows/<name>.js` (beside src, so `../adapters/…` here) and
+  // belong to one kit.
+  ['a kit workflow whose file exists', { manifest: { workflows: ['fx-wf'] },
+    files: { '../adapters/opencode/workflows/fx-wf.js': 'export default async () => {}\n' } }, []],
+  ['a kit workflow with no file', { manifest: { workflows: ['fx-ghost'] } },
+    ["[authoring] kit 'fx' lists workflow 'fx-ghost', but adapters/opencode/workflows/fx-ghost.js does not exist"]],
+  ["'workflows' that is not an array of names", { manifest: { workflows: 'fx-wf' } },
+    ["[authoring] src/kits/fx.json: 'workflows' must be an array of workflow names (a-z, 0-9, -)"]],
+  ['a workflow in two kits', { manifest: { workflows: ['fx-wf'] }, files: {
+    '../adapters/opencode/workflows/fx-wf.js': 'export default async () => {}\n',
+    'kits/fy.json': JSON.stringify({ ...MANIFEST, skills: [], agents: [], rules: 'kits/fy/rules.md', catalogue: {}, workflows: ['fx-wf'] }),
+    'kits/fy/rules.md': '### Fy rules\n' } },
+  ["[authoring] workflows/fx-wf is in two kits: 'fx' and 'fy'"]],
   // `replacedBy` (the superpowers kit): a plugin skill for every member, an upstream key that exists,
   // the two provider blocks, and the one exception to R4 — a core link to a member is rewritten with the
   // kit off, so it does not dangle. A bare mention of a member in prose cannot be rewritten, so it is refused.
@@ -223,11 +237,11 @@ test('kitProblems: a manifest that does not parse is a problem, not a crash', as
   });
 });
 
-// The shipped tree has six kits, `ci-pipelines` (two members), `docker` (one), `react` (four),
-// `spring-boot` (nine), `superpowers` (five) and `terminal-tools` (two), each member with a
+// The shipped tree has seven kits, `ci-pipelines` (two members), `council` (eight, and one
+// workflow), `docker` (one), `react` (four), `spring-boot` (nine), `superpowers` (five) and `terminal-tools` (two), each member with a
 // registry row and a catalogue row, none in both kits, and the kit gate reports nothing on it.
-test('kitProblems: the shipped tree, which has the ci-pipelines, docker, react, spring-boot, superpowers and terminal-tools kits, is clean', async () => {
-  assert.deepEqual([...loadKits().keys()], ['ci-pipelines', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools']);
+test('kitProblems: the shipped tree, which has the ci-pipelines, council, docker, react, spring-boot, superpowers and terminal-tools kits, is clean', async () => {
+  assert.deepEqual([...loadKits().keys()], ['ci-pipelines', 'council', 'docker', 'react', 'spring-boot', 'superpowers', 'terminal-tools']);
   assert.deepEqual(kitProblems(), []);
 });
 
@@ -239,8 +253,8 @@ test('--exclude-skills accepts a kit skill only kit files link (R5), and keeps c
     assert.ok(!linked.includes('fx-skill'), 'a kit-only link protected its kit skill');
     assert.ok(linked.includes('commit'), 'a core skill linked by core files lost its protection');
     let msg = null;
-    try { parseExcludeSkills('council', src); } catch (e) { msg = e.message; }
-    assert.match(msg ?? '', /'council' cannot be excluded/);
+    try { parseExcludeSkills('parallel-agents', src); } catch (e) { msg = e.message; }
+    assert.match(msg ?? '', /'parallel-agents' cannot be excluded/);
   });
 });
 

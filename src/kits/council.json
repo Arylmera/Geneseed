@@ -1,0 +1,22 @@
+{
+  "description": "The council debate: seven read-only stance seats (advocate, pragmatist, visionary, framer, empiricist, operator, historian; skeptic, steward and user-advocate stay core, because factories and loops seat them), the council Rite that convenes them, and its OpenCode workflow. Turn it on when you want decisions argued from several viewpoints before you commit.",
+  "skills": ["council"],
+  "agents": ["advocate", "pragmatist", "visionary", "framer", "empiricist", "operator", "historian"],
+  "workflows": ["council"],
+  "rules": "kits/council/rules.md",
+  "rulesWordBudget": 300,
+  "catalogue": {
+    "skills": [
+      "| [council]({{DIR_SKILLS}}/council.md) | a decision, change, or discussion needs debating from several points of view before committing |"
+    ],
+    "agents": [
+      "| [advocate]({{DIR_AGENTS}}/advocate.md) | a council debate needs the strongest case **for** the motion argued in isolation |",
+      "| [pragmatist]({{DIR_AGENTS}}/pragmatist.md) | a council debate needs the cost, effort, and complexity weighed against the payoff |",
+      "| [visionary]({{DIR_AGENTS}}/visionary.md) | a council debate needs the bold, transformative version argued against incrementalism |",
+      "| [framer]({{DIR_AGENTS}}/framer.md) | a council debate needs the problem framing itself pressure-tested |",
+      "| [empiricist]({{DIR_AGENTS}}/empiricist.md) | a council debate needs every claim held to evidence, for and against |",
+      "| [operator]({{DIR_AGENTS}}/operator.md) | a council debate needs the production/runtime reality — reliability, on-call — weighed |",
+      "| [historian]({{DIR_AGENTS}}/historian.md) | a council debate needs precedent — what was tried before and how it went |"
+    ]
+  }
+}

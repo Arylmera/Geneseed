@@ -1341,7 +1341,7 @@ test('a kit member needs a row in its kit manifest, not the template, and counts
 test('geneseed build --kits fx --exclude-skills fx-skill is accepted; a core link still refuses (R5)', () => {
   // Through the real CLI of a checkout copy holding the kit. `fx-skill` is linked by the kit's
   // rules.md and by its agent — kit links, which must not protect it — so the build excludes it
-  // (exclusion wins: the skill is gone, the agent and both marker lines stay). `council` is
+  // (exclusion wins: the skill is gone, the agent and both marker lines stay). `wayfinder` is
   // linked by core files, so excluding it is still refused with exit 2.
   const faults = {
     'src/kits/fx.json': JSON.stringify({ description: 'Fx', skills: ['fx-skill'], agents: ['fx-agent'],
@@ -1368,9 +1368,9 @@ test('geneseed build --kits fx --exclude-skills fx-skill is accepted; a core lin
       assert.ok(fs.existsSync(path.join(out, 'skills', 'commit.md')), 'the bundle lays skills out elsewhere');
       assert.ok(!fs.existsSync(path.join(out, 'skills', 'fx-skill.md')), 'the excluded kit skill shipped');
       assert.ok(fs.existsSync(path.join(out, 'agents', 'fx-agent.md')), 'the kit agent did not ship');
-      const refused = build(path.join(sb.path, 'refused'), 'council');
+      const refused = build(path.join(sb.path, 'refused'), 'wayfinder');
       assert.equal(refused.status, 2);
-      assert.match(refused.stderr, /'council' cannot be excluded/);
+      assert.match(refused.stderr, /'wayfinder' cannot be excluded/);
     });
   } finally { sb.cleanup(); }
 });

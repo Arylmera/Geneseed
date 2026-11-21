@@ -363,15 +363,21 @@ export function linkTargetOf(rel, target) {
   return { kind: hit[1], name: hit[2] };
 }
 
-/** Every skill and agent the kits handed in claim (a `loadKits` Map, or a subset of one). */
+/**
+ * Every skill, agent and OpenCode workflow the kits handed in claim (a `loadKits` Map, or a subset
+ * of one). A workflow is a member when it seats a kit's agents: with the kit off, those agents are
+ * not written, and the saved script would dispatch agents the install does not have.
+ */
 export function kitMembers(kits) {
   const skills = new Set();
   const agents = new Set();
+  const workflows = new Set();
   for (const m of kits.values()) {
     for (const s of m.skills ?? []) skills.add(s);
     for (const a of m.agents ?? []) agents.add(a);
+    for (const w of m.workflows ?? []) workflows.add(w);
   }
-  return { skills, agents };
+  return { skills, agents, workflows };
 }
 
 /**

@@ -12,7 +12,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, GATE_SWITCHES, PACK_ORDER, loadKits } from './source.mjs';
-import { migrateSuperpowersKit } from '../maintain/kit-migration.mjs';
+import { migrateCouncilKit, migrateSuperpowersKit } from '../maintain/kit-migration.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
 import {
@@ -158,7 +158,10 @@ export function installProfile(host, scope, root, notify = null) {
   const gates = gatesOfDir(root, host);
   // Kits on stay on (spec A3); one this checkout no longer ships drops with a notice (R2).
   // An install built before the superpowers kit existed keeps its five Rites unless the plugin is seen.
-  const kits = migrateSuperpowersKit({ host, scope, root, kits: kitsOfDir(root, host, notify), notify, knownKits: [...loadKits().keys()], aware: kitAwareOfDir(root, host) });
+  // An install built before the council kit keeps the council while it still owns a member.
+  const knownKits = [...loadKits().keys()];
+  const kits = migrateCouncilKit({ host, scope, root, notify, knownKits,
+    kits: migrateSuperpowersKit({ host, scope, root, kits: kitsOfDir(root, host, notify), notify, knownKits, aware: kitAwareOfDir(root, host) }) });
   // A project install's `Shared tier: on` stays on across a rebuild; a global install never has it.
   const sharedTier = sharedTierOfDir(root, host);
   // `Context window: 1m` stays 1m: a rebuild that forgot it would shrink the listing cap.
