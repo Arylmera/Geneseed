@@ -72,6 +72,17 @@ describe('Docs layout', () => {
     expect(filterRows(rows, '  ').map((r) => r.name)).toEqual(['quick', 'clone', 'verify'])
   })
 
+  it('filters a memory fact on its name, description and topic (its heading)', () => {
+    // A memory row has no title: the name is its slug, and the topic is the group it sits under.
+    const facts = [
+      { name: 'fact-a', desc: 'prefers tabs', topic: 'Editor' },
+      { name: 'fact-b', desc: 'uses pnpm', topic: 'Tooling' },
+    ]
+    expect(filterRows(facts, 'FACT-A').map((r) => r.name)).toEqual(['fact-a'])
+    expect(filterRows(facts, 'pnpm').map((r) => r.name)).toEqual(['fact-b'])
+    expect(filterRows(facts, 'tooling').map((r) => r.name)).toEqual(['fact-b'])
+  })
+
   it('lists the parts with counts, the part pages by section, and the breadcrumb', async () => {
     render(<Docs page="clone" overview={{}} />)
     await waitFor(() => expect(texts('.lib-group')).toEqual(['Install', 'General']))
