@@ -182,7 +182,32 @@ async function sovereignBypass(cwd) {
 }
 
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
-const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
+const MIN_NOTES_CHARS = 200            // below this, the new part of a session is too trivial to mine
+const CONTEXT_CHARS = 2000             // the most context the cursor window carries
+// The cursor window (D4): a twin of the one in js/hosts/hooks-learn.mjs.
+// ---- learn cursor twin: BEGIN
+/** Messages before the cursor that ride along as context, so the first new turn is not read cold. */
+const CONTEXT_MESSAGES = 2;
+
+/**
+ * Split a session's messages at its cursor (how many were already mined): `fresh` is what a distil mines, `context`
+ * the last CONTEXT_MESSAGES before it, and `next` the cursor a successful distil moves to. A cursor that is not a
+ * whole number inside the list (a compacted session now holds fewer messages than it did) starts over at 0.
+ *
+ * WHY: every distil re-read the last 16k of the whole session, so a 3-turn session was mined 3 times over turn 1
+ * and a long one by each PreCompact and SessionEnd over the same text. Each region is now mined once.
+ */
+function freshWindow(items, cursor) {
+  const at = Number.isInteger(cursor) && cursor >= 0 && cursor <= items.length ? cursor : 0;
+  return { context: items.slice(Math.max(0, at - CONTEXT_MESSAGES), at), fresh: items.slice(at), next: items.length };
+}
+
+/** The notes of a window: the context marked as not to be mined, then the new turns; no marks without context. */
+function windowNotes(contextText, freshText) {
+  if (!contextText) return freshText;
+  return `CONTEXT (earlier turns, already mined; read them to follow the new ones, never distil from them):\n${contextText}\n\nNEW TURNS (distil from these):\n${freshText}`;
+}
+// ---- learn cursor twin: END
 // NaN-safe: garbage in the env var would make setTimeout fire immediately (NaN
 // delay → 0), distilling after EVERY turn instead of at session end.
 const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
@@ -894,7 +919,7 @@ function flatten(messages) {
       if (providerID && modelID) model = { providerID, modelID }
     }
   }
-  return { notes: lines.join("\n\n"), model }
+  return { notes: lines.join("\n\n"), model, lines }
 }
 
 function envModel() {
@@ -916,24 +941,200 @@ async function existingSlugs(memDir) {
   return new Set((await listMd(memDir)).map((f) => f.slice(0, -3)).filter((s) => !isReservedStem(s)))
 }
 
+// The BM25 search behind the ALREADY STORED list and the near-duplicate guard: a copy of
+// js/hosts/memory-search.mjs (its docblock says why).
+// ---- memory-search twin: BEGIN
+/** How many of the newest facts are always listed, whatever the notes say. */
+const RECENT_FACTS = 10;
+/**
+ * A new fact is SKIPPED as a near-duplicate of a stored one at or above this similarity (0..1, see
+ * `nearestFact`). Conservative on purpose: a false skip loses a fact for good, a false create costs one
+ * duplicate that `consolidate` or the next distil can merge. Measured on tests/unit/memory_search.test.mjs:
+ * a reworded copy of the same claim scores above 0.8, two different facts of one topic below 0.35.
+ */
+const DUPLICATE_SIMILARITY = 0.7;
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+
+/** Lower-case words: split on anything that is not a letter or a digit, one-letter words dropped, no stemming. */
+function tokenize(text) {
+  return String(text ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 1);
+}
+
+/** What a fact is searched by: its slug's words, description, topic and body. */
+function factText(slug, fact) {
+  return `${slug.replace(/[-_]+/g, ' ')} ${fact?.desc ?? ''} ${fact?.topic ?? ''} ${fact?.body ?? ''}`;
+}
+
+function termFrequencies(text) {
+  const tf = new Map();
+  let len = 0;
+  for (const t of tokenize(text)) { tf.set(t, (tf.get(t) ?? 0) + 1); len += 1; }
+  return { tf, len };
+}
+
+/** The corpus statistics BM25 needs, over `facts` (slug -> fact). */
+function searchIndex(facts) {
+  const slugs = [];
+  const docs = [];
+  const df = new Map();
+  let total = 0;
+  for (const [slug, fact] of facts) {
+    const doc = termFrequencies(factText(slug, fact));
+    for (const t of doc.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+    slugs.push(slug);
+    docs.push(doc);
+    total += doc.len;
+  }
+  return { slugs, docs, df, avg: total / (docs.length || 1) || 1 };
+}
+
+// The `1 +` form keeps idf positive for a word in every document, so a small store never scores below zero.
+const idf = (ix, term) => {
+  const n = ix.df.get(term) ?? 0;
+  return Math.log(1 + (ix.docs.length - n + 0.5) / (n + 0.5));
+};
+
+function bm25(ix, terms, doc) {
+  let score = 0;
+  for (const t of terms) {
+    const f = doc.tf.get(t);
+    if (f) score += (idf(ix, t) * f * (BM25_K1 + 1)) / (f + BM25_K1 * (1 - BM25_B + (BM25_B * doc.len) / ix.avg));
+  }
+  return score;
+}
+
+/** Slugs whose text shares a word with `query`, best match first (ties in store order); no match, no entry. */
+function rankFacts(facts, query) {
+  const ix = searchIndex(facts);
+  const terms = [...new Set(tokenize(query))];
+  const hits = [];
+  ix.docs.forEach((doc, i) => {
+    const score = bm25(ix, terms, doc);
+    if (score > 0) hits.push({ slug: ix.slugs[i], score });
+  });
+  return hits.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * The stored fact closest to `candidate` (`{ slug, desc, topic, body }`), as `{ slug, similarity }`, or null
+ * for an empty store. SIMILARITY is the BM25 score of the stored fact for the candidate's words, divided by
+ * the score the candidate would get from a document identical to itself, so 1 is "says the same, in the same
+ * words" and a word the store has never seen costs the candidate its share. Capped at 1.
+ */
+function nearestFact(facts, candidate) {
+  const ix = searchIndex(facts);
+  if (!ix.docs.length) return null;
+  const own = termFrequencies(factText(candidate.slug, candidate));
+  const terms = [...own.tf.keys()];
+  const ceiling = bm25(ix, terms, own);
+  if (!ceiling) return null;
+  let best = null;
+  ix.docs.forEach((doc, i) => {
+    const similarity = Math.min(1, bm25(ix, terms, doc) / ceiling);
+    if (!best || similarity > best.similarity) best = { slug: ix.slugs[i], similarity };
+  });
+  return best;
+}
+
+/** One line of the ALREADY STORED list. */
+const storedLine = (slug, desc) => (desc ? `- ${slug} — ${desc}` : `- ${slug}`);
+
+/**
+ * The slugs the prompt lists as ALREADY STORED, in listing order: the `recent` newest by mtime, then the
+ * best BM25 matches for `notes`, each once, while their lines fit in `maxChars`. The first line that
+ * does not fit ends the list, so a better match is never traded for a worse, shorter one.
+ */
+function pickStored(facts, notes, maxChars, recent = RECENT_FACTS) {
+  const newest = [...facts.entries()].sort((a, b) => (b[1].mtime ?? 0) - (a[1].mtime ?? 0))
+    .slice(0, recent).map(([slug]) => slug);
+  const seen = new Set();
+  const picked = [];
+  let used = 0;
+  for (const slug of [...newest, ...rankFacts(facts, notes).map((h) => h.slug)]) {
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+    const line = storedLine(slug, facts.get(slug).desc);
+    if (used + line.length > maxChars) break;
+    picked.push(slug);
+    used += line.length + 1;
+  }
+  return picked;
+}
+
+/**
+ * The search a person or an agent runs on purpose (`geneseed memory search`, OpenCode's `memory_search` tool):
+ * the best `limit` BM25 matches for `query`, one line each, `slug — description (topic)`. No match, no line.
+ */
+function searchLines(facts, query, limit = 10) {
+  return rankFacts(facts, query).slice(0, limit).map(({ slug }) => {
+    const f = facts.get(slug);
+    return `${storedLine(slug, f.desc)}${f.topic ? ` (${f.topic})` : ''}`;
+  });
+}
+
+/**
+ * THE MAP IS BOUNDED (O10). MEMORY.md is injected at every session start, and it listed every topic: a
+ * store whose distils invent topics freely grew it past 13 KB at 300 topics, and the OpenCode context
+ * plugin drops a session file over 16 KB WHOLE, so a big store loaded with no index at all. The map now
+ * lists MAP_TOPIC_LINES topics, the largest first (and `misc`, whose line is what fires the curation
+ * nudge), then one line counting the rest. A folded topic is still a file under topics/, and every fact
+ * is still reached by the search the hint names.
+ */
+const MAP_TOPIC_LINES = 25;
+const MAP_HINT = 'Each topic file lists its facts; open the one the task needs, or search every fact: '
+  + '`geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).';
+// The hint an older build wrote: a rebuild must drop it as generated, not carry it as a line a person wrote.
+const OLD_MAP_HINTS = new Set(['Each topic file lists its facts; open the one the task needs.']);
+const MAP_FOLD_RE = /^- … \d+ more topics? \(\d+ facts?\) under topics\/, reached by the search above$/;
+
+/** One map line per topic: `- [topic](topics/topic.md) — n facts`. */
+const mapLine = (topic, n) => `- [${topic}](topics/${topic}.md) — ${n} fact${n === 1 ? '' : 's'}`;
+
+/**
+ * The map's generated lines for `counts` (topic -> fact count): the hint, a blank line, the listed topics in
+ * name order, and the fold line when some are left out. The listed ones are the largest, ties by name, with
+ * `misc` always in. No topic, no line.
+ */
+function mapBody(counts) {
+  const all = [...counts.entries()];
+  if (!all.length) return [];
+  const bySize = [...all].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const keep = new Set(bySize.slice(0, MAP_TOPIC_LINES).map(([t]) => t));
+  if (counts.has('misc') && !keep.has('misc')) {
+    keep.delete(bySize[MAP_TOPIC_LINES - 1][0]);
+    keep.add('misc');
+  }
+  const lines = all.filter(([t]) => keep.has(t)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([t, n]) => mapLine(t, n));
+  const rest = all.filter(([t]) => !keep.has(t));
+  if (rest.length) {
+    const facts = rest.reduce((s, [, n]) => s + n, 0);
+    lines.push(`- … ${rest.length} more topic${rest.length === 1 ? '' : 's'} (${facts} fact${facts === 1 ? '' : 's'}) `
+      + 'under topics/, reached by the search above');
+  }
+  return [MAP_HINT, '', ...lines];
+}
+
+/** Is this trimmed MEMORY.md line one the map writer generates (a hint, old or new, or the fold line)? */
+const isMapText = (t) => t === MAP_HINT || OLD_MAP_HINTS.has(t) || MAP_FOLD_RE.test(t);
+// ---- memory-search twin: END
+
 // The stored facts' lines are capped at MAX_STORED_CHARS, a twin of buildLearnPrompt in
-// js/hosts/hooks-learn.mjs: a store of hundreds of facts would otherwise outgrow the notes.
-// A fact past the cap is only unlisted — writeMemories still refuses to create its slug.
+// js/hosts/hooks-learn.mjs: a store of hundreds of facts would otherwise outgrow the notes. WHICH
+// facts fit is pickStored's call (the newest ten, then the best matches for the notes), not the
+// alphabet's: that cut hid the fact the previous distil had just written.
+// A fact past the cap is only unlisted — writeMemories still refuses to create its slug and skips a near-duplicate of it.
 const MAX_STORED_CHARS = 8000
 function buildPrompt(notes, facts) {
   const parts = [LEARN_PROMPT_HEAD, ""]
   if (facts.size) {
     parts.push("ALREADY STORED — 'slug — description', to update or archive, never to create:")
-    let used = 0
-    let shown = 0
-    for (const [slug, { desc }] of facts) {
-      const line = desc ? `- ${slug} — ${desc}` : `- ${slug}`
-      if (used + line.length > MAX_STORED_CHARS) break
-      parts.push(line)
-      used += line.length + 1
-      shown += 1
+    const shown = pickStored(facts, notes, MAX_STORED_CHARS)
+    for (const slug of shown) parts.push(storedLine(slug, facts.get(slug).desc))
+    if (shown.length < facts.size) {
+      parts.push(`(${facts.size - shown.length} more stored facts not shown: the newest and the closest to the notes are listed)`)
     }
-    if (shown < facts.size) parts.push(`(${facts.size - shown} more stored facts not shown)`)
     parts.push("", "TOPICS IN USE:", [...new Set([...facts.values()].map((f) => f.topic))].sort().join(", "), "")
   }
   parts.push("NOTES:", notes)
@@ -991,7 +1192,8 @@ async function archiveFact(memDir, slug) {
 async function writeMemories(output, memDir, existing) {
   const stored = new Map([...existing].map((s) => [s.toLowerCase(), s]))
   const done = new Set()
-  const res = { created: [], updated: [], archived: [] }
+  const res = { created: [], updated: [], archived: [], skipped: [] }
+  let corpus = null // the stored facts, read once and only when a create needs them
   for (let chunk of output.split(/^---FILE---\s*$/m)) {
     chunk = chunk.trim()
     if (!chunk || chunk.toUpperCase() === "NOTHING") continue
@@ -1004,6 +1206,16 @@ async function writeMemories(output, memDir, existing) {
     if (slug && action !== "create" && (await hasForce(memDir, slug))) continue
     const body = stripAction(chunk).replace(/\n+$/, "") + "\n"
     if (action === "create" && !slug) {
+      // A create that repeats a stored fact is skipped and reported (D9), as writeMemories in js/hosts/memory-files.mjs does.
+      corpus ??= await readFacts(memDir)
+      const fact = { desc: (fm.description || "").trim(), topic: topicOf(fm), body: (chunk.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)$/)?.[1] ?? "").trim() }
+      const near = nearestFact(corpus, { slug: name, ...fact })
+      if (near && near.similarity >= DUPLICATE_SIMILARITY) {
+        res.skipped.push(`${name}: near-duplicate of ${near.slug}, skipped`)
+        done.add(key)
+        continue
+      }
+      corpus.set(name, fact)
       await fs.writeFile(path.join(memDir, `${name}.md`), body, "utf8")
       existing.add(name)
       stored.set(key, name)
@@ -1029,7 +1241,6 @@ async function writeMemories(output, memDir, existing) {
 // already indexed keeps its line (title and hook), a new one gets its description, a topic
 // file no fact uses is deleted, and map lines the build did not generate are carried.
 const MEMORY_SEED = "# Memory Index\n"
-const MAP_HINT = "Each topic file lists its facts; open the one the task needs."
 const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/
 const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/
 
@@ -1059,15 +1270,22 @@ function topicOf(fm) {
   return raw.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "misc"
 }
 
-// Every top-level fact (never archive/ or agents/), in index order: slug -> { desc, topic }.
+// Every top-level fact (never archive/ or agents/), in index order: slug -> { desc, topic, body, mtime }.
 async function readFacts(memDir) {
   const facts = new Map()
   for (const f of await listMd(memDir)) {
     const slug = f.slice(0, -3)
     if (isReservedStem(slug)) continue
     let fm
-    try { fm = parseFrontmatter((await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")) } catch { continue }
-    facts.set(slug, { desc: (fm.description || "").trim(), topic: topicOf(fm) })
+    let body
+    let mtime
+    try {
+      const text = (await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")
+      fm = parseFrontmatter(text)
+      body = (text.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)$/)?.[1] ?? text).trim()
+      mtime = (await fs.stat(path.join(memDir, f))).mtimeMs
+    } catch { continue }
+    facts.set(slug, { desc: (fm.description || "").trim(), topic: topicOf(fm), body, mtime })
   }
   return facts
 }
@@ -1096,21 +1314,23 @@ async function rebuildIndex(memDir, fresh = new Set()) {
   }
   if (byTopic.size) await fs.mkdir(tdir, { recursive: true })
   else await fs.rmdir(tdir).catch(() => {})
-  const mapLines = []
+  const counts = new Map()
   for (const topic of [...byTopic.keys()].sort()) {
     const lines = byTopic.get(topic)
     await writeIfChanged(path.join(tdir, `${topic}.md`), `# ${topic}\n\n${lines.join("\n")}\n`)
-    mapLines.push(`- [${topic}](topics/${topic}.md) — ${lines.length} fact${lines.length === 1 ? "" : "s"}`)
+    counts.set(topic, lines.length)
   }
+  // Bounded (the memory-search block's mapBody): at most MAP_TOPIC_LINES topics and a count of the rest.
+  const mapLines = mapBody(counts)
   const index = path.join(memDir, "MEMORY.md")
   // A flat pointer is dropped unless it names a store document (D4): a fact's has moved into its topic file.
   const documents = new Set((await listMd(memDir)).map((f) => f.slice(0, -3).toLowerCase()).filter((s) => !known.has(s)))
   const carried = ((await readLines(index)) ?? []).filter((l) => {
     const t = l.trim()
     const flat = FACT_LINE_RE.exec(t)
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t) && !(flat && !documents.has(flat[2].toLowerCase()))
+    return t && t !== MEMORY_SEED.trim() && !isMapText(t) && !MAP_LINE_RE.test(t) && !(flat && !documents.has(flat[2].toLowerCase()))
   })
-  const body = [...(mapLines.length ? ["", MAP_HINT, "", ...mapLines] : []), ...(carried.length ? ["", ...carried] : [])]
+  const body = [...(mapLines.length ? ["", ...mapLines] : []), ...(carried.length ? ["", ...carried] : [])]
   await writeIfChanged(index, body.length ? MEMORY_SEED + body.join("\n") + "\n" : MEMORY_SEED)
 }
 
@@ -1171,6 +1391,33 @@ async function writeDistil(output, { isChild, memDir, agentName, existing }) {
   for (const [verb, slugs] of [["wrote", res.created], ["updated", res.updated], ["archived", res.archived]]) {
     if (slugs.length) say(`${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`, "info")
   }
+  for (const line of res.skipped) say(line, "info")
+}
+
+// THE memory_search TOOL (O10). The map MEMORY.md lists only the largest topics, so the model needs a way
+// to every fact: this is OpenCode's, as `geneseed memory search` is the Claude-family hosts' (one BM25,
+// the memory-search block above). It reads the store the distil writes to and never writes. Every failure
+// is text, never a throw: a V2 tool execute that rejects fails the whole agent step.
+const MEMORY_SEARCH_DESCRIPTION = "Search the agent's long-term memory facts by words (BM25, best match first). "
+  + "Use it before a task that may repeat an earlier decision, preference or convention, or when MEMORY.md "
+  + "folds topics. Returns 'slug — description (topic)' lines; read <slug>.md in the memory folder for the whole fact."
+const QUERY_DESCRIPTION = "the words to look for"
+const LIMIT_DESCRIPTION = "how many matches to return (default 10, at most 50)"
+
+async function memorySearchText(input) {
+  try {
+    const query = String(input?.query ?? "").trim()
+    if (!query) return 'memory_search needs a "query": the words to look for.'
+    const memDir = await resolveMemoryDir()
+    if (!memDir) return "No memory store on this install: nothing to search."
+    const n = Number(input?.limit)
+    const limit = Number.isInteger(n) && n > 0 ? Math.min(n, 50) : 10
+    const lines = searchLines(await readFacts(memDir), query, limit)
+    return lines.length ? [`Facts in ${memDir} (read <slug>.md there for the whole fact):`, ...lines].join("\n")
+      : `No fact in ${memDir} matches "${query}".`
+  } catch (err) {
+    return `memory_search failed: ${err?.message ?? err}`
+  }
 }
 
 export const GeneseedLearn = async (ctx) => {
@@ -1180,6 +1427,9 @@ export const GeneseedLearn = async (ctx) => {
   const timers = new Map()     // sid -> debounce timer, re-armed on each idle
   const inFlight = new Set()   // sid currently being distilled (guards against overlap)
   const lastReply = new Map()  // sid -> id of its newest assistant message (captureTurn)
+  // sid -> how many of its text messages a distil has already mined (D4). In-process, not persisted: after
+  // an OpenCode restart a reopened session is mined once more from its start, the whole cost of losing it.
+  const cursors = new Map()
   let warnedNoDir = false
 
   // The session root, as guard and context use it — not process.cwd(), which is the
@@ -1225,9 +1475,19 @@ export const GeneseedLearn = async (ctx) => {
         return
       }
 
-      let { notes, model } = flatten(messages ?? (await fetchMessages()))
-      if (notes.length < MIN_NOTES_CHARS) return
-      notes = notes.slice(-MAX_NOTES_CHARS)
+      let { notes, model, lines } = flatten(messages ?? (await fetchMessages()))
+      let next = null
+      if (isChild) {
+        if (notes.length < MIN_NOTES_CHARS) return
+        notes = notes.slice(-MAX_NOTES_CHARS)
+      } else {
+        // Only what the last successful distil had not seen, plus two messages of marked context.
+        const w = freshWindow(lines, cursors.get(sid))
+        const fresh = w.fresh.join("\n\n")
+        if (fresh.length < MIN_NOTES_CHARS) return
+        notes = windowNotes(w.context.join("\n\n").slice(-CONTEXT_CHARS), fresh.slice(-MAX_NOTES_CHARS))
+        next = w.next
+      }
       model = model ?? envModel()
       if (!model) {
         say(
@@ -1262,6 +1522,7 @@ export const GeneseedLearn = async (ctx) => {
       }
 
       await storeDistil(output, { isChild, memDir, agentName, existing })
+      if (next !== null) cursors.set(sid, next) // only a distil that reached the store moves the cursor
     } catch (err) {
       // Never break the session over a memory write.
       say(`skipped: ${err?.message ?? err}`)
@@ -1270,7 +1531,26 @@ export const GeneseedLearn = async (ctx) => {
     }
   }
 
+  // The helper is the geneseed-workflow plugin's pattern: the `tool()` wrapper when this OpenCode ships it,
+  // else a raw definition. Only string and number arguments: an object schema once wedged tool registration.
+  let toolHelper
+  try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) } catch { toolHelper = null }
+  const searchDef = {
+    description: MEMORY_SEARCH_DESCRIPTION,
+    args: toolHelper
+      ? {
+          query: toolHelper.schema.string().describe(QUERY_DESCRIPTION),
+          limit: toolHelper.schema.number().optional().describe(LIMIT_DESCRIPTION),
+        }
+      : {
+          query: { type: "string", description: QUERY_DESCRIPTION },
+          limit: { type: "number", description: LIMIT_DESCRIPTION },
+        },
+    async execute(argv) { return memorySearchText(argv) },
+  }
+
   return {
+    tool: { memory_search: toolHelper ? toolHelper(searchDef) : searchDef },
     event: async ({ event }) => {
       if (!event) return
       const sid =
@@ -1293,6 +1573,7 @@ export const GeneseedLearn = async (ctx) => {
         timers.delete(sid)
         ours.delete(sid)
         lastReply.delete(sid)
+        cursors.delete(sid)
         return
       }
       if (event.type !== "session.idle") return
@@ -1354,13 +1635,14 @@ function flattenV2(messages) {
       if (m.model?.providerID && m.model?.id) model = m.model
     }
   }
-  return { notes: lines.join("\n\n"), model }
+  return { notes: lines.join("\n\n"), model, lines }
 }
 
 async function setupV2(ctx) {
   const root = ctx?.location?.project?.directory || ctx?.location?.directory || process.cwd()
   const timers = new Map()
   const inFlight = new Set()
+  const cursors = new Map() // sid -> text messages already mined (D4/D6), in-process as on V1
   let warnedNoDir = false
 
   async function runDistill(sid) {
@@ -1391,9 +1673,18 @@ async function setupV2(ctx) {
         return
       }
 
-      let { notes, model } = flattenV2(messages ?? (await ctx.session.context({ sessionID: sid })))
-      if (notes.length < MIN_NOTES_CHARS) return
-      notes = notes.slice(-MAX_NOTES_CHARS)
+      let { notes, model, lines } = flattenV2(messages ?? (await ctx.session.context({ sessionID: sid })))
+      let next = null
+      if (isChild) {
+        if (notes.length < MIN_NOTES_CHARS) return
+        notes = notes.slice(-MAX_NOTES_CHARS)
+      } else {
+        const w = freshWindow(lines, cursors.get(sid))
+        const fresh = w.fresh.join("\n\n")
+        if (fresh.length < MIN_NOTES_CHARS) return
+        notes = windowNotes(w.context.join("\n\n").slice(-CONTEXT_CHARS), fresh.slice(-MAX_NOTES_CHARS))
+        next = w.next
+      }
       if (!model) {
         const env = envModel()
         model = env ? { providerID: env.providerID, id: env.modelID } : null
@@ -1411,11 +1702,33 @@ async function setupV2(ctx) {
         prompt, model: { providerID: model.providerID, id: model.id, ...(model.variant ? { variant: model.variant } : {}) },
       })
       await storeDistil(String(reply?.text ?? ""), { isChild, memDir, agentName, existing })
+      if (next !== null) cursors.set(sid, next)
     } catch (err) {
       say(`skipped: ${err?.message ?? err}`)
     } finally {
       inFlight.delete(sid)
     }
+  }
+
+  // V2 registers a tool through tool.transform with a plain JSON-schema input (geneseed-workflow's shape).
+  try {
+    await ctx.tool?.transform?.((editor) => {
+      editor.add({
+        name: "memory_search",
+        description: MEMORY_SEARCH_DESCRIPTION,
+        input: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: QUERY_DESCRIPTION },
+            limit: { type: "number", description: LIMIT_DESCRIPTION },
+          },
+          required: ["query"],
+        },
+        execute: async (input) => ({ content: await memorySearchText(input) }),
+      })
+    })
+  } catch (err) {
+    say(`memory_search tool not registered: ${err?.message ?? err}`)
   }
 
   const controller = new AbortController()
@@ -1427,6 +1740,7 @@ async function setupV2(ctx) {
         const t = timers.get(sid)
         if (t) clearTimeout(t)
         timers.delete(sid)
+        cursors.delete(sid)
         continue
       }
       if (ev.type !== "session.execution.succeeded") continue

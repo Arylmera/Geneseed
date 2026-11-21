@@ -24,7 +24,7 @@ function rig() {
   fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');
   fs.mkdirSync(path.join(tier, 'memory'), { recursive: true });
   const transcript = path.join(sb.path, 't.jsonl');
-  fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows' } })}\n`);
+  fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows '.repeat(8) } })}\n`);
   const reply = path.join(sb.path, 'reply.md');
   fs.writeFileSync(reply, REPLY);
   const log = path.join(sb.path, 'calls.log');

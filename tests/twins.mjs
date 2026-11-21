@@ -65,6 +65,8 @@ export const TWINS = [
   ['decl', 'normalizeRun', 'js/hosts/hooks-done.mjs', plugin('context')],
   ['block', 'spec-feedback', 'js/hosts/spec-feedback.mjs', plugin('learn')],
   ['block', 'agent-runs', 'js/hosts/agent-runs.mjs', plugin('learn')],
+  ['block', 'memory-search', 'js/hosts/memory-search.mjs', plugin('learn')],
+  ['block', 'learn cursor', 'js/hosts/hooks-learn.mjs', plugin('learn')],
   ['block', 'done-check tables', 'js/hosts/done-checks.mjs', plugin('context')],
   ['block', 'ownership shape', 'js/hosts/ownership-gate.mjs', plugin('guard')],
   ['block', 'ownership shape', 'js/hosts/ownership-gate.mjs', plugin('context')],

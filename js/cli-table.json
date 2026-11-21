@@ -1546,8 +1546,8 @@
     },
     {
       "name": "memory",
-      "help": "manage the memory store: list, remove, or rebuild the index",
-      "description": "manage the memory store: list the facts the agent reads, remove one by name (archived into memory/archive/; --purge deletes), or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
+      "help": "manage the memory store: list, search, remove, or rebuild the index",
+      "description": "manage the memory store: list the facts the agent reads, search them by words (best matches first, --limit), remove one by name (archived into memory/archive/; --purge deletes), or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
       "positionals": [
         {
           "names": [],
@@ -1556,6 +1556,7 @@
           "help": "",
           "choices": [
             "list",
+            "search",
             "rm",
             "consolidate"
           ],
@@ -1570,7 +1571,7 @@
           "names": [],
           "dest": "name",
           "metavar": null,
-          "help": "the fact to remove, spelled as its filename without the .md",
+          "help": "the fact to remove, spelled as its filename without the .md; for search, the words to look for (quote several words)",
           "choices": null,
           "default": null,
           "required": false,
@@ -1594,6 +1595,21 @@
           "nargs": null,
           "is_flag": false,
           "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--limit"
+          ],
+          "dest": "limit",
+          "metavar": null,
+          "help": "search: how many matches to print (default: 10)",
+          "choices": null,
+          "default": 10,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": "int",
           "hidden": false
         },
         {

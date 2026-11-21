@@ -146,7 +146,7 @@ function rig(extra = {}) {
   fs.mkdirSync(path.join(inst, 'memory'), { recursive: true });
   fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');   // an install: its memory/ is a store a job may name
   const transcript = path.join(sb.path, 't.jsonl');
-  fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows' } })}\n`
+  fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows '.repeat(8) } })}\n`
     + `${JSON.stringify({ message: { role: 'assistant', content: 'cp1252 is the console code page' } })}\n`);
   const reply = path.join(sb.path, 'reply.md');
   fs.writeFileSync(reply, '---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact.\n');
@@ -181,6 +181,9 @@ test('Stop and SubagentStop call no model; PreCompact and SessionEnd do (D8)', (
     // The one run also asked the queued sub-agent's lesson: two calls in all, one session.
     assert.equal(r.calls().length, 2);
     fs.rmSync(r.fact);
+    // PreCompact mined the transcript: SessionEnd has something to distil only after the session went on (O8).
+    fs.appendFileSync(r.transcript, `${JSON.stringify({ message: { role: 'user', content: 'and now the same failure on macos '.repeat(8) } })}
+`);
     r.run({ ...base, hook_event_name: 'SessionEnd' });
     assert.ok(fs.existsSync(r.fact), 'SessionEnd distils');
     assert.equal(r.calls().length, 3, 'the queue was taken: one call this time');
@@ -199,7 +202,7 @@ test('SessionEnd starts a detached worker: the hook returns first, the job runs,
     assert.equal(fs.readdirSync(jobs).filter((n) => /^job-.*\.json$/.test(n)).length, 1, 'the job is written');
     assert.ok(!fs.existsSync(r.fact), 'the hook did not wait for the model');
     assert.ok(await until(() => fs.existsSync(r.fact)), 'the worker wrote the memory');
-    assert.ok(await until(() => fs.readdirSync(jobs).length === 0), 'the worker deleted its job');
+    assert.ok(await until(() => fs.readdirSync(jobs).filter((n) => n.startsWith('job-')).length === 0), 'the worker deleted its job (the session cursor stays beside it)');
   } finally { r.sb.cleanup(); }
 });
 

@@ -21,10 +21,10 @@ The agent works every task itself, turn by turn. Nothing is spawned; you talk to
 
 The session sorts every request:
 
-- **Delegated** — handed to one **task worker** running in the background. The session tells you it is running and stays free to answer you. A task is delegated when any one of these holds: it will run a command longer than about a minute (a test suite, a build, a canary), it will change three or more files, or it can run beside work already in flight while you keep talking.
-- **Inline** — none of those holds: a question, a read-and-explain, an edit to one or two files with a quick check, a short investigation. Done directly, as in direct mode.
+- **Delegated** — handed to one **task worker** running in the background. The session tells you it is running and stays free to answer you. A task is delegated when any one of these holds: it will run a command longer than about a minute (a test suite, a build, a canary), it can run beside work already in flight while you keep talking, or it will change five or more files.
+- **Inline** — none of those holds: a question, a read-and-explain, an edit to up to four files with a quick check, a short investigation. Done directly, as in direct mode.
 
-When the session is unsure, it delegates. The test is still a count, because "substantial" left to judgement lost every time to the host's own default of doing small work in place. The count asks what would block the session, not how big the task looks.
+When the session is unsure, it does the task inline. A worker is not free. It starts with its own instructions and tool list (about 80k tokens on Claude Code, measured in November 2026), reads them again on every turn, and its diff gets a blind review. Over a month of sessions, a commit made in foreman mode cost about 55 % more tokens than one made in direct mode. So the session delegates only what pays that back: a task that would block it, work that runs beside other work, or a change large enough to fill a context of its own. The test is still a count, not a feeling, so the host's own habits cannot move it. The session always starts a worker as the `developer` agent, never as a general-purpose one, because only that agent's spec carries the task-worker bounds.
 
 ### No dispatch tool, no foreman
 
@@ -49,7 +49,7 @@ A worker can lead a small team inside its own worktree. It can start read-only h
 
 A value you set yourself is kept. On Claude Code and OpenCode, the value 2 is read as session → worker → sub-worker; that reading is the design's, not yet observed live on either host.
 
-When a worker returns green with a diff that touches two or more files or changes logic, the session sends a `reviewer` only your request and the diff — never the worker's reasoning — for a blind check. A failing verdict goes back to the same worker.
+When a worker returns green with a diff that touches two or more files or changes logic, the session sends a `reviewer` only your request and the diff — never the worker's reasoning — for a blind check. A failing verdict goes back to the same worker, with all its findings in one message and without delay: a worker that waits more than a few minutes loses its prompt cache and pays its whole context again when it resumes. A task gets one full review and at most one delta review, which sees only the diff since the last review. Non-blocking findings are fixed by the worker and proven by the session's re-run, with no new review. A task that still fails the delta review comes to you. One task once went through six reviews before this bound.
 
 The session keeps a ledger in its notebook (`notebook/foreman-ledger.md`), one line per task: the task, the agent id, the worktree and the state. A correction, a follow-up or a reviewer finding goes back to **the same worker**, which resumes with everything it already knows. Each host resumes a worker its own way:
 
