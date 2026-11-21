@@ -161,8 +161,12 @@ export function rebuildAll() {
   }
   const failures = [];
   // D10: which Claude-family installs hold no learn command now, so the ones that start learning are said once.
-  const learnCmd = ([host, scope, root]) => (host === 'claude' || host === 'openclaude'
-    ? claudeReadManifest(claudeCfg(root, scope, host)).managed?.settings_env?.GENESEED_LLM ?? null : null);
+  // The recorded command (O13: `learn_command`), else an older build's `settings_env` record.
+  const learnCmd = ([host, scope, root]) => {
+    if (host !== 'claude' && host !== 'openclaude') return null;
+    const managed = claudeReadManifest(claudeCfg(root, scope, host)).managed;
+    return managed?.learn_command ?? managed?.settings_env?.GENESEED_LLM ?? null;
+  };
   const before = new Map(targets.map((t) => [t, learnCmd(t)]));
   for (const [host, scope, root] of targets) {
     const label = `${host}:${scope} (${root})`;

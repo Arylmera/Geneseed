@@ -2,6 +2,7 @@
 
 > {{DESC_VISIONARY}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs the bold, transformative version argued against incrementalism.

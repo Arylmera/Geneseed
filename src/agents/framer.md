@@ -2,6 +2,7 @@
 
 > {{DESC_FRAMER}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a test of the framing — is this the right problem.

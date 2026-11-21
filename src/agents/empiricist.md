@@ -2,6 +2,7 @@
 
 > {{DESC_EMPIRICIST}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs every claim, for and against, held to evidence.

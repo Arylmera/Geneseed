@@ -2,6 +2,7 @@
 
 > {{DESC_HISTORIAN}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs precedent and institutional memory.

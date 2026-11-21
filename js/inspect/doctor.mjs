@@ -83,15 +83,18 @@ export function commandOnPath(word, env = process.env, exists = existsSync, plat
 
 /**
  * D9: the one case where `active` would lie. An install whose learn command (`$GENESEED_LLM`, from its
- * settings or the shell) names a first word the hook's PATH does not hold learns nothing. A NOTE and never a
+ * settings or the shell, else the recorded command of its `--learn-model`) names a first word the hook's PATH
+ * does not hold learns nothing. A NOTE and never a
  * problem: doctor runs in a terminal whose PATH may differ from the one the host app hands its hooks.
  */
 export function learnCommandNotes(installs, env = process.env, onPath = commandOnPath) {
   const seen = new Set();
   const notes = [];
-  for (const { host, settingsEnv = [] } of installs) {
+  for (const { host, settingsEnv = [], baked = null } of installs) {
     if (host === 'opencode' || host === 'bob') continue;
-    const llm = [...settingsEnv].reverse().find((e) => e && typeof e === 'object' && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+    // The user's `$GENESEED_LLM` wins in the hook; else the command its `--learn-model` gives, as recorded (O13).
+    const llm = [...settingsEnv].reverse().find((e) => e && typeof e === 'object' && e.GENESEED_LLM)?.GENESEED_LLM
+      || env.GENESEED_LLM || baked || '';
     const word = String(llm).trim().split(/\s+/)[0];
     if (!word || seen.has(`${host} ${word}`) || onPath(word, env)) continue;
     seen.add(`${host} ${word}`);
