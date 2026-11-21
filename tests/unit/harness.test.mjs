@@ -119,7 +119,7 @@ test('writeMemories writes the new fact, skips the duplicate and indexes both', 
       + '---FILE---\n---\nname: dup\ndescription: x\n---\nbody';
     const written = writeMemories(out, d, new Set(['dup']));
 
-    assert.deepEqual(written, { created: ['new-fact'], updated: [], archived: [] });
+    assert.deepEqual(written, { created: ['new-fact'], updated: [], archived: [], skipped: [] });
     assert.ok(fs.statSync(path.join(d, 'new-fact.md')).isFile());
     assert.ok(!fs.existsSync(path.join(d, 'dup.md')),
       'a slug the caller declared as existing was overwritten');
@@ -206,7 +206,7 @@ test('writeMemories adds to an existing topic and recounts the map', () => {
   });
 });
 
-const NONE = { created: [], updated: [], archived: [] };
+const NONE = { created: [], updated: [], archived: [], skipped: [] };
 
 // `action: update` REPLACES the stored fact with the model's merged text, under the STORED
 // spelling (the model wrote `Pref`, the file is `pref.md`), with the `action:` line dropped:
@@ -331,10 +331,14 @@ test('the learn prompt lists stored facts with descriptions, and the topics in u
     factFile(d, 'alpha', 'description: A desc', 'topic: build');
     factFile(d, 'beta', 'type: build');
     factFile(d, 'gamma', 'description: G');
+    // Newest first (the list is the newest facts, then the best matches for the notes): the times are set, not left to the clock.
+    for (const [slug, at] of [['alpha', 1000], ['beta', 2000], ['gamma', 3000]]) {
+      fs.utimesSync(path.join(d, `${slug}.md`), at, at);
+    }
     const prompt = buildLearnPrompt('the notes', readFacts(d));
     assert.ok(prompt.includes(
       "ALREADY STORED — 'slug — description', to update or archive, never to create:\n"
-      + '- alpha — A desc\n- beta\n- gamma — G\n\nTOPICS IN USE:\nbuild, misc\n\nNOTES:\nthe notes'),
+      + '- gamma — G\n- beta\n- alpha — A desc\n\nTOPICS IN USE:\nbuild, misc\n\nNOTES:\nthe notes'),
     prompt);
     assert.ok(prompt.includes("'action: update'") && prompt.includes("'action: archive'"));
     assert.ok(prompt.includes('When in doubt, output exactly: NOTHING.'));
@@ -351,7 +355,7 @@ test('the learn prompt caps the stored-fact list and says how many it left out',
     }
     const prompt = buildLearnPrompt('n', readFacts(d));
     const shown = prompt.split('\n').filter((l) => l.startsWith('- fact-')).length;
-    const m = /^\((\d+) more stored facts not shown\)$/m.exec(prompt);
+    const m = /^\((\d+) more stored facts not shown: /m.exec(prompt);
     assert.ok(m, 'the cut was not reported');
     assert.equal(shown + Number(m[1]), 300);
     assert.ok(shown > 0 && shown * 72 <= 8000, `${shown} lines shown`);
@@ -528,7 +532,7 @@ test('learn (bob) returns immediately when the Stop payload has no transcript', 
 // all — not an empty index, which would look like a store that had been cleared.
 test('a NOTHING answer writes no files', () => {
   withDir((d) => {
-    assert.deepEqual(writeMemories('NOTHING', d, new Set()), { created: [], updated: [], archived: [] });
+    assert.deepEqual(writeMemories('NOTHING', d, new Set()), { created: [], updated: [], archived: [], skipped: [] });
     assert.ok(!fs.existsSync(path.join(d, 'MEMORY.md')));
   });
 });

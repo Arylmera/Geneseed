@@ -16,7 +16,7 @@
  */
 import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
@@ -24,6 +24,7 @@ import { normcase } from '../lib/paths.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
+import { DUPLICATE_SIMILARITY, nearestFact } from './memory-search.mjs';
 
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
 const FILE_SEP_RE = /^---FILE---[^\S\n]*$/m;
@@ -177,8 +178,9 @@ function topicSlug(raw) {
 const topicOf = (fm) => topicSlug(fmGet(fm, 'topic') || fmGet(fm, 'type'));
 
 /**
- * Every fact on disk, in the index's sort order: slug -> { desc, topic }. Top level only, so
- * `archive/` and `agents/` are never facts. Exported for learn's prompt, which lists them.
+ * Every fact on disk, in the index's sort order: slug -> { desc, topic, body, mtime }. Top level only,
+ * so `archive/` and `agents/` are never facts. Exported for learn's prompt, which lists them. `body`
+ * and `mtime` (ms) are what `./memory-search.mjs` ranks by: the text, and which facts are newest.
  */
 export function readFacts(memDir) {
   const facts = new Map();
@@ -186,8 +188,9 @@ export function readFacts(memDir) {
     const s = stem(name);
     if (isReservedStem(s)) continue;
     try {
-      const [fm] = frontmatter(readText(path.join(memDir, name)));
-      facts.set(s, { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm) });
+      const file = path.join(memDir, name);
+      const [fm, body] = frontmatter(readText(file));
+      facts.set(s, { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm), body: body.trim(), mtime: statSync(file).mtimeMs });
     } catch { continue; }
   }
   return facts;
@@ -373,16 +376,24 @@ export function archiveFact(memDir, slug) {
  * case variant of a stored slug would overwrite it. An update or archive therefore acts on
  * the STORED spelling, whatever case the model used.
  *
- * Returns `{ created, updated, archived }`, each a list of slugs.
+ * A CREATE THAT REPEATS A STORED FACT IS NOT WRITTEN (D9). The prompt lists the stored facts that match the
+ * notes (`pickStored`), but a model can still restate one under a new slug, and a store that grows a copy per
+ * distil is the failure this guards (a work machine reached ~1 200 facts in a week). A create whose
+ * `nearestFact` similarity reaches DUPLICATE_SIMILARITY is skipped and named in `skipped`, for the caller to
+ * report: never silent, because a false skip loses a fact. The fix is the model's to make, as an `action: update`.
+ *
+ * Returns `{ created, updated, archived, skipped }`; the first three are lists of slugs, `skipped` of
+ * `<slug>: near-duplicate of <stored slug>, skipped` lines.
  */
 export function writeMemories(modelOutput, memDir, existing) {
   const stored = new Map([...existing].map((s) => [s.toLowerCase(), s]));
   const done = new Set();
-  const res = { created: [], updated: [], archived: [] };
+  const res = { created: [], updated: [], archived: [], skipped: [] };
+  let corpus = null;   // the stored facts, read once and only when a create needs them
   for (let chunk of modelOutput.split(FILE_SEP_RE)) {
     chunk = chunk.trim();
     if (!chunk || chunk.toUpperCase() === 'NOTHING') continue;
-    const [fm] = frontmatter(chunk);
+    const [fm, text] = frontmatter(chunk);
     const name = fmGet(fm, 'name').trim();
     const key = name.toLowerCase();
     const action = fmGet(fm, 'action').trim().toLowerCase() || 'create';
@@ -391,6 +402,15 @@ export function writeMemories(modelOutput, memDir, existing) {
     if (slug && action !== 'create' && hasForce(memDir, slug)) continue;
     const body = `${stripAction(chunk).replace(/\n+$/, '')}\n`;
     if (action === 'create' && !slug) {
+      corpus ??= readFacts(memDir);
+      const fact = { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm), body: text.trim() };
+      const near = nearestFact(corpus, { slug: name, ...fact });
+      if (near && near.similarity >= DUPLICATE_SIMILARITY) {
+        res.skipped.push(`${name}: near-duplicate of ${near.slug}, skipped`);
+        done.add(key);
+        continue;
+      }
+      corpus.set(name, fact);
       writeText(path.join(memDir, `${name}.md`), body);
       existing.add(name);
       stored.set(key, name);

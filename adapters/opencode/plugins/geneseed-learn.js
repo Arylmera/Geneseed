@@ -182,7 +182,32 @@ async function sovereignBypass(cwd) {
 }
 
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
-const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
+const MIN_NOTES_CHARS = 200            // below this, the new part of a session is too trivial to mine
+const CONTEXT_CHARS = 2000             // the most context the cursor window carries
+// The cursor window (D4): a twin of the one in js/hosts/hooks-learn.mjs.
+// ---- learn cursor twin: BEGIN
+/** Messages before the cursor that ride along as context, so the first new turn is not read cold. */
+const CONTEXT_MESSAGES = 2;
+
+/**
+ * Split a session's messages at its cursor (how many were already mined): `fresh` is what a distil mines, `context`
+ * the last CONTEXT_MESSAGES before it, and `next` the cursor a successful distil moves to. A cursor that is not a
+ * whole number inside the list (a compacted session now holds fewer messages than it did) starts over at 0.
+ *
+ * WHY: every distil re-read the last 16k of the whole session, so a 3-turn session was mined 3 times over turn 1
+ * and a long one by each PreCompact and SessionEnd over the same text. Each region is now mined once.
+ */
+function freshWindow(items, cursor) {
+  const at = Number.isInteger(cursor) && cursor >= 0 && cursor <= items.length ? cursor : 0;
+  return { context: items.slice(Math.max(0, at - CONTEXT_MESSAGES), at), fresh: items.slice(at), next: items.length };
+}
+
+/** The notes of a window: the context marked as not to be mined, then the new turns; no marks without context. */
+function windowNotes(contextText, freshText) {
+  if (!contextText) return freshText;
+  return `CONTEXT (earlier turns, already mined; read them to follow the new ones, never distil from them):\n${contextText}\n\nNEW TURNS (distil from these):\n${freshText}`;
+}
+// ---- learn cursor twin: END
 // NaN-safe: garbage in the env var would make setTimeout fire immediately (NaN
 // delay → 0), distilling after EVERY turn instead of at session end.
 const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
@@ -894,7 +919,7 @@ function flatten(messages) {
       if (providerID && modelID) model = { providerID, modelID }
     }
   }
-  return { notes: lines.join("\n\n"), model }
+  return { notes: lines.join("\n\n"), model, lines }
 }
 
 function envModel() {
@@ -916,24 +941,143 @@ async function existingSlugs(memDir) {
   return new Set((await listMd(memDir)).map((f) => f.slice(0, -3)).filter((s) => !isReservedStem(s)))
 }
 
+// The BM25 search behind the ALREADY STORED list and the near-duplicate guard: a copy of
+// js/hosts/memory-search.mjs (its docblock says why).
+// ---- memory-search twin: BEGIN
+/** How many of the newest facts are always listed, whatever the notes say. */
+const RECENT_FACTS = 10;
+/**
+ * A new fact is SKIPPED as a near-duplicate of a stored one at or above this similarity (0..1, see
+ * `nearestFact`). Conservative on purpose: a false skip loses a fact for good, a false create costs one
+ * duplicate that `consolidate` or the next distil can merge. Measured on tests/unit/memory_search.test.mjs:
+ * a reworded copy of the same claim scores above 0.8, two different facts of one topic below 0.35.
+ */
+const DUPLICATE_SIMILARITY = 0.7;
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+
+/** Lower-case words: split on anything that is not a letter or a digit, one-letter words dropped, no stemming. */
+function tokenize(text) {
+  return String(text ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 1);
+}
+
+/** What a fact is searched by: its slug's words, description, topic and body. */
+function factText(slug, fact) {
+  return `${slug.replace(/[-_]+/g, ' ')} ${fact?.desc ?? ''} ${fact?.topic ?? ''} ${fact?.body ?? ''}`;
+}
+
+function termFrequencies(text) {
+  const tf = new Map();
+  let len = 0;
+  for (const t of tokenize(text)) { tf.set(t, (tf.get(t) ?? 0) + 1); len += 1; }
+  return { tf, len };
+}
+
+/** The corpus statistics BM25 needs, over `facts` (slug -> fact). */
+function searchIndex(facts) {
+  const slugs = [];
+  const docs = [];
+  const df = new Map();
+  let total = 0;
+  for (const [slug, fact] of facts) {
+    const doc = termFrequencies(factText(slug, fact));
+    for (const t of doc.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+    slugs.push(slug);
+    docs.push(doc);
+    total += doc.len;
+  }
+  return { slugs, docs, df, avg: total / (docs.length || 1) || 1 };
+}
+
+// The `1 +` form keeps idf positive for a word in every document, so a small store never scores below zero.
+const idf = (ix, term) => {
+  const n = ix.df.get(term) ?? 0;
+  return Math.log(1 + (ix.docs.length - n + 0.5) / (n + 0.5));
+};
+
+function bm25(ix, terms, doc) {
+  let score = 0;
+  for (const t of terms) {
+    const f = doc.tf.get(t);
+    if (f) score += (idf(ix, t) * f * (BM25_K1 + 1)) / (f + BM25_K1 * (1 - BM25_B + (BM25_B * doc.len) / ix.avg));
+  }
+  return score;
+}
+
+/** Slugs whose text shares a word with `query`, best match first (ties in store order); no match, no entry. */
+function rankFacts(facts, query) {
+  const ix = searchIndex(facts);
+  const terms = [...new Set(tokenize(query))];
+  const hits = [];
+  ix.docs.forEach((doc, i) => {
+    const score = bm25(ix, terms, doc);
+    if (score > 0) hits.push({ slug: ix.slugs[i], score });
+  });
+  return hits.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * The stored fact closest to `candidate` (`{ slug, desc, topic, body }`), as `{ slug, similarity }`, or null
+ * for an empty store. SIMILARITY is the BM25 score of the stored fact for the candidate's words, divided by
+ * the score the candidate would get from a document identical to itself, so 1 is "says the same, in the same
+ * words" and a word the store has never seen costs the candidate its share. Capped at 1.
+ */
+function nearestFact(facts, candidate) {
+  const ix = searchIndex(facts);
+  if (!ix.docs.length) return null;
+  const own = termFrequencies(factText(candidate.slug, candidate));
+  const terms = [...own.tf.keys()];
+  const ceiling = bm25(ix, terms, own);
+  if (!ceiling) return null;
+  let best = null;
+  ix.docs.forEach((doc, i) => {
+    const similarity = Math.min(1, bm25(ix, terms, doc) / ceiling);
+    if (!best || similarity > best.similarity) best = { slug: ix.slugs[i], similarity };
+  });
+  return best;
+}
+
+/** One line of the ALREADY STORED list. */
+const storedLine = (slug, desc) => (desc ? `- ${slug} — ${desc}` : `- ${slug}`);
+
+/**
+ * The slugs the prompt lists as ALREADY STORED, in listing order: the `recent` newest by mtime, then the
+ * best BM25 matches for `notes`, each once, while their lines fit in `maxChars`. The first line that
+ * does not fit ends the list, so a better match is never traded for a worse, shorter one.
+ */
+function pickStored(facts, notes, maxChars, recent = RECENT_FACTS) {
+  const newest = [...facts.entries()].sort((a, b) => (b[1].mtime ?? 0) - (a[1].mtime ?? 0))
+    .slice(0, recent).map(([slug]) => slug);
+  const seen = new Set();
+  const picked = [];
+  let used = 0;
+  for (const slug of [...newest, ...rankFacts(facts, notes).map((h) => h.slug)]) {
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+    const line = storedLine(slug, facts.get(slug).desc);
+    if (used + line.length > maxChars) break;
+    picked.push(slug);
+    used += line.length + 1;
+  }
+  return picked;
+}
+// ---- memory-search twin: END
+
 // The stored facts' lines are capped at MAX_STORED_CHARS, a twin of buildLearnPrompt in
-// js/hosts/hooks-learn.mjs: a store of hundreds of facts would otherwise outgrow the notes.
-// A fact past the cap is only unlisted — writeMemories still refuses to create its slug.
+// js/hosts/hooks-learn.mjs: a store of hundreds of facts would otherwise outgrow the notes. WHICH
+// facts fit is pickStored's call (the newest ten, then the best matches for the notes), not the
+// alphabet's: that cut hid the fact the previous distil had just written.
+// A fact past the cap is only unlisted — writeMemories still refuses to create its slug and skips a near-duplicate of it.
 const MAX_STORED_CHARS = 8000
 function buildPrompt(notes, facts) {
   const parts = [LEARN_PROMPT_HEAD, ""]
   if (facts.size) {
     parts.push("ALREADY STORED — 'slug — description', to update or archive, never to create:")
-    let used = 0
-    let shown = 0
-    for (const [slug, { desc }] of facts) {
-      const line = desc ? `- ${slug} — ${desc}` : `- ${slug}`
-      if (used + line.length > MAX_STORED_CHARS) break
-      parts.push(line)
-      used += line.length + 1
-      shown += 1
+    const shown = pickStored(facts, notes, MAX_STORED_CHARS)
+    for (const slug of shown) parts.push(storedLine(slug, facts.get(slug).desc))
+    if (shown.length < facts.size) {
+      parts.push(`(${facts.size - shown.length} more stored facts not shown: the newest and the closest to the notes are listed)`)
     }
-    if (shown < facts.size) parts.push(`(${facts.size - shown} more stored facts not shown)`)
     parts.push("", "TOPICS IN USE:", [...new Set([...facts.values()].map((f) => f.topic))].sort().join(", "), "")
   }
   parts.push("NOTES:", notes)
@@ -991,7 +1135,8 @@ async function archiveFact(memDir, slug) {
 async function writeMemories(output, memDir, existing) {
   const stored = new Map([...existing].map((s) => [s.toLowerCase(), s]))
   const done = new Set()
-  const res = { created: [], updated: [], archived: [] }
+  const res = { created: [], updated: [], archived: [], skipped: [] }
+  let corpus = null // the stored facts, read once and only when a create needs them
   for (let chunk of output.split(/^---FILE---\s*$/m)) {
     chunk = chunk.trim()
     if (!chunk || chunk.toUpperCase() === "NOTHING") continue
@@ -1004,6 +1149,16 @@ async function writeMemories(output, memDir, existing) {
     if (slug && action !== "create" && (await hasForce(memDir, slug))) continue
     const body = stripAction(chunk).replace(/\n+$/, "") + "\n"
     if (action === "create" && !slug) {
+      // A create that repeats a stored fact is skipped and reported (D9), as writeMemories in js/hosts/memory-files.mjs does.
+      corpus ??= await readFacts(memDir)
+      const fact = { desc: (fm.description || "").trim(), topic: topicOf(fm), body: (chunk.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)$/)?.[1] ?? "").trim() }
+      const near = nearestFact(corpus, { slug: name, ...fact })
+      if (near && near.similarity >= DUPLICATE_SIMILARITY) {
+        res.skipped.push(`${name}: near-duplicate of ${near.slug}, skipped`)
+        done.add(key)
+        continue
+      }
+      corpus.set(name, fact)
       await fs.writeFile(path.join(memDir, `${name}.md`), body, "utf8")
       existing.add(name)
       stored.set(key, name)
@@ -1059,15 +1214,22 @@ function topicOf(fm) {
   return raw.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "misc"
 }
 
-// Every top-level fact (never archive/ or agents/), in index order: slug -> { desc, topic }.
+// Every top-level fact (never archive/ or agents/), in index order: slug -> { desc, topic, body, mtime }.
 async function readFacts(memDir) {
   const facts = new Map()
   for (const f of await listMd(memDir)) {
     const slug = f.slice(0, -3)
     if (isReservedStem(slug)) continue
     let fm
-    try { fm = parseFrontmatter((await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")) } catch { continue }
-    facts.set(slug, { desc: (fm.description || "").trim(), topic: topicOf(fm) })
+    let body
+    let mtime
+    try {
+      const text = (await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")
+      fm = parseFrontmatter(text)
+      body = (text.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)$/)?.[1] ?? text).trim()
+      mtime = (await fs.stat(path.join(memDir, f))).mtimeMs
+    } catch { continue }
+    facts.set(slug, { desc: (fm.description || "").trim(), topic: topicOf(fm), body, mtime })
   }
   return facts
 }
@@ -1171,6 +1333,7 @@ async function writeDistil(output, { isChild, memDir, agentName, existing }) {
   for (const [verb, slugs] of [["wrote", res.created], ["updated", res.updated], ["archived", res.archived]]) {
     if (slugs.length) say(`${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`, "info")
   }
+  for (const line of res.skipped) say(line, "info")
 }
 
 export const GeneseedLearn = async (ctx) => {
@@ -1180,6 +1343,9 @@ export const GeneseedLearn = async (ctx) => {
   const timers = new Map()     // sid -> debounce timer, re-armed on each idle
   const inFlight = new Set()   // sid currently being distilled (guards against overlap)
   const lastReply = new Map()  // sid -> id of its newest assistant message (captureTurn)
+  // sid -> how many of its text messages a distil has already mined (D4). In-process, not persisted: after
+  // an OpenCode restart a reopened session is mined once more from its start, the whole cost of losing it.
+  const cursors = new Map()
   let warnedNoDir = false
 
   // The session root, as guard and context use it — not process.cwd(), which is the
@@ -1225,9 +1391,19 @@ export const GeneseedLearn = async (ctx) => {
         return
       }
 
-      let { notes, model } = flatten(messages ?? (await fetchMessages()))
-      if (notes.length < MIN_NOTES_CHARS) return
-      notes = notes.slice(-MAX_NOTES_CHARS)
+      let { notes, model, lines } = flatten(messages ?? (await fetchMessages()))
+      let next = null
+      if (isChild) {
+        if (notes.length < MIN_NOTES_CHARS) return
+        notes = notes.slice(-MAX_NOTES_CHARS)
+      } else {
+        // Only what the last successful distil had not seen, plus two messages of marked context.
+        const w = freshWindow(lines, cursors.get(sid))
+        const fresh = w.fresh.join("\n\n")
+        if (fresh.length < MIN_NOTES_CHARS) return
+        notes = windowNotes(w.context.join("\n\n").slice(-CONTEXT_CHARS), fresh.slice(-MAX_NOTES_CHARS))
+        next = w.next
+      }
       model = model ?? envModel()
       if (!model) {
         say(
@@ -1262,6 +1438,7 @@ export const GeneseedLearn = async (ctx) => {
       }
 
       await storeDistil(output, { isChild, memDir, agentName, existing })
+      if (next !== null) cursors.set(sid, next) // only a distil that reached the store moves the cursor
     } catch (err) {
       // Never break the session over a memory write.
       say(`skipped: ${err?.message ?? err}`)
@@ -1293,6 +1470,7 @@ export const GeneseedLearn = async (ctx) => {
         timers.delete(sid)
         ours.delete(sid)
         lastReply.delete(sid)
+        cursors.delete(sid)
         return
       }
       if (event.type !== "session.idle") return
@@ -1354,13 +1532,14 @@ function flattenV2(messages) {
       if (m.model?.providerID && m.model?.id) model = m.model
     }
   }
-  return { notes: lines.join("\n\n"), model }
+  return { notes: lines.join("\n\n"), model, lines }
 }
 
 async function setupV2(ctx) {
   const root = ctx?.location?.project?.directory || ctx?.location?.directory || process.cwd()
   const timers = new Map()
   const inFlight = new Set()
+  const cursors = new Map() // sid -> text messages already mined (D4/D6), in-process as on V1
   let warnedNoDir = false
 
   async function runDistill(sid) {
@@ -1391,9 +1570,18 @@ async function setupV2(ctx) {
         return
       }
 
-      let { notes, model } = flattenV2(messages ?? (await ctx.session.context({ sessionID: sid })))
-      if (notes.length < MIN_NOTES_CHARS) return
-      notes = notes.slice(-MAX_NOTES_CHARS)
+      let { notes, model, lines } = flattenV2(messages ?? (await ctx.session.context({ sessionID: sid })))
+      let next = null
+      if (isChild) {
+        if (notes.length < MIN_NOTES_CHARS) return
+        notes = notes.slice(-MAX_NOTES_CHARS)
+      } else {
+        const w = freshWindow(lines, cursors.get(sid))
+        const fresh = w.fresh.join("\n\n")
+        if (fresh.length < MIN_NOTES_CHARS) return
+        notes = windowNotes(w.context.join("\n\n").slice(-CONTEXT_CHARS), fresh.slice(-MAX_NOTES_CHARS))
+        next = w.next
+      }
       if (!model) {
         const env = envModel()
         model = env ? { providerID: env.providerID, id: env.modelID } : null
@@ -1411,6 +1599,7 @@ async function setupV2(ctx) {
         prompt, model: { providerID: model.providerID, id: model.id, ...(model.variant ? { variant: model.variant } : {}) },
       })
       await storeDistil(String(reply?.text ?? ""), { isChild, memDir, agentName, existing })
+      if (next !== null) cursors.set(sid, next)
     } catch (err) {
       say(`skipped: ${err?.message ?? err}`)
     } finally {
@@ -1427,6 +1616,7 @@ async function setupV2(ctx) {
         const t = timers.get(sid)
         if (t) clearTimeout(t)
         timers.delete(sid)
+        cursors.delete(sid)
         continue
       }
       if (ev.type !== "session.execution.succeeded") continue
