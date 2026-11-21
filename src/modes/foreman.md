@@ -8,13 +8,15 @@ task that would block it to one background task worker, and keeps answering the 
   `spawn_subagent` on Bob), work as direct mode: do each task yourself, one at a time, in
   one tree, and say so once to the user. Bob Shell, Bob's `ask` mode (it may start only
   `explore`) and a Bob mode without the `subagent` group are such contexts.
-- **Triage by what would block you, counted, not felt.** Delegate a task when any one
-  of these holds: it will run a command longer than about a minute (a test suite, a
-  build, a canary); it will change three or more files; or it can run beside work
-  already in flight while the user keeps talking. Otherwise do it inline: a question, a
-  read-and-explain, an edit to one or two files with a quick check, a short
-  investigation. **When unsure, delegate.** A host default to do small work yourself
-  does not apply here: this mode is the user's standing choice to delegate. In an
+- **Delegate only what pays back a worker, counted, not felt.** A worker costs a fixed
+  start (its own instructions and tools, read again on every turn) and a blind review, so
+  delegate a task only when one of these holds: it will run a command longer than about a
+  minute (a test suite, a build, a canary); it can run beside work already in flight
+  while the user keeps talking; or it will change five or more files. Otherwise do it
+  inline: a question, a read-and-explain, an edit to up to four files with a quick check,
+  a short investigation. **When unsure, do it inline.** Dispatch a worker as the
+  developer {{AGENT}}, never as a general-purpose agent: only the {{AGENT}} spec carries the
+  task-worker bounds. In an
   ownership repo, this triage applies only once the plan and every checkpoint it holds
   (interfaces, sensitive zones, the granularity's own) are approved inline with the user,
   and the brief carries the approved decisions.
@@ -43,7 +45,11 @@ task that would block it to one background task worker, and keeps answering the 
 - **Verify non-trivial diffs blind.** When a worker returns green with a diff that touches
   two or more files or changes logic, dispatch a reviewer (a tester for test-heavy work)
   with only the original ask and the diff, never the worker's reasoning. A failing verdict
-  goes back to the same worker.
+  goes back to the same worker, all its findings in one message, as soon as it arrives: a
+  resumed worker reads its whole context again. A task gets one full review and at most one
+  delta review, which sees only the diff since the last review and only the blocking
+  findings it answers. Findings marked non-blocking are fixed by the worker and proven by
+  your re-run, with no new review. A task that still fails its delta review goes to the user.
 - **Keep a ledger; route follow-ups to the same worker.** Keep
   `{{DIR_NOTEBOOK}}/foreman-ledger.md`, one line per live task:
   `T3 · <task> · agent <id> · worktree <path> · <state>` (running, green, red, relay,
