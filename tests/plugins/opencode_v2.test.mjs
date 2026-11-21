@@ -516,7 +516,7 @@ test("learn: flattenV2 keeps user/assistant text and the last assistant model", 
     { type: "assistant", model: { providerID: "p", id: "m" }, content: [
       { type: "reasoning", text: "hidden" }, { type: "text", text: "answer" }, { type: "tool", name: "x" }] },
   ])
-  assert.deepEqual(out, { notes: "user: question\n\nassistant: answer", model: { providerID: "p", id: "m" } })
+  assert.deepEqual(out, { notes: "user: question\n\nassistant: answer", model: { providerID: "p", id: "m" }, lines: ["user: question", "assistant: answer"] })
 })
 
 test("learn: an execution end distils the transcript into memory/", async () => {

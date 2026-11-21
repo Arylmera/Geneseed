@@ -194,8 +194,16 @@ test('plugin: the index temp name differs per write, so two sessions in one proc
     const real = fs.promises.writeFile;
     fs.promises.writeFile = (f, ...rest) => { if (String(f).endsWith('.tmp')) names.push(path.basename(String(f))); return real(f, ...rest); };
     try {
-      for (const n of ['fact-1', 'fact-2']) await GeneseedLearn.writeMemories(`---FILE---
-${fact(n)}`, mem, new Set());
+      // Two DIFFERENT facts: two copies of one claim would trip the near-duplicate guard and write one index.
+      const texts = ['fact-1', 'fact-2'].map((n, i) => `---
+name: ${n}
+description: ${['windows quoting of percent signs', 'vite chunk hashing of the dist'][i]}
+topic: t${i}
+---
+body ${i}
+`);
+      for (const t of texts) await GeneseedLearn.writeMemories(`---FILE---
+${t}`, mem, new Set());
     } finally { fs.promises.writeFile = real; }
     const index = names.filter((n) => n.startsWith('MEMORY.md.'));
     assert.equal(index.length, 2, names.join(', '));

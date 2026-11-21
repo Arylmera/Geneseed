@@ -722,17 +722,29 @@ test("retrieval + guard through the plugin: a just-written fact is listed with 1
       prompt: async ({ body }) => { prompts.push(body.parts[0].text); return { parts: [{ type: "text", text: out }] } },
     } }
     const hooks = await mod.server({ client, directory: process.cwd() })
-    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
-    assert.ok(await until(() => prompts.length >= 1))
-    await until(() => fsSyncExists(path.join(mem, "topics", "windows.md"))) // the index rebuild is the distil's last write
-    await new Promise((r) => setTimeout(r, 300))
+    // An idle that arrives while a distil runs is dropped, so the next distil starting proves the previous one ended
+    // (1200 facts take a while under load: no fixed sleep decides it).
+    const distilTo = async (n) => {
+      for (let i = 0; i < 400 && prompts.length < n; i += 1) {
+        await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+        await new Promise((r) => setTimeout(r, 75))
+      }
+      assert.ok(prompts.length >= n, `distil ${n} ran`)
+    }
+    await distilTo(1)
     // The next distil, on new turns, must see the fact the first wrote although it sorts last of 1201.
     texts.push(turnText(3), turnText(4))
-    out = `---\nname: zz-stdin-again\ndescription: ${said}\ntopic: windows\n---\nSend it over stdin.`
-    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
-    assert.ok(await until(() => prompts.length >= 2))
+    out = `---
+name: zz-stdin-again
+description: ${said}
+topic: windows
+---
+Send it over stdin.`
+    await distilTo(2)
     assert.ok(prompts[1].includes(`- zz-stdin — ${said}`), "the fact just written is in the next prompt")
-    await new Promise((r) => setTimeout(r, 3000))
+    texts.push(turnText(5), turnText(6))
+    await distilTo(3) // the second distil has ended
+    assert.ok(fsSyncExists(path.join(mem, "zz-stdin.md")), "the first fact was written")
     assert.ok(!fsSyncExists(path.join(mem, "zz-stdin-again.md")), "a restated fact is skipped by the guard")
   } finally { restore() }
 })
