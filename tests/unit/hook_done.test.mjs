@@ -961,6 +961,21 @@ test('learn on SubagentStop: the worker\'s own root and list judge its turn', ()
   assert.equal(parentOnly.ledger, '');
 });
 
+// A relay hand-off is not judged. The relay gate (js/hosts/hooks-relay.mjs) stops a task worker past
+// its context ceiling and tells it to commit and end with `STATUS: RELAY`; blocking that stop for the
+// checks would cost one more turn at the ceiling, and the next worker owes them. Only a report that
+// OPENS with the status counts: the word anywhere else is no hand-off.
+test('learn on SubagentStop: a report that opens with STATUS: RELAY is not judged', () => {
+  const said = (text) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } });
+  const relay = subagentStop({ rows: [prompt('brief'), editWorker, said('STATUS: RELAY\nHandoff: a.test.mjs red; next step x.')] });
+  assert.equal(relay.out, '', relay.err);
+  assert.equal(relay.ledger, '');
+  assert.match(relay.err, /\[done-gate\] STATUS: RELAY — sub-agent turn not judged/);
+  // The same edit with any other report still owes its checks.
+  const ok = subagentStop({ rows: [prompt('brief'), editWorker, said('STATUS: OK\nI did not need a RELAY.')] });
+  assert.equal(JSON.parse(ok.out).decision, 'block');
+});
+
 // Spec 2026-11-18-learn-model-row, D8: a sub-agent's stop calls no model, blocked or allowed. Its lesson is
 // queued (an allowed stop only) and distilled by the session's one run, which tests/unit/learn_worker.test.mjs drives.
 test('learn on SubagentStop: no model runs at the stop, blocked or allowed', () => {
