@@ -347,6 +347,8 @@ function turnOf(transcript, whole, sidechain = false) {
   // Distinct notifications in the turn, by text: the host writes each twice (an attachment and a
   // user line holding the same text), and a set counts it once. The cap reads its size.
   const notes = new Set();
+  // The turn's last assistant text: a relay's report opens with `STATUS: RELAY` (doneGate).
+  let lastText = '';
   for (const obj of entries.slice(start)) {
     if (obj.isSidechain && !sidechain) continue;
     if (typeof obj.cwd === 'string' && obj.cwd) cwd = obj.cwd;
@@ -359,7 +361,9 @@ function turnOf(transcript, whole, sidechain = false) {
     if (!Array.isArray(content)) continue;
     for (const b of content) {
       if (!b || typeof b !== 'object') continue;
-      if (b.type === 'tool_use') {
+      if (b.type === 'text' && obj.type === 'assistant' && typeof b.text === 'string' && b.text.trim()) {
+        lastText = b.text;
+      } else if (b.type === 'tool_use') {
         calls.push(b);
         if (b.input && b.input.run_in_background === true) background.add(b.id);
       } else if (b.type === 'tool_result') {
@@ -372,7 +376,7 @@ function turnOf(transcript, whole, sidechain = false) {
       }
     }
   }
-  return { calls, results, originals, background, finished, cwd, opening, notes: notes.size };
+  return { calls, results, originals, background, finished, cwd, opening, notes: notes.size, lastText };
 }
 
 /**
@@ -601,6 +605,13 @@ export function doneGate(meta, args, install, read = tailReader()) {
     } catch {
       // No ask tier on Stop: blocking on an unreadable transcript would trap the user.
       if (sub ? listed : here.checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
+      return null;
+    }
+    // A relay is a hand-off of unfinished work, not a claim that it is done: the relay gate stopped
+    // the worker past its context ceiling (./hooks-relay.mjs), the next worker owes the checks and the
+    // parent re-runs them before any merge. Blocking here would cost one more turn at that ceiling.
+    if (sub && turn && /^\s*STATUS:\s*RELAY\b/.test(turn.lastText || '')) {
+      err('[done-gate] STATUS: RELAY — sub-agent turn not judged; the next worker owes the checks.\n');
       return null;
     }
     const at = sub ? turn.cwd || cwd : cwd;
