@@ -126,9 +126,14 @@ memory that carries a `force`; revising one stays with the agent and the user.
 The index has two levels, so the part loaded every session stays small however many
 facts the store holds:
 
-- `MEMORY.md` — the map: one line per topic, `- [<topic>](topics/<topic>.md) — <N> facts`.
+- `MEMORY.md` — the map: one line per topic, `- [<topic>](topics/<topic>.md) — <N> facts`,
+  for the 25 largest topics (and `misc`), then one line counting the rest. It stays under
+  about 2 KB however many topics the store grows.
 - `topics/<topic>.md` — one line per fact in that topic,
-  `- [Title](../file.md) — one-line hook`.
+  `- [Title](../file.md) — one-line hook`. Every topic keeps its file, listed or not.
+
+To reach a fact the map does not list, search: `geneseed memory search "<words>"`
+(best matches first, `--limit n`), or the `memory_search` tool on OpenCode.
 
 A fact's topic is its `topic:`, else its `type:`, else `misc`, normalised to
 lowercase `[a-z0-9-]`. Both levels are generated from the fact files:
