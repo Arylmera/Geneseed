@@ -24,7 +24,7 @@ import { normcase } from '../lib/paths.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
-import { DUPLICATE_SIMILARITY, nearestFact } from './memory-search.mjs';
+import { DUPLICATE_SIMILARITY, isMapText, mapBody, nearestFact } from './memory-search.mjs';
 
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
 const FILE_SEP_RE = /^---FILE---[^\S\n]*$/m;
@@ -48,7 +48,6 @@ export const MEMORY_SEED = '# Memory Index\n';
  * facts and lost the newest ones, which is why it was split.
  */
 const TOPICS = 'topics';
-const MAP_HINT = 'Each topic file lists its facts; open the one the task needs.';
 // A fact pointer: `- [title](slug.md)` in a legacy flat index, `- [title](../slug.md)` in a
 // topic file. The slug may not hold a `/`, so a map line (`topics/x.md`) is never a fact.
 const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/;
@@ -221,13 +220,14 @@ export function indexNotes(memDir, generated) {
   return (readLines(path.join(memDir, 'MEMORY.md')) ?? []).filter((l) => {
     const t = l.trim();
     const flat = FACT_LINE_RE.exec(t);
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
+    return t && t !== MEMORY_SEED.trim() && !isMapText(t) && !MAP_LINE_RE.test(t)
       && !(flat && generated(flat[2]));
   });
 }
 
 /**
- * Rewrite MEMORY.md as the map: one line per topic file with its fact count.
+ * Rewrite MEMORY.md as the map: one line per topic file with its fact count, at most
+ * MAP_TOPIC_LINES of them and a count of the rest (`mapBody`, `./memory-search.mjs`).
  *
  * LINES THE MAP DID NOT GENERATE ARE CARRIED, so a note the user wrote into the index
  * survives. `generated(slug)` says which legacy flat fact pointers a rebuild has just moved into
@@ -239,12 +239,10 @@ function writeMap(memDir, generated) {
   const idx = path.join(memDir, 'MEMORY.md');
   const carried = indexNotes(memDir, generated);
   const tdir = path.join(memDir, TOPICS);
-  const topics = globMd(tdir).map(stem).sort().map((t) => {
-    const n = (readLines(path.join(tdir, `${t}.md`)) ?? [])
-      .filter((l) => FACT_LINE_RE.test(l.trim())).length;
-    return `- [${t}](${TOPICS}/${t}.md) — ${n} fact${n === 1 ? '' : 's'}`;
-  });
-  const body = [...(topics.length ? ['', MAP_HINT, '', ...topics] : []),
+  const counts = new Map(globMd(tdir).map(stem).map((t) => [t, (readLines(path.join(tdir, `${t}.md`)) ?? [])
+    .filter((l) => FACT_LINE_RE.test(l.trim())).length]));
+  const map = mapBody(counts);
+  const body = [...(map.length ? ['', ...map] : []),
     ...(carried.length ? ['', ...carried] : [])];
   writeIfChanged(idx, body.length ? `${MEMORY_SEED}${body.join('\n')}\n` : MEMORY_SEED);
 }

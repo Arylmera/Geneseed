@@ -60,7 +60,7 @@ test("learn plugin: a store document is no fact, and the index rebuild matches t
     assert.deepEqual(right, left)
     // The pointer to the store document is carried, the missing fact's goes, the fact's moved (D4).
     assert.equal(left["MEMORY.md"], [
-      "# Memory Index", "", "Each topic file lists its facts; open the one the task needs.", "",
+      "# Memory Index", "", "Each topic file lists its facts; open the one the task needs, or search every fact: `geneseed memory search \"<words>\"` (OpenCode: the `memory_search` tool).", "",
       "- [project](topics/project.md) — 2 facts", "",
       "## Notes", "A line a person wrote.",
       "- [Archive hub](archive-index.md) — old material", ""].join("\n"))

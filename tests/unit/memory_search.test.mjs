@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import {
-  DUPLICATE_SIMILARITY, RECENT_FACTS, nearestFact, pickStored, rankFacts, tokenize,
+  DUPLICATE_SIMILARITY, MAP_TOPIC_LINES, RECENT_FACTS, isMapText, mapBody, nearestFact, pickStored, rankFacts, searchLines, tokenize,
 } from '../../js/hosts/memory-search.mjs';
 import { readFacts, writeMemories } from '../../js/hosts/memory-files.mjs';
 import { buildLearnPrompt } from '../../js/hosts/hooks-learn.mjs';
@@ -152,5 +152,72 @@ test('writeMemories: an update is never judged a duplicate, and an empty store c
   withDir((d) => {
     const res = writeMemories(chunk('first-fact', SAID), d, new Set());
     assert.deepEqual([res.created, res.skipped], [['first-fact'], []]);
+  });
+});
+
+// ---- O10: the bounded map and the search verb's lines ---------------------------------------------------
+
+const HINT = 'Each topic file lists its facts; open the one the task needs, or search every fact: '
+  + '`geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).';
+
+test('mapBody: under the cap every topic is listed by name, with no fold line', () => {
+  // Three topics fit in MAP_TOPIC_LINES (25), so the map is the old one plus the hint that names the search.
+  assert.equal(MAP_TOPIC_LINES, 25);
+  assert.deepEqual(mapBody(new Map([['web', 2], ['build', 1], ['tooling', 3]])), [HINT, '',
+    '- [build](topics/build.md) — 1 fact', '- [tooling](topics/tooling.md) — 3 facts', '- [web](topics/web.md) — 2 facts']);
+  // No topic, no map: an empty store goes back to the seed.
+  assert.deepEqual(mapBody(new Map()), []);
+});
+
+test('mapBody: over the cap the largest 25 are listed by name and the rest are counted on one line', () => {
+  // 30 topics t00..t29 holding 30..1 facts: t00..t24 (30..6 facts) are the largest 25; t25..t29 hold 5+4+3+2+1 = 15.
+  const counts = new Map(Array.from({ length: 30 }, (_, i) => [`t${String(i).padStart(2, '0')}`, 30 - i]));
+  const body = mapBody(counts);
+  assert.equal(body.length, 2 + 25 + 1, 'hint, blank, 25 topics, the fold line');
+  assert.equal(body[2], '- [t00](topics/t00.md) — 30 facts');
+  assert.equal(body[26], '- [t24](topics/t24.md) — 6 facts');
+  assert.equal(body[27], '- … 5 more topics (15 facts) under topics/, reached by the search above');
+});
+
+test('mapBody: misc is always listed, in place of the smallest kept topic, because its line fires the nudge', () => {
+  // 26 topics of 10 facts and a misc of 1: misc is the smallest, so the cap would drop it; it takes the slot of
+  // the last of the 25 by size (ties by name: z24), and the fold counts z24 and z25.
+  const counts = new Map([...Array.from({ length: 26 }, (_, i) => [`z${String(i).padStart(2, '0')}`, 10]), ['misc', 1]]);
+  const body = mapBody(counts);
+  assert.ok(body.includes('- [misc](topics/misc.md) — 1 fact'), 'misc is listed');
+  assert.ok(!body.some((l) => l.startsWith('- [z24]')), 'the smallest kept topic gave misc its slot');
+  assert.equal(body.at(-1), '- … 2 more topics (20 facts) under topics/, reached by the search above');
+});
+
+test('isMapText: the hint, the older hint and the fold line are generated; a line a person wrote is not', () => {
+  // A rebuild drops what it generates and carries the rest, so the hint an older build wrote must read as generated,
+  // or an upgraded store would carry it under the new one forever.
+  assert.equal(isMapText(HINT), true);
+  assert.equal(isMapText('Each topic file lists its facts; open the one the task needs.'), true);
+  assert.equal(isMapText('- … 1 more topic (1 fact) under topics/, reached by the search above'), true);
+  assert.equal(isMapText('## Notes'), false);
+});
+
+test('searchLines: best match first, slug — description (topic), cut at the limit, nothing on no match', () => {
+  // "stdin prompt" names windows-cmd-quoting's body words; no other fact holds both.
+  assert.deepEqual(searchLines(STORE, 'stdin prompt', 1),
+    ['- windows-cmd-quoting — cmd.exe reads percent signs inside quotes, so a prompt never rides the command line (windows)']);
+  assert.deepEqual(searchLines(STORE, 'zzzz-nothing'), []);
+});
+
+test('a rebuild over 300 topics writes a map under 2 KB, and a second rebuild carries nothing twice', () => {
+  // The F13 case: 300 topics made a 13.4 KB map, which the OpenCode context plugin injects whole up to 16 KB and
+  // drops whole above it. Bounded, it is the hint, 25 topic lines and one fold line.
+  withDir((d) => {
+    const out = Array.from({ length: 300 }, (_, i) =>
+      `---\nname: f${i}\ndescription: fact number ${i} of its own\ntopic: topic-${i}\n---\nbody ${i} ${'x'.repeat(i)}`).join('\n---FILE---\n');
+    writeMemories(out, d, new Set());
+    fs.appendFileSync(path.join(d, 'MEMORY.md'), '\n## Notes\nA line a person wrote.\n');
+    writeMemories('---\nname: f300\ndescription: one more distinct fact about the release train\ntopic: release\n---\nShip on Fridays never.', d, new Set());
+    const map = fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8').replace(/\r\n/g, '\n');
+    assert.ok(map.length < 2048, `the map is ${map.length} bytes`);
+    assert.equal(map.split('\n').filter((l) => l.startsWith('- … ')).length, 1, 'one fold line, not carried twice');
+    assert.equal(map.split('\n').filter((l) => l === 'A line a person wrote.').length, 1, 'the person\'s line is carried once');
+    assert.equal(fs.readdirSync(path.join(d, 'topics')).length, 301, 'every topic keeps its file');
   });
 });

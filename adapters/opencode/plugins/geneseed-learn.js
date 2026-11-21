@@ -1061,6 +1061,63 @@ function pickStored(facts, notes, maxChars, recent = RECENT_FACTS) {
   }
   return picked;
 }
+
+/**
+ * The search a person or an agent runs on purpose (`geneseed memory search`, OpenCode's `memory_search` tool):
+ * the best `limit` BM25 matches for `query`, one line each, `slug — description (topic)`. No match, no line.
+ */
+function searchLines(facts, query, limit = 10) {
+  return rankFacts(facts, query).slice(0, limit).map(({ slug }) => {
+    const f = facts.get(slug);
+    return `${storedLine(slug, f.desc)}${f.topic ? ` (${f.topic})` : ''}`;
+  });
+}
+
+/**
+ * THE MAP IS BOUNDED (O10). MEMORY.md is injected at every session start, and it listed every topic: a
+ * store whose distils invent topics freely grew it past 13 KB at 300 topics, and the OpenCode context
+ * plugin drops a session file over 16 KB WHOLE, so a big store loaded with no index at all. The map now
+ * lists MAP_TOPIC_LINES topics, the largest first (and `misc`, whose line is what fires the curation
+ * nudge), then one line counting the rest. A folded topic is still a file under topics/, and every fact
+ * is still reached by the search the hint names.
+ */
+const MAP_TOPIC_LINES = 25;
+const MAP_HINT = 'Each topic file lists its facts; open the one the task needs, or search every fact: '
+  + '`geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).';
+// The hint an older build wrote: a rebuild must drop it as generated, not carry it as a line a person wrote.
+const OLD_MAP_HINTS = new Set(['Each topic file lists its facts; open the one the task needs.']);
+const MAP_FOLD_RE = /^- … \d+ more topics? \(\d+ facts?\) under topics\/, reached by the search above$/;
+
+/** One map line per topic: `- [topic](topics/topic.md) — n facts`. */
+const mapLine = (topic, n) => `- [${topic}](topics/${topic}.md) — ${n} fact${n === 1 ? '' : 's'}`;
+
+/**
+ * The map's generated lines for `counts` (topic -> fact count): the hint, a blank line, the listed topics in
+ * name order, and the fold line when some are left out. The listed ones are the largest, ties by name, with
+ * `misc` always in. No topic, no line.
+ */
+function mapBody(counts) {
+  const all = [...counts.entries()];
+  if (!all.length) return [];
+  const bySize = [...all].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const keep = new Set(bySize.slice(0, MAP_TOPIC_LINES).map(([t]) => t));
+  if (counts.has('misc') && !keep.has('misc')) {
+    keep.delete(bySize[MAP_TOPIC_LINES - 1][0]);
+    keep.add('misc');
+  }
+  const lines = all.filter(([t]) => keep.has(t)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([t, n]) => mapLine(t, n));
+  const rest = all.filter(([t]) => !keep.has(t));
+  if (rest.length) {
+    const facts = rest.reduce((s, [, n]) => s + n, 0);
+    lines.push(`- … ${rest.length} more topic${rest.length === 1 ? '' : 's'} (${facts} fact${facts === 1 ? '' : 's'}) `
+      + 'under topics/, reached by the search above');
+  }
+  return [MAP_HINT, '', ...lines];
+}
+
+/** Is this trimmed MEMORY.md line one the map writer generates (a hint, old or new, or the fold line)? */
+const isMapText = (t) => t === MAP_HINT || OLD_MAP_HINTS.has(t) || MAP_FOLD_RE.test(t);
 // ---- memory-search twin: END
 
 // The stored facts' lines are capped at MAX_STORED_CHARS, a twin of buildLearnPrompt in
@@ -1184,7 +1241,6 @@ async function writeMemories(output, memDir, existing) {
 // already indexed keeps its line (title and hook), a new one gets its description, a topic
 // file no fact uses is deleted, and map lines the build did not generate are carried.
 const MEMORY_SEED = "# Memory Index\n"
-const MAP_HINT = "Each topic file lists its facts; open the one the task needs."
 const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/
 const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/
 
@@ -1258,21 +1314,23 @@ async function rebuildIndex(memDir, fresh = new Set()) {
   }
   if (byTopic.size) await fs.mkdir(tdir, { recursive: true })
   else await fs.rmdir(tdir).catch(() => {})
-  const mapLines = []
+  const counts = new Map()
   for (const topic of [...byTopic.keys()].sort()) {
     const lines = byTopic.get(topic)
     await writeIfChanged(path.join(tdir, `${topic}.md`), `# ${topic}\n\n${lines.join("\n")}\n`)
-    mapLines.push(`- [${topic}](topics/${topic}.md) — ${lines.length} fact${lines.length === 1 ? "" : "s"}`)
+    counts.set(topic, lines.length)
   }
+  // Bounded (the memory-search block's mapBody): at most MAP_TOPIC_LINES topics and a count of the rest.
+  const mapLines = mapBody(counts)
   const index = path.join(memDir, "MEMORY.md")
   // A flat pointer is dropped unless it names a store document (D4): a fact's has moved into its topic file.
   const documents = new Set((await listMd(memDir)).map((f) => f.slice(0, -3).toLowerCase()).filter((s) => !known.has(s)))
   const carried = ((await readLines(index)) ?? []).filter((l) => {
     const t = l.trim()
     const flat = FACT_LINE_RE.exec(t)
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t) && !(flat && !documents.has(flat[2].toLowerCase()))
+    return t && t !== MEMORY_SEED.trim() && !isMapText(t) && !MAP_LINE_RE.test(t) && !(flat && !documents.has(flat[2].toLowerCase()))
   })
-  const body = [...(mapLines.length ? ["", MAP_HINT, "", ...mapLines] : []), ...(carried.length ? ["", ...carried] : [])]
+  const body = [...(mapLines.length ? ["", ...mapLines] : []), ...(carried.length ? ["", ...carried] : [])]
   await writeIfChanged(index, body.length ? MEMORY_SEED + body.join("\n") + "\n" : MEMORY_SEED)
 }
 
@@ -1334,6 +1392,32 @@ async function writeDistil(output, { isChild, memDir, agentName, existing }) {
     if (slugs.length) say(`${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`, "info")
   }
   for (const line of res.skipped) say(line, "info")
+}
+
+// THE memory_search TOOL (O10). The map MEMORY.md lists only the largest topics, so the model needs a way
+// to every fact: this is OpenCode's, as `geneseed memory search` is the Claude-family hosts' (one BM25,
+// the memory-search block above). It reads the store the distil writes to and never writes. Every failure
+// is text, never a throw: a V2 tool execute that rejects fails the whole agent step.
+const MEMORY_SEARCH_DESCRIPTION = "Search the agent's long-term memory facts by words (BM25, best match first). "
+  + "Use it before a task that may repeat an earlier decision, preference or convention, or when MEMORY.md "
+  + "folds topics. Returns 'slug — description (topic)' lines; read <slug>.md in the memory folder for the whole fact."
+const QUERY_DESCRIPTION = "the words to look for"
+const LIMIT_DESCRIPTION = "how many matches to return (default 10, at most 50)"
+
+async function memorySearchText(input) {
+  try {
+    const query = String(input?.query ?? "").trim()
+    if (!query) return 'memory_search needs a "query": the words to look for.'
+    const memDir = await resolveMemoryDir()
+    if (!memDir) return "No memory store on this install: nothing to search."
+    const n = Number(input?.limit)
+    const limit = Number.isInteger(n) && n > 0 ? Math.min(n, 50) : 10
+    const lines = searchLines(await readFacts(memDir), query, limit)
+    return lines.length ? [`Facts in ${memDir} (read <slug>.md there for the whole fact):`, ...lines].join("\n")
+      : `No fact in ${memDir} matches "${query}".`
+  } catch (err) {
+    return `memory_search failed: ${err?.message ?? err}`
+  }
 }
 
 export const GeneseedLearn = async (ctx) => {
@@ -1447,7 +1531,26 @@ export const GeneseedLearn = async (ctx) => {
     }
   }
 
+  // The helper is the geneseed-workflow plugin's pattern: the `tool()` wrapper when this OpenCode ships it,
+  // else a raw definition. Only string and number arguments: an object schema once wedged tool registration.
+  let toolHelper
+  try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) } catch { toolHelper = null }
+  const searchDef = {
+    description: MEMORY_SEARCH_DESCRIPTION,
+    args: toolHelper
+      ? {
+          query: toolHelper.schema.string().describe(QUERY_DESCRIPTION),
+          limit: toolHelper.schema.number().optional().describe(LIMIT_DESCRIPTION),
+        }
+      : {
+          query: { type: "string", description: QUERY_DESCRIPTION },
+          limit: { type: "number", description: LIMIT_DESCRIPTION },
+        },
+    async execute(argv) { return memorySearchText(argv) },
+  }
+
   return {
+    tool: { memory_search: toolHelper ? toolHelper(searchDef) : searchDef },
     event: async ({ event }) => {
       if (!event) return
       const sid =
@@ -1605,6 +1708,27 @@ async function setupV2(ctx) {
     } finally {
       inFlight.delete(sid)
     }
+  }
+
+  // V2 registers a tool through tool.transform with a plain JSON-schema input (geneseed-workflow's shape).
+  try {
+    await ctx.tool?.transform?.((editor) => {
+      editor.add({
+        name: "memory_search",
+        description: MEMORY_SEARCH_DESCRIPTION,
+        input: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: QUERY_DESCRIPTION },
+            limit: { type: "number", description: LIMIT_DESCRIPTION },
+          },
+          required: ["query"],
+        },
+        execute: async (input) => ({ content: await memorySearchText(input) }),
+      })
+    })
+  } catch (err) {
+    say(`memory_search tool not registered: ${err?.message ?? err}`)
   }
 
   const controller = new AbortController()

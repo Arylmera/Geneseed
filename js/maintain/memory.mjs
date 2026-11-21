@@ -48,7 +48,8 @@
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { archiveFact, consolidateMemory, isReservedStem, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { archiveFact, consolidateMemory, isReservedStem, memoryDropIndex, readFacts } from '../hosts/memory-files.mjs';
+import { searchLines } from '../hosts/memory-search.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
@@ -124,6 +125,26 @@ export function cmdMemory(args) {
     return 0;
   }
   const where = args.archived ? path.join(dir, 'archive') : dir;
+  if (args.action === 'search') {
+    // The map lists only the largest topics (O10), so this is the way to every fact: the same BM25 the
+    // learn prompt ranks by (`./memory-search.mjs`), over slug, description, topic and body.
+    const query = String(args.name ?? '').trim();
+    if (!query) {
+      printErr('[memory] search needs the words to look for: geneseed memory search "<words>".\n');
+      return 2;
+    }
+    // The parser checks `--limit` is an int but hands it over as a string (bin/geneseed-cli.mjs `parse`).
+    const n = Number(args.limit);
+    const limit = Number.isInteger(n) && n > 0 ? n : 10;
+    const lines = searchLines(readFacts(where), query, limit);
+    if (!lines.length) {
+      printOut(`[memory] ${where}: no fact matches "${query}".\n`);
+      return 0;
+    }
+    printOut(`[memory] ${where} (open a fact as <slug>.md there)\n`);
+    for (const line of lines) printOut(`  ${line.slice(2)}\n`);
+    return 0;
+  }
   if (args.action === 'list') {
     const facts = memoryFacts(where);
     if (!facts.length) {

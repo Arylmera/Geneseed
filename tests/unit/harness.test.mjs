@@ -106,7 +106,7 @@ const readLf = (p) => fs.readFileSync(p, 'utf8').replaceAll('\r\n', '\n');
 
 /** The MEMORY.md map the two-level index writes, for the given topic lines. */
 const mapOf = (...topicLines) => '# Memory Index\n\n'
-  + 'Each topic file lists its facts; open the one the task needs.\n\n'
+  + 'Each topic file lists its facts; open the one the task needs, or search every fact: `geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).\n\n'
   + `${topicLines.join('\n')}\n`;
 
 /** A fact file with the given frontmatter lines. */

@@ -134,4 +134,61 @@ export function pickStored(facts, notes, maxChars, recent = RECENT_FACTS) {
   }
   return picked;
 }
+
+/**
+ * The search a person or an agent runs on purpose (`geneseed memory search`, OpenCode's `memory_search` tool):
+ * the best `limit` BM25 matches for `query`, one line each, `slug — description (topic)`. No match, no line.
+ */
+export function searchLines(facts, query, limit = 10) {
+  return rankFacts(facts, query).slice(0, limit).map(({ slug }) => {
+    const f = facts.get(slug);
+    return `${storedLine(slug, f.desc)}${f.topic ? ` (${f.topic})` : ''}`;
+  });
+}
+
+/**
+ * THE MAP IS BOUNDED (O10). MEMORY.md is injected at every session start, and it listed every topic: a
+ * store whose distils invent topics freely grew it past 13 KB at 300 topics, and the OpenCode context
+ * plugin drops a session file over 16 KB WHOLE, so a big store loaded with no index at all. The map now
+ * lists MAP_TOPIC_LINES topics, the largest first (and `misc`, whose line is what fires the curation
+ * nudge), then one line counting the rest. A folded topic is still a file under topics/, and every fact
+ * is still reached by the search the hint names.
+ */
+export const MAP_TOPIC_LINES = 25;
+export const MAP_HINT = 'Each topic file lists its facts; open the one the task needs, or search every fact: '
+  + '`geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).';
+// The hint an older build wrote: a rebuild must drop it as generated, not carry it as a line a person wrote.
+const OLD_MAP_HINTS = new Set(['Each topic file lists its facts; open the one the task needs.']);
+const MAP_FOLD_RE = /^- … \d+ more topics? \(\d+ facts?\) under topics\/, reached by the search above$/;
+
+/** One map line per topic: `- [topic](topics/topic.md) — n facts`. */
+const mapLine = (topic, n) => `- [${topic}](topics/${topic}.md) — ${n} fact${n === 1 ? '' : 's'}`;
+
+/**
+ * The map's generated lines for `counts` (topic -> fact count): the hint, a blank line, the listed topics in
+ * name order, and the fold line when some are left out. The listed ones are the largest, ties by name, with
+ * `misc` always in. No topic, no line.
+ */
+export function mapBody(counts) {
+  const all = [...counts.entries()];
+  if (!all.length) return [];
+  const bySize = [...all].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const keep = new Set(bySize.slice(0, MAP_TOPIC_LINES).map(([t]) => t));
+  if (counts.has('misc') && !keep.has('misc')) {
+    keep.delete(bySize[MAP_TOPIC_LINES - 1][0]);
+    keep.add('misc');
+  }
+  const lines = all.filter(([t]) => keep.has(t)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([t, n]) => mapLine(t, n));
+  const rest = all.filter(([t]) => !keep.has(t));
+  if (rest.length) {
+    const facts = rest.reduce((s, [, n]) => s + n, 0);
+    lines.push(`- … ${rest.length} more topic${rest.length === 1 ? '' : 's'} (${facts} fact${facts === 1 ? '' : 's'}) `
+      + 'under topics/, reached by the search above');
+  }
+  return [MAP_HINT, '', ...lines];
+}
+
+/** Is this trimmed MEMORY.md line one the map writer generates (a hint, old or new, or the fold line)? */
+export const isMapText = (t) => t === MAP_HINT || OLD_MAP_HINTS.has(t) || MAP_FOLD_RE.test(t);
 // ---- memory-search twin: END

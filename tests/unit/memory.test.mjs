@@ -122,7 +122,7 @@ test('removing a fact from a two-level index takes its topic line and recounts t
   withStore((d) => {
     assert.equal(migrateMemoryIndex(d), true);
     const lf = (p) => readFileSync(p, 'utf8').replaceAll('\r\n', '\n');
-    const hint = 'Each topic file lists its facts; open the one the task needs.';
+    const hint = 'Each topic file lists its facts; open the one the task needs, or search every fact: `geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).';
     assert.equal(lf(path.join(d, 'MEMORY.md')),
       `# Memory Index\n\n${hint}\n\n- [misc](topics/misc.md) — 2 facts\n`);
     assert.equal(memoryDelete(d, 'a-fact'), path.join(d, 'archive', 'a-fact.md'));
@@ -220,7 +220,7 @@ test('rm with no name refuses, and refusing is not deleting', () => {
 // unchanged store reports +0/-0 and rewrites nothing. `seed` gives two facts without
 // frontmatter (so both land in `misc`) and an index naming both; the test adds one typed fact
 // the index does not know and one index line whose file does not exist.
-const MAP_HEAD = '# Memory Index\n\nEach topic file lists its facts; open the one the task needs.\n\n';
+const MAP_HEAD = '# Memory Index\n\nEach topic file lists its facts; open the one the task needs, or search every fact: `geneseed memory search "<words>"` (OpenCode: the `memory_search` tool).\n\n';
 const lf = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
 test('consolidate reports both directions, writes both index levels, and is idempotent', () => {
@@ -478,8 +478,9 @@ test('the entry dispatches `memory` at this module, with the actions the table d
   // Every Geneseed CLI path exits 0 and signals through stdout, so an unrecognised action that
   // fell through to the end of the dispatch would be indistinguishable from a successful run.
   // `consolidate` joined in 5.1.1: the specs told readers to run `geneseed learn --consolidate`,
-  // a hook verb this binary refuses, so the rebuild got a door a person may use.
-  assert.deepEqual(cmd.positionals[0].choices, ['list', 'rm', 'consolidate']);
+  // a hook verb this binary refuses, so the rebuild got a door a person may use. `search` joined
+  // with the bounded map (O10): MEMORY.md lists only the largest topics, so every fact needs a way in.
+  assert.deepEqual(cmd.positionals[0].choices, ['list', 'search', 'rm', 'consolidate']);
   assert.equal(cmd.positionals[0].required, true, 'the action became optional');
   assert.equal(cmd.positionals[1].nargs, '?', 'the fact name became required for `list` too');
   // Deleting for good is opt-in: both switches are flags that default off.
@@ -487,4 +488,26 @@ test('the entry dispatches `memory` at this module, with the actions the table d
     const opt = cmd.options.find((o) => o.names.includes(flag));
     assert.ok(opt?.is_flag && opt.default === false, `${flag} is not an off-by-default flag`);
   }
+});
+
+// `search` (O10): the bounded map lists only the largest topics, so the verb is how a person or a Claude-family
+// agent reaches every fact. Run as a user would: best match first, `--limit` cuts, no match exits 0 and says so,
+// and no words is a usage refusal (2), as a missing fact name for `rm` is.
+test('the verb searches by words, best match first, and refuses an empty query', () => {
+  withStore((d) => {
+    writeFileSync(path.join(d, 'uses-pnpm.md'), '---\nname: uses-pnpm\ndescription: the repo installs with pnpm, never npm\ntopic: tooling\n---\nAlways pnpm.\n');
+    writeFileSync(path.join(d, 'tabs-pref.md'), '---\nname: tabs-pref\ndescription: prefers tabs over spaces\ntopic: editor\n---\nTabs.\n');
+    const hit = run(d, 'search', 'pnpm');
+    assert.equal(hit.status, 0, hit.stderr);
+    assert.match(hit.stdout, /^ {2}uses-pnpm — the repo installs with pnpm, never npm \(tooling\)$/m);
+    assert.ok(!/tabs-pref/.test(hit.stdout), 'a fact without the word is not listed');
+    const one = run(d, 'search', 'tabs spaces pnpm', '--limit', '1');
+    assert.equal(one.stdout.split('\n').filter((l) => l.startsWith('  ')).length, 1, '--limit 1 prints one match');
+    const none = run(d, 'search', 'zzzz');
+    assert.equal(none.status, 0);
+    assert.match(none.stdout, /no fact matches "zzzz"/);
+    const empty = run(d, 'search');
+    assert.equal(empty.status, 2);
+    assert.match(empty.stderr, /search needs the words to look for/);
+  });
 });

@@ -749,3 +749,39 @@ Send it over stdin.`
   } finally { restore() }
 })
 import { existsSync as fsSyncExists } from "node:fs"
+
+// The memory_search tool (O10): OpenCode's way to every fact once MEMORY.md folds topics, as `geneseed memory search`
+// is the Claude family's. V1 registers it in the factory's `tool` key; V2 adds it through tool.transform with a
+// plain JSON-schema input. Both answer with text, never a throw (a V2 execute that rejects fails the agent step).
+const SEARCH_FACT = "---\nname: uses-pnpm\ndescription: the repo installs with pnpm, never npm\ntopic: tooling\n---\nAlways pnpm.\n"
+test("memory_search: V1 registers the tool and answers with the best match, an empty query with a hint", async () => {
+  const { d, mod, restore } = await sandboxPlugin()
+  try {
+    await fs.writeFile(path.join(d, "memory", "uses-pnpm.md"), SEARCH_FACT)
+    const hooks = await mod.server({ client: { session: {} }, directory: process.cwd() })
+    const t = hooks.tool?.memory_search
+    assert.ok(t && typeof t.execute === "function", "V1 registers memory_search")
+    assert.match(await t.execute({ query: "pnpm" }), /^- uses-pnpm — the repo installs with pnpm, never npm \(tooling\)$/m)
+    assert.match(await t.execute({ query: "zzzz" }), /^No fact in .* matches "zzzz"\.$/)
+    assert.equal(await t.execute({}), 'memory_search needs a "query": the words to look for.')
+  } finally { restore() }
+})
+
+test("memory_search: V2 adds the tool through tool.transform, with query required", async () => {
+  const { d, mod, restore } = await sandboxPlugin()
+  try {
+    await fs.writeFile(path.join(d, "memory", "uses-pnpm.md"), SEARCH_FACT)
+    const added = []
+    const ctx = {
+      location: { directory: d, project: { directory: d } },
+      tool: { transform: async (cb) => { cb({ add: (def) => added.push(def) }); return { dispose: async () => {} } } },
+      event: { subscribe: () => ({ async *[Symbol.asyncIterator]() {} }) },
+    }
+    const stop = await mod.setup(ctx)
+    const def = added.find((x) => x.name === "memory_search")
+    assert.ok(def, "V2 adds memory_search")
+    assert.deepEqual(def.input.required, ["query"])
+    assert.match((await def.execute({ query: "pnpm" })).content, /uses-pnpm — the repo installs with pnpm/)
+    if (typeof stop === "function") stop()
+  } finally { restore() }
+})
