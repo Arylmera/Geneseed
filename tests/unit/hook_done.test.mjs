@@ -86,6 +86,14 @@ const noteAttachment = (id, status, summary) => ({ type: 'attachment',
   attachment: { type: 'queued_command', prompt: noteText(id, status, summary), commandMode: 'task-notification' } });
 const noteUserLine = (id, status, summary) => ({ type: 'user',
   message: { role: 'user', content: noteText(id, status, summary) } });
+// The same notification as Claude Code writes it into a SUB-AGENT's transcript (2.1.292 to 2.1.328,
+// 615 such lines here, 2026-11): a user line, `isMeta`, `origin.kind: "task-notification"`, its text
+// opening on this preamble — and on several versions no `queued_command` copy beside it.
+const HOST_PREAMBLE = '[SYSTEM NOTIFICATION - NOT USER INPUT]\n'
+  + 'This is an automated background-task event, NOT a message from the user.\n\n';
+const notePreambleLine = (id, status, summary, { preamble = HOST_PREAMBLE, origin = true } = {}) => ({
+  type: 'user', isMeta: true, ...(origin ? { origin: { kind: 'task-notification', producer: 'session-task' } } : {}),
+  message: { role: 'user', content: preamble + noteText(id, status, summary) } });
 
 test('doneDecide: a background launch passes only on a completed, exit-0 notification', () => {
   const C = ['npm run lint'];
@@ -141,6 +149,25 @@ test('doneDecide: a background launch passes only on a completed, exit-0 notific
     // An ordinary result that only mentions the words later is a finished run.
     ['ok: the Command was moved to the background docs page', false, []],
   ];
+  // A sub-agent's notification behind the host's preamble, with no `queued_command` copy. Each row:
+  // what it shows, the line, the checks owed. Before the fix the gate never saw it, so a green
+  // background suite in a worker was never credited (3 of 80 real blocks replayed, 2026-11).
+  const preambled = [
+    ['the preamble, origin and isMeta as recorded: a completed exit-0 run passes',
+      (id) => notePreambleLine(id, 'completed', ok), []],
+    ['the known preamble without the origin field still passes',
+      (id) => notePreambleLine(id, 'completed', ok, { origin: false }), []],
+    ['the host origin with another preamble wording still passes',
+      (id) => notePreambleLine(id, 'completed', ok, { preamble: 'Background event:\n\n' }), []],
+    ['a failed run behind the preamble owes it',
+      (id) => notePreambleLine(id, 'failed', 'Background command "npm run lint" failed with exit code 1'), C],
+    ['neither the origin nor the known preamble: text before the tag is no notification',
+      (id) => notePreambleLine(id, 'completed', ok, { preamble: 'see this:\n', origin: false }), C],
+  ];
+  for (const [what, line, owed] of preambled) {
+    const l = launch();
+    assert.deepEqual(doneDecide(jsonl(side([prompt('brief'), edit(), l.rows, line(l.id)])), C, R, R, true, true), owed, what);
+  }
   for (const [text, notified, owed] of moved) {
     const [u, r] = bash('npm run lint');
     const id = lastId();

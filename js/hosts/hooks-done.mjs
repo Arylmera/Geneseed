@@ -250,7 +250,17 @@ const FEEDBACK_OPENS = ['Stop hook feedback', 'SubagentStop hook feedback', REAS
  * `queued_command` attachment (`attachment.prompt`, a string; 174 of them here are objects, not
  * notifications) and as a `type: "user"` line holding the same text. `queue-operation` lines carry
  * it a third time and are not read.
+ *
+ * In a SUB-AGENT's transcript the user line opens on the host's preamble instead
+ * (`[SYSTEM NOTIFICATION - NOT USER INPUT]…`, then the tag), carries `origin.kind:
+ * "task-notification"`, and on several versions has no `queued_command` copy beside it (615 such
+ * lines here, Claude Code 2.1.292 to 2.1.328, 2026-11). Read as no notification, a green background
+ * suite in a worker was never credited. So a user line whose tag follows a preamble counts when the
+ * host marks it: its `origin`, or that preamble's own opening. The text from the tag on is returned,
+ * so `notified` reads the same block either way. Only the host writes a user line, so neither mark
+ * is the agent's text.
  */
+const HOST_PREAMBLE = '[SYSTEM NOTIFICATION';
 function notificationText(obj) {
   let t = null;
   if (obj.type === 'attachment') {
@@ -261,7 +271,11 @@ function notificationText(obj) {
     t = typeof c === 'string' ? c
       : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null;
   }
-  return typeof t === 'string' && t.trimStart().startsWith(NOTE_OPEN) ? t : null;
+  if (typeof t !== 'string') return null;
+  if (t.trimStart().startsWith(NOTE_OPEN)) return t;
+  const at = obj.type === 'user' ? t.indexOf(`\n${NOTE_OPEN}`) : -1;
+  const marked = (obj.origin && obj.origin.kind === 'task-notification') || t.trimStart().startsWith(HOST_PREAMBLE);
+  return at >= 0 && marked ? t.slice(at + 1) : null;
 }
 
 /**
