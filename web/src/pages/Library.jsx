@@ -205,6 +205,7 @@ export default function Library({
   selected,
   dataRev,
   lock,
+  topic,
   base,
   onRulesChanged,
   onCountsChanged,
@@ -402,7 +403,11 @@ export default function Library({
   // header, with a category per class under Skills in the rail to narrow to one. A skill the
   // registry does not know is yours (`personal`), outside the taxonomy, so it gets its own
   // category only when one exists.
-  const inCat = isSkills ? rows.filter((it) => cat === 'all' || it.cat === cat) : rows
+  const inCat = isSkills
+    ? rows.filter((it) => cat === 'all' || it.cat === cat)
+    : topic
+      ? rows.filter((it) => it.topic === topic)
+      : rows
   const nUnused = useOn ? inCat.filter(unused).length : 0
   const isExp = (it) => it.status === 'experimental'
   const nExp = inCat.filter(isExp).length
@@ -434,12 +439,14 @@ export default function Library({
   // Skills are never capped: a class header must not promise rows the cap then hides.
   const CAP = isSkills ? Infinity : 50
   const ql = q.trim().toLowerCase()
-  const matches = ql ? filterRows(pool, ql) : pool.slice(0, CAP)
+  // A picked topic is a search too: its facts are never cut by the cap.
+  const matches = ql ? filterRows(pool, ql) : topic ? pool : pool.slice(0, CAP)
   // A class category or a usage filter narrows on purpose, so it does not pull the active entry
   // back in.
   const shown =
     !ql &&
     cat === 'all' &&
+    !topic &&
     useF === 'all' &&
     activeName &&
     !matches.some((it) => it.name === activeName)
@@ -700,7 +707,7 @@ export default function Library({
                 : undefined
             }
           />
-          {!ql && items.length > CAP && (
+          {!ql && !topic && items.length > CAP && (
             <div className="lib-more">
               Showing {CAP} of {items.length}; type to search the rest.
             </div>

@@ -188,6 +188,61 @@ describe('Personal', () => {
     expect(within(topics).getByText('2 topics')).toBeTruthy()
   })
 
+  // Topics sort by family (the slug's first `-` segment), then by full slug, so a family sits
+  // together whatever order the map lists it in: `release` and `web` follow the `geneseed` family.
+  it('puts topics of one family side by side, sorted by family then slug', async () => {
+    mapWith(
+      [
+        '- [web](topics/web.md) — 1 fact',
+        '- [geneseed-git](topics/geneseed-git.md) — 2 facts',
+        '- [release](topics/release.md) — 1 fact',
+        '- [geneseed](topics/geneseed.md) — 4 facts',
+        '- [geneseed-decisions](topics/geneseed-decisions.md) — 3 facts',
+      ].join('\n'),
+    )
+    render(<Personal tab="memory" dataRev={0} />)
+    const topics = await screen.findByRole('region', { name: 'Topics' })
+    const names = within(topics)
+      .getAllByRole('button')
+      .map((b) => b.querySelector('.pm-chip-name').textContent)
+    expect(names).toEqual(['geneseed', 'geneseed-decisions', 'geneseed-git', 'release', 'web'])
+  })
+
+  // A pill is a toggle: pressed it narrows the fact list below to that topic, pressed again it
+  // clears. The pick also lifts the 50-row cap, so a topic's facts past row 50 all show.
+  it('a pill narrows the facts to its topic, and a second click clears it', async () => {
+    memoryItems = Array.from({ length: 60 }, (_, i) => ({
+      name: `fact-${i}`,
+      title: `Fact ${i}`,
+      topic: i < 55 ? 'big' : 'small',
+    }))
+    mapWith(
+      ['- [big](topics/big.md) — 55 facts', '- [small](topics/small.md) — 5 facts'].join('\n'),
+    )
+    const { container } = render(<Personal tab="memory" dataRev={0} />)
+    const topics = await screen.findByRole('region', { name: 'Topics' })
+    const small = within(topics).getByRole('button', { name: /^small/ })
+    const big = within(topics).getByRole('button', { name: /^big/ })
+    const rows = () => container.querySelectorAll('.lib-row').length
+    await waitFor(() => expect(rows()).toBe(50))
+    expect(small.getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(small)
+    expect(small.getAttribute('aria-pressed')).toBe('true')
+    await waitFor(() => expect(rows()).toBe(5))
+    const text = () =>
+      [...container.querySelectorAll('.lib-row')].map((r) => r.textContent).join('|')
+    expect(text()).not.toContain('Fact 0')
+    expect(text()).toContain('Fact 59')
+
+    fireEvent.click(small)
+    expect(small.getAttribute('aria-pressed')).toBe('false')
+    await waitFor(() => expect(rows()).toBe(50))
+
+    fireEvent.click(big)
+    await waitFor(() => expect(rows()).toBe(55))
+  })
+
   it('leaves the topics of the shared store untagged: the header says shared', async () => {
     api.item.mockImplementation(() =>
       Promise.resolve({
