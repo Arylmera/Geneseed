@@ -65,7 +65,8 @@
 ### Task worker (Foreman)
 
 Dispatched as Foreman's task worker, there is no tester seat: explore, implement and test
-in your own context. While you iterate, run the targeted test file, not the full suite.
+in your own context, through the [develop {{SKILL}}](../{{DIR_SKILLS}}/develop.md): new behaviour gets the
+test that pins it, and a bug fix starts with the test that reproduces it, seen red before the fix. While you iterate, run the targeted test file, not the full suite.
 Send its output to a file, and read only the count line and the failing test names. Wait
 for a background run's completion notice; never poll it with a monitor or a sleep loop.
 Count your proof runs (one run of a check command); these bounds are starting values
