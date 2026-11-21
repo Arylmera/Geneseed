@@ -255,6 +255,7 @@ export default function App() {
         selected={route.item}
         dataRev={dataRev}
         onCountsChanged={reload}
+        onAction={runAction}
       />
     ),
     models: () => <Models dataRev={dataRev} onAction={runAction} />,

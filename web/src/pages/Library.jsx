@@ -22,6 +22,9 @@ import { useConfirm } from '../hooks/useConfirm.jsx'
 import { useViewLevel } from '../hooks/useViewLevel.jsx'
 import Seg from '../components/Seg.jsx'
 import Stat from '../components/Stat.jsx'
+import { ShipsTo, SkillApplyBar } from '../components/SkillShips.jsx'
+import { useSkillStaging } from '../hooks/useSkillStaging.js'
+import { useLocalStorage } from '../hooks/useLocalStorage.js'
 
 // Lazy, each with its own boundary: marked waits for an opened item, the glyphs for an agent.
 const Markdown = lazy(() => import('../components/Markdown.jsx'))
@@ -209,6 +212,7 @@ export default function Library({
   base,
   onRulesChanged,
   onCountsChanged,
+  onAction,
 }) {
   const confirm = useConfirm()
   const { canSee } = useViewLevel()
@@ -231,6 +235,10 @@ export default function Library({
   // Opening another entry does not clear it, so the picked entry shows that copy again on return,
   // until a pick on another entry replaces it.
   const [copyFrom, setCopyFrom] = useState(null)
+  // The rail's "Showing" scope: one install's key, or '' for all installs (Option E of the
+  // 2026-11-21 Library canvas: one install or all, never a mix). Kept per browser; a key that is
+  // no longer an active install reads as all (`scope` below).
+  const [scopeKey, setScopeKey] = useLocalStorage('geneseed-library-scope', (v) => v || '')
 
   // Follow the route's section, and drop any filter text so it doesn't carry across kinds.
   // Adjusted during render against the last-seen prop, not in an effect.
@@ -306,14 +314,27 @@ export default function Library({
   const pending = !listed && !catErr
   // Every global install reads one memory store and one wiki manifest: the server lists each under
   // the first of them (`sharedInstalls`), which reads as "shared", and the others hold no slot.
-  const [sharedKey, ...merged] = (listed && catalog.sharedInstalls) || []
+  const sharedAll = (listed && catalog.sharedInstalls) || []
+  const [sharedKey, ...merged] = sharedAll
   const tagOf = (k) => (k === sharedKey ? 'shared' : installLabel(k))
+  const activeInsts = useInstalls(dataRev)
+  // The scope on screen: the stored install while it is still active and there are two or more
+  // to choose from, else all. A shared store (memory, wiki) is listed under its first reader, so
+  // a scope on any of its readers matches that key. A skill the install EXCLUDES stays in its
+  // scope: its chip is how it comes back. Every kind's count reads the same rule (the server's
+  // `installCounts`), so the rail and the list agree.
+  const scopeKeys = (activeInsts || []).map((i) => i.id)
+  const scope = !lock && scopeKeys.length > 1 && scopeKeys.includes(scopeKey) ? scopeKey : ''
+  const scopeAs = sharedAll.includes(scope) ? sharedKey : scope
+  const inScope = (it) =>
+    !scope || !!it.installs?.includes(scopeAs) || it.ships?.[scope] === 'excluded'
+  const scoped = scope ? items.filter(inScope) : items
   // The entry on display: the URL-selected one, or the first row when the kind was opened
   // without a selection, so the highlighted row and the reader always agree.
   // Skills are listed class by class (splitSkills), so their first row is not items[0].
   const isSkills = sec === 'skills'
-  const skillSplit = isSkills ? splitSkills(items) : null
-  const rows = isSkills ? skillSplit.rows : sec === 'memory' ? groupMemory(items) : items
+  const skillSplit = isSkills ? splitSkills(scoped) : null
+  const rows = isSkills ? skillSplit.rows : sec === 'memory' ? groupMemory(scoped) : scoped
   const activeName = selected || rows[0]?.name || null
   const isAgents = sec === 'agents' && !lock
   const isPrimary = isAgents && activeName === PRIMARY
@@ -342,14 +363,17 @@ export default function Library({
       : null
   const activeType = fromCatalog?.type || SECTIONS[sec].type
   const pick = copyFrom?.sec === sec && copyFrom?.name === activeName ? copyFrom.key : null
+  // A skill every install excludes has no copy to read: its row stays so its chips can bring it
+  // back, and the reader says why there is no text instead of failing a read.
+  const noCopy = isSkills && !!fromCatalog && !fromCatalog.installs?.length && !!fromCatalog.ships
   const { data: lastItem, error: itemErr } = useAsync(
     () =>
-      !activeName || isPrimary
+      !activeName || isPrimary || noCopy
         ? Promise.resolve(null)
         : pick
           ? api.item(activeType, activeName, installOfKey(pick))
           : api.item(activeType, activeName),
-    [sec, activeName, activeType, pick, dataRev, isPrimary],
+    [sec, activeName, activeType, pick, dataRev, isPrimary, noCopy],
   )
   // useAsync keeps the last good read beside a failed one; here that is the PREVIOUS
   // entry, so a failed read shows nothing of it (title, lede, source).
@@ -385,19 +409,24 @@ export default function Library({
     ? { name: activeName, title: item?.title || activeName, desc: item?.desc || '' }
     : null
   const activeItem = fromCatalog || synthetic
-  // The kind on screen counts its own list, so a forget moves the badge with the row.
-  const railCount = (k) => (k === sec && listed ? items.length : (overview?.counts?.[k] ?? ''))
-  const activeInsts = useInstalls(dataRev)
+  // The kind on screen counts its own list, so a forget moves the badge with the row; under a
+  // scope, the other kinds read that install's own counts (`counts.byInstall`).
+  const countIn = (k, key) => overview?.counts?.byInstall?.[key]?.[k] ?? ''
+  const railCount = (k) =>
+    k === sec && listed ? scoped.length : scope ? countIn(k, scope) : (overview?.counts?.[k] ?? '')
   // The install the Loadout panel read: the copy's, else the default (the list's first row).
   const loadKey = loadInst || activeInsts?.[0]?.id
   const loadName = loadKey ? installLabel(loadKey) : undefined
-  // Install badges only say something when the list spans two installs or more.
-  const fleetWide = new Set(items.flatMap((it) => it.installs || [])).size > 1
+  // Install badges only say something when the list spans two installs or more, and not under a
+  // scope, which already names the one install.
+  const fleetWide = !scope && new Set(items.flatMap((it) => it.installs || [])).size > 1
   // Every install's dot slot, in the install list's order, so a colour holds across the kinds.
   const fleetKeys = fleetSlots(
     [...(activeInsts || []).map((i) => i.id), ...items.flatMap((it) => it.installs || [])],
     merged,
   )
+  // The install chips' staging (skills only): what each install will exclude once applied.
+  const skillStage = useSkillStaging(isSkills && listed ? items : null, fleetKeys, onAction)
 
   // Skills are divided by class, as the old Skills page did: listed class by class under a
   // header, with a category per class under Skills in the rail to narrow to one. A skill the
@@ -558,6 +587,34 @@ export default function Library({
                 <span className="mono dim lib-title-since">calls since {usage.since}</span>
               ) : null}
             </div>
+            {/* The "Showing" scope: all installs, or one. Each count is what the kind on screen
+                lists under that choice. */}
+            {scopeKeys.length > 1 ? (
+              <fieldset className="lib-scope">
+                <legend className="lib-scope-h mono">Showing</legend>
+                {['', ...scopeKeys].map((k) => (
+                  <label key={k || 'all'} className={`lib-scope-opt${scope === k ? ' on' : ''}`}>
+                    <input
+                      type="radio"
+                      name="lib-scope"
+                      checked={scope === k}
+                      onChange={() => setScopeKey(k)}
+                    />
+                    {k ? (
+                      <i
+                        className="lr-dot"
+                        style={dotColour(fleetKeys.indexOf(k))}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span className="lib-scope-name">{k ? installLabel(k) : 'All installs'}</span>
+                    <span className="mono dim">
+                      {!listed ? '' : k ? countIn(sec, k) : items.length}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
             <nav className="kind-list" aria-label="Kinds">
               {kinds.map((k) => (
                 <React.Fragment key={k}>
@@ -574,7 +631,7 @@ export default function Library({
                   {k === sec && isSkills && listed && (
                     <RailCats
                       label="Skill types"
-                      total={items.length}
+                      total={scoped.length}
                       cats={skillSplit.cats}
                       cat={cat}
                       onChange={setCat}
@@ -608,7 +665,7 @@ export default function Library({
           }
           cats={isSkills && listed ? skillSplit.cats : null}
           cat={cat}
-          total={items.length}
+          total={scoped.length}
           onCat={setCat}
           catLabel={'Skill types'}
           extra={
@@ -673,7 +730,17 @@ export default function Library({
                     const badges = fleetWide ? (
                       <span className="lr-dots">
                         {fleetKeys.map((k, i) =>
-                          it.installs?.includes(k) ? (
+                          isSkills && /^turning-/.test(skillStage.stateOf(it, k)) ? (
+                            // Staged on this install, not applied yet: a dashed ring.
+                            <span
+                              key={k}
+                              className="lr-dot lr-install staged"
+                              style={dotColour(i)}
+                              title={`${tagOf(k)}: staged — Apply to rebuild`}
+                            >
+                              <span className="sr-only">{tagOf(k)} staged</span>
+                            </span>
+                          ) : it.installs?.includes(k) ? (
                             <span
                               key={k}
                               className="lr-dot lr-install"
@@ -707,9 +774,9 @@ export default function Library({
                 : undefined
             }
           />
-          {!ql && !topic && items.length > CAP && (
+          {!ql && !topic && scoped.length > CAP && (
             <div className="lib-more">
-              Showing {CAP} of {items.length}; type to search the rest.
+              Showing {CAP} of {scoped.length}; type to search the rest.
             </div>
           )}
           {empty &&
@@ -794,7 +861,19 @@ export default function Library({
                     </button>
                   </div>
                 )}
-              {item?.installs?.length > 1 && item.installs.includes(item.install) ? (
+              {isSkills && fromCatalog?.ships ? (
+                <ShipsTo
+                  row={fromCatalog}
+                  keys={fleetKeys}
+                  tagOf={tagOf}
+                  stage={skillStage}
+                  busy={skillStage.busy}
+                />
+              ) : isAgents && !isPrimary && fromCatalog?.ships ? (
+                // Read-only for agents: where it ships, never a switch. The Loadout below reads
+                // the default copy (the first install that has the agent).
+                <ShipsTo row={fromCatalog} keys={fleetKeys} tagOf={tagOf} kind="agent" />
+              ) : item?.installs?.length > 1 && item.installs.includes(item.install) ? (
                 <label className="row gap-8 lib-copy">
                   <span className="dim">Install:</span>
                   <select
@@ -824,7 +903,12 @@ export default function Library({
                 <Loadout loadout={load?.own} base={load?.base} error={loadErr} install={loadName} />
               ) : null}
               {/* A failed read (a stale bookmark, a retired skill) ends here, not on "Loading…" forever. */}
-              {isPrimary ? null : itemErr ? (
+              {isPrimary ? null : noCopy ? (
+                <p className="sub">
+                  Excluded on every install, so no copy of <em>{activeItem.name}</em> is deployed.
+                  Switch an install back on above to bring it back.
+                </p>
+              ) : itemErr ? (
                 <p className="sub">
                   No {label.replace(/s$/, '').toLowerCase()} named <em>{activeItem.name}</em> could
                   be read in this install.
@@ -859,6 +943,9 @@ export default function Library({
           ) : null}
         </article>
       </div>
+      {isSkills ? (
+        <SkillApplyBar tagOf={tagOf} installOf={installOfKey} stage={skillStage} />
+      ) : null}
     </div>
   )
 }

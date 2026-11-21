@@ -16,7 +16,9 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { GLOBAL_MANIFEST, isGlobalInstall, resolvePath } from '../hosts/hosts.mjs';
-import { EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, readMaybe } from '../hosts/installs.mjs';
+import {
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, readMaybe,
+} from '../hosts/installs.mjs';
 import { frontmatter, parseRules, readFacts } from '../hosts/memory-files.mjs';
 import { emittedHost, sessionFiles } from '../hosts/hooks-context.mjs';
 import { agentLoadout } from '../inspect/cost.mjs';
@@ -29,7 +31,9 @@ import { WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
-import { SRC, loadKits, makeCfg, ruleCanon, ruleSummaries } from '../build/source.mjs';
+import {
+  SRC, knownSkillIds, linkedSkillIds, loadKits, makeCfg, ruleCanon, ruleSummaries, skillDescriptions,
+} from '../build/source.mjs';
 import { RESERVED_STEMS, isReservedStem } from '../hosts/memory-files.mjs';
 import { loadTheme } from '../build/render.mjs';
 
@@ -657,19 +661,103 @@ const sharedWiki = (fleet) => fleet.filter((v) => {
   return Boolean(file) && path.dirname(file) === tier.root;
 }).map((v) => v.install);
 
+/** A fleet key `host:scope:root` back into its parts; the root may hold ':' (a Windows drive). */
+function keyParts(key) {
+  const a = key.indexOf(':');
+  const b = key.indexOf(':', a + 1);
+  return { host: key.slice(0, a), scope: key.slice(a + 1, b), root: key.slice(b + 1) };
+}
+
+/**
+ * Where each skill ships, per install: the Library's install chips. One state per fleet key:
+ *   `on`       the install has it;
+ *   `excluded` its `Excluded skills:` marker names it — the one state a chip can switch back;
+ *   `kit-off`  its kit is not on in that install (the Kits page turns it on, not this chip);
+ *   `absent`   missing for another reason (a host or scope that does not ship it).
+ * ABSENCE IS NOT EXCLUSION: re-admitting a skill through `excludeSkills` brings back only what the
+ * marker took, so `excluded` is read off the marker, never inferred from a missing folder.
+ * `toggle` is false for a skill Geneseed does not ship (a personal skill) and for one the harness
+ * links to by path (`linkedSkillIds`), so the UI renders it and never computes it. An install
+ * whose carrier cannot be read counts as excluding nothing, as `orSkip` skips an unreadable list.
+ */
+function skillShipping(fleet, owner, linked = linkedSkillIds()) {
+  const views = fleet.filter((v) => v.install !== null).map((v) => {
+    const { host, root } = keyParts(v.install);
+    let excluded = [];
+    let kits = [];
+    try { excluded = excludedSkillsOfDir(root, host) || []; kits = kitsOfDir(root, host) || []; } catch { /* as orSkip */ }
+    return { key: v.install, excluded, kits };
+  });
+  const known = new Set(knownSkillIds());
+  const locked = new Set(linked);
+  const of = (name, installs) => {
+    const kit = owner.get(`skill:${name}`) ?? null;
+    const ships = {};
+    for (const v of views) {
+      ships[v.key] = installs.includes(v.key) ? 'on'
+        : v.excluded.includes(name) ? 'excluded'
+          : kit && !v.kits.includes(kit) ? 'kit-off' : 'absent';
+    }
+    return { ships, toggle: known.has(name) && !locked.has(name), locked: locked.has(name) };
+  };
+  const excludedAnywhere = [...new Set(views.flatMap((v) => v.excluded))];
+  return { of, excludedAnywhere };
+}
+
+/**
+ * Where each agent ships, per install: the same chips, READ-ONLY (the user, 2026-11-21: they
+ * replace the Install select; a switch comes only if agent exclusion is ever built). No build
+ * axis excludes an agent, so the states are `on`, `kit-off` and `absent`, and `toggle` is always
+ * false. `locked` marks a core agent — one this checkout ships outside every kit — which ships
+ * with every install ("always on"); every core agent is linked by path or dispatched by name, so
+ * an exclusion axis would protect it too. A kit agent or a personal one is not locked.
+ */
+function agentShipping(fleet, owner) {
+  const views = fleet.filter((v) => v.install !== null).map((v) => {
+    const { host, root } = keyParts(v.install);
+    let kits = [];
+    try { kits = kitsOfDir(root, host) || []; } catch { /* as orSkip */ }
+    return { key: v.install, kits };
+  });
+  let shipped = [];
+  try { shipped = readdirSync(path.join(SRC, 'agents')).filter((f) => f.endsWith('.md') && !f.startsWith('_')).map((f) => f.slice(0, -3)); } catch { /* no source tree */ }
+  const known = new Set(shipped);
+  return (name, installs) => {
+    const kit = owner.get(`agent:${name}`) ?? null;
+    const ships = {};
+    for (const v of views) {
+      ships[v.key] = installs.includes(v.key) ? 'on' : kit && !v.kits.includes(kit) ? 'kit-off' : 'absent';
+    }
+    return { ships, toggle: false, locked: known.has(name) && kit === null };
+  };
+}
+
 /**
  * `fleet` defaults to `state` alone, which answers as one install did before the console
  * listed the fleet; the `/api/catalog/` route passes every active install for `FLEET_SECTIONS`.
  */
-export function apiCatalog(state, section, fleet = [{ install: null, state }], owner = kitOwners()) {
+export function apiCatalog(state, section, fleet = [{ install: null, state }], owner = kitOwners(), linked = undefined) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
   let items;
   if (section === 'agents') {
+    const ship = agentShipping(fleet, owner);
     items = fleetEntries(fleet, 'agents').map(({ e, installs }) => ({ name: e.name, title: e.name, desc: e.desc,
-      source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null, installs }));
+      source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null, installs,
+      ...ship(e.name, installs) }));
   } else if (section === 'skills') {
+    const ship = skillShipping(fleet, owner, linked);
     items = fleetEntries(fleet, 'skills').map(({ e, installs }) => ({ name: e.name, title: e.name, desc: e.desc,
-      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null, installs }));
+      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null, installs,
+      ...ship.of(e.name, installs) }));
+    // A skill every install excludes is on no inventory, yet it must stay a row, or its chips are
+    // gone and nothing can switch it back. Its text is the source's one-line description.
+    const listed = new Set(items.map((r) => r.name));
+    const desc = skillDescriptions();
+    for (const name of ship.excludedAnywhere.filter((n) => !listed.has(n)).sort()) {
+      items.push({ name, title: name, desc: Object.hasOwn(desc, name) ? desc[name] : '', source: null,
+        klass: Object.hasOwn(SKILL_CLASS, name) ? SKILL_CLASS[name] : 'build', status: 'unknown',
+        kit: owner.get(`skill:${name}`) ?? null, installs: [], ...ship.of(name, []) });
+    }
   } else if (section === 'laws') {
     return { section, items: constitutionItems(state.inventory), nouns: tierNouns(state.theme) };
   } else if (section === 'memory') {
@@ -715,6 +803,30 @@ export function fleetCounts(state, fleet = [{ install: null, state }]) {
     wiki: listed('wiki'),
     config: listed('config'),
   };
+}
+
+/**
+ * The Library rail's counts for each install, for its "Showing" scope: what each kind lists when
+ * the scope is that one install. Computed as the catalog over a fleet of that install alone, so a
+ * count is the size of the list the scoped page shows — the same rule as `fleetCounts`. That list
+ * is the rows that install holds, plus (skills) the ones its marker excludes, which keep a row so
+ * their chip can bring them back. Keyed by fleet key.
+ *
+ * An install whose inventory cannot be read has NO entry, as `fleetCounts` skips it: each
+ * section's `orSkip` would otherwise swallow the error and report it as an install holding
+ * nothing. The source scan (`linkedSkillIds`, a walk of `src`) runs once for the pass, not once
+ * per install.
+ */
+export function installCounts(state, fleet = []) {
+  const owner = kitOwners();
+  const linked = linkedSkillIds();
+  const out = {};
+  for (const v of fleet.filter((x) => x.install !== null)) {
+    try { void v.state.inventory; } catch { continue; }
+    const listed = (sec) => apiCatalog(state, sec, [v], owner, linked).items.length;
+    out[v.install] = { skills: listed('skills'), agents: listed('agents'), wiki: listed('wiki'), config: listed('config') };
+  }
+  return out;
 }
 
 /**

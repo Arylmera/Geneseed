@@ -486,6 +486,40 @@ test('an unknown kit is refused with an error and no command', () => {
   });
 });
 
+// The Library's install chips send `excludeSkills`, the install's WHOLE excluded set, as the Kits
+// page sends `kits`. The rules: a name list becomes `--exclude-skills` sorted; `[]` and `none`
+// re-admit every skill, so the flag goes and `--reset` still closes the argv (the preserve guard
+// must not read the missing flag as "keep"); an omitted key replays the install's own
+// `Excluded skills:` marker. An unknown name, a personal skill and a protected one (the harness
+// links to `develop` by path) are each refused here with an error naming it, never in the job.
+const skillsFlag = (cmd) => (cmd.includes('--exclude-skills') ? cmd[cmd.indexOf('--exclude-skills') + 1] : undefined);
+
+test('an excludeSkills body REPLACES the excluded set; an omitted key keeps the marker', () => {
+  withThreeInstalls(({ st, oc }) => {
+    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# Rules\nExcluded skills: bruno\n');
+    const replay = apiInstallCmd(st, { host: 'opencode', path: oc }).cmd.map(String);
+    assert.equal(skillsFlag(replay), 'bruno', 'an omitted key must keep the install marker');
+    const set = apiInstallCmd(st, { host: 'opencode', path: oc, excludeSkills: ['bruno', 'adhd'] }).cmd.map(String);
+    assert.equal(skillsFlag(set), 'adhd,bruno');
+    for (const none of [[], 'none']) {
+      const cmd = apiInstallCmd(st, { host: 'opencode', path: oc, excludeSkills: none }).cmd.map(String);
+      assert.equal(skillsFlag(cmd), undefined, `${JSON.stringify(none)} still carried --exclude-skills`);
+      assert.equal(cmd.at(-1), '--reset');
+    }
+  });
+});
+
+test('an excludeSkills body naming an unknown, personal or protected skill is refused', () => {
+  withThreeInstalls(({ st, oc }) => {
+    for (const [names, says] of [[['ghost'], /unknown skill.*ghost/], [['bruno', 'my-own'], /unknown skill.*my-own/],
+      [['develop'], /develop cannot be excluded/]]) {
+      const res = apiInstallCmd(st, { host: 'opencode', path: oc, excludeSkills: names });
+      assert.ok(!('cmd' in res), JSON.stringify(res));
+      assert.match(res.error, says);
+    }
+  });
+});
+
 test('a kits body on a disabled or unknown install gets the existing refusals', () => {
   withKitInstalls(({ st, proj }) => {
     assert.match(apiInstallCmd(st, { host: 'opencode', path: proj, kits: [] }).error, /disabled/);

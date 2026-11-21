@@ -39,7 +39,7 @@ import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { pinCountOf } from './model-catalog.mjs';
 import {
-  configItems, deployed, dget, fleetCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
+  configItems, deployed, dget, fleetCounts, installCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg, warmDoctor } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
@@ -442,7 +442,9 @@ export function apiKits() {
 export function machineCounts(state, fleet) {
   const templates = (v) => [...loadCatalog({ projectRoot: v.state.root }).templates.keys()];
   return { ...fleetCounts(state, fleet),
-    loops: new Set(fleet.flatMap((v) => orSkip(v, () => templates(v)))).size };
+    loops: new Set(fleet.flatMap((v) => orSkip(v, () => templates(v)))).size,
+    // The Library rail's per-install counts, for its "Showing" scope (`installCounts`).
+    byInstall: installCounts(state, fleet) };
 }
 
 // How long `machineCounts` may serve a read: the overview is asked every 1.5 s while the doctor

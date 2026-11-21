@@ -14,7 +14,7 @@ Geneseed has three ways to switch something off, and they work at different scal
 | **Switches off** | the whole global install, inside one folder | one doctrine rule, everywhere the install applies | one skill, everywhere the install applies |
 | **Scope** | a folder and everything under it | the install | the install |
 | **Applies to** | **global** installs only | any install | any install |
-| **Set with** | `geneseed exclude add <path>` | `--exclude-rules` at build time | `--exclude-skills` at build time |
+| **Set with** | `geneseed exclude add <path>` | `--exclude-rules` at build time | `--exclude-skills` at build time, or the Library's **Ships to** chips |
 | **Takes effect** | on the next tool call, no rebuild | on rebuild | on rebuild |
 
 > **You already know this:** `.gitignore` versus disabling one lint rule. One makes a tool ignore a whole folder; the other keeps the tool running everywhere with one check turned off.
@@ -79,6 +79,8 @@ geneseed build --emit claude-global --exclude-skills "bruno,react-view-transitio
 ```
 
 The skill's files are not written, its catalogue row goes, and an OpenCode `/command` that runs it goes too. The install records the list (`Excluded skills: …` under its skill section), and every rebuild and upgrade keeps it. `--exclude-skills none` puts them all back.
+
+In the web console, a skill's page in the Library shows a **Ships to** row with one chip for each install. A filled dot means the skill ships to that install, and a hollow dot means it is excluded there. Click a chip to stage a change. The chip goes dashed, and a bar at the bottom of the Library lists the staged changes for each install. Changes to several skills stack, so **Apply** rebuilds each install once, with exactly that set. A chip does not switch when the skill is protected, is not a Geneseed skill, or is missing for another reason: its kit is off (turn the kit on in Kits) or the host does not ship it. A skill excluded on every install stays in the list, so you can bring it back.
 
 A few skills cannot be excluded, because the harness itself links to them, by path or by a relative link from another skill — `rule`, `skill-forge`, `workflow`, `prototype` and a handful more, the five [superpowers kit](superpowers-kit.md) skills among them. (Until the relative links were scanned, `--exclude-skills prototype` was accepted and left a dead link in `wayfinder`; an install that did so has the exclusion dropped, with a notice, at its next rebuild.) The flag names them when it refuses one. Skills you installed yourself are not Geneseed's to exclude: remove those from the host's skills folder directly.
 

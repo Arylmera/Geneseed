@@ -58,7 +58,7 @@ const manifest = (dir) => {
  * must find there, first), never the checkout's own `.claude/`. `manifests: false` leaves every
  * install inactive, for the no-fleet fallback.
  */
-async function withFleetServed(fn, { project = null, manifests = true } = {}) {
+async function withFleetServed(fn, { project = null, manifests = true, seed = null } = {}) {
   const sb = makeSandbox();
   const cl = path.join(os.homedir(), '.claude');
   const cwd = process.cwd();
@@ -86,6 +86,8 @@ async function withFleetServed(fn, { project = null, manifests = true } = {}) {
       skill(projData, 'fleet-shared', 'project copy');
       skill(projData, 'fleet-proj-only', 'only in the project');
     }
+    // A test's own files in the two installs, written before the daemon reads them.
+    if (seed) seed({ oc, cl });
     const st = webState('neutral', oc);
     const pair = (host, dir) => {
       const row = apiInstalls(st).installs.find((r) => r.host === host && samePath(r.path, dir));
@@ -225,4 +227,80 @@ test('an opencode project install lists its own skills', async () => {
     assert.deepEqual(rowOf(items, 'fleet-proj-only')?.installs, [op]);
     assert.deepEqual(rowOf(items, 'fleet-shared').installs, [ocKey, op, clKey]);
   }, { project: 'opencode' });
+});
+
+// THE INSTALL CHIPS (Library, Option A): each skill row says, per install, where it ships —
+// `on` (the install has it), `excluded` (its `Excluded skills:` marker names it, the one state a
+// chip switches back), `kit-off` (its kit is off there) or `absent` (anything else). Absence is
+// never read as exclusion. The fixture: opencode's AGENT.md turns the spring-boot kit on and
+// excludes bruno; opencode alone holds the kit's `spring-boot` skill; claude has no marker.
+// So bruno is excluded on opencode and absent on claude, yet stays a row (installs []), with the
+// source's own description; spring-boot is on in opencode and kit-off in claude; the fixture's
+// own `fleet-shared` is no Geneseed skill, so its chips do not switch.
+test('skill rows carry each install\'s ship state, and a skill excluded everywhere stays a row', async () => {
+  await withFleetServed(async ({ get, ocKey, clKey }) => {
+    const { items } = await (await get('/api/catalog/skills')).json();
+    const bruno = rowOf(items, 'bruno');
+    assert.ok(bruno, 'a skill no install holds, but a marker excludes, must stay listed');
+    assert.deepEqual(bruno.installs, []);
+    assert.deepEqual(bruno.ships, { [ocKey]: 'excluded', [clKey]: 'absent' });
+    assert.equal(bruno.toggle, true);
+    assert.equal(bruno.locked, false);
+    const src = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'skill-descriptions.json'), 'utf8'));
+    assert.equal(bruno.desc, src.bruno);
+    assert.deepEqual(rowOf(items, 'spring-boot').ships, { [ocKey]: 'on', [clKey]: 'kit-off' });
+    const shared = rowOf(items, 'fleet-shared');
+    assert.deepEqual(shared.ships, { [ocKey]: 'on', [clKey]: 'on' });
+    assert.equal(shared.toggle, false);
+  }, { seed: ({ oc }) => {
+    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# Rules\nActive kits: spring-boot\nExcluded skills: bruno\n');
+    skill(oc, 'spring-boot', 'kit member');
+  } });
+});
+
+// Agents get the same chips, READ-ONLY: no build axis excludes an agent, so the states are `on`,
+// `kit-off` and `absent`, and `toggle` is false on every row. A core agent (shipped outside every
+// kit) is `locked`: "always on". The fixture: opencode turns the council kit on and holds a core
+// agent (`reviewer`) and a council seat (`advocate`); claude has neither and no kit. So reviewer is
+// locked, on in opencode, absent in claude; advocate is not locked, on in opencode and kit-off in
+// claude; the fixture's own `fleet-agent` is no Geneseed agent, so it is not locked either.
+test('agent rows carry each install\'s ship state, read-only', async () => {
+  await withFleetServed(async ({ get, ocKey, clKey }) => {
+    const { items } = await (await get('/api/catalog/agents')).json();
+    const reviewer = rowOf(items, 'reviewer');
+    assert.deepEqual(reviewer.ships, { [ocKey]: 'on', [clKey]: 'absent' });
+    assert.equal(reviewer.locked, true);
+    const seat = rowOf(items, 'advocate');
+    assert.deepEqual(seat.ships, { [ocKey]: 'on', [clKey]: 'kit-off' });
+    assert.equal(seat.locked, false);
+    assert.equal(rowOf(items, 'fleet-agent').locked, false);
+    assert.deepEqual(items.filter((it) => it.toggle !== false).map((it) => it.name), []);
+  }, { seed: ({ oc }) => {
+    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# Rules\nActive kits: council\n');
+    agent(oc, 'reviewer', 'core agent');
+    agent(oc, 'advocate', 'council seat');
+  } });
+});
+
+// THE RAIL'S "SHOWING" SCOPE (Library, Option E): one install or all. `/api/overview` counts each
+// kind per install (`counts.byInstall`), and the rule both sides use is the scoped list: the rows
+// that install holds, plus (skills) the ones its own marker excludes, which stay so their chip can
+// bring them back. So each per-install count must equal the fleet catalog filtered by that rule.
+// The fixture excludes bruno on opencode only: it counts for opencode, never for claude.
+test('per-install counts are the size of the list each install scope shows', async () => {
+  await withFleetServed(async ({ get, ocKey, clKey }) => {
+    const { counts } = await (await get('/api/overview')).json();
+    for (const sec of ['skills', 'agents']) {
+      const { items } = await (await get(`/api/catalog/${sec}`)).json();
+      for (const key of [ocKey, clKey]) {
+        const scoped = items.filter((it) => it.installs.includes(key) || it.ships?.[key] === 'excluded');
+        assert.equal(counts.byInstall[key][sec], scoped.length, `${sec} in ${key}`);
+      }
+    }
+    const { items } = await (await get('/api/catalog/skills')).json();
+    const inScope = (key) => items.filter((it) => it.installs.includes(key) || it.ships?.[key] === 'excluded')
+      .map((it) => it.name);
+    assert.ok(inScope(ocKey).includes('bruno'), 'an excluded skill stays in its install scope');
+    assert.ok(!inScope(clKey).includes('bruno'), 'and never in another install scope');
+  }, { seed: ({ oc }) => { fs.writeFileSync(path.join(oc, 'AGENT.md'), '# Rules\nExcluded skills: bruno\n'); } });
 });
