@@ -25,10 +25,23 @@ const topicsOf = (body) =>
     .filter(Boolean)
     .map((m) => ({ topic: m[1], n: Number(m[2]) }))
 
+// A topic's family is its slug's first `-` segment: `geneseed`, `geneseed-decisions` and
+// `geneseed-git` are one family. Sorted by family and then by full slug, the family sits together.
+const familyOf = (slug) => slug.split('-')[0]
+const byFamily = (a, b) => {
+  const fa = familyOf(a.topic)
+  const fb = familyOf(b.topic)
+  if (fa !== fb) return fa < fb ? -1 : 1
+  return a.topic < b.topic ? -1 : a.topic > b.topic ? 1 : 0
+}
+
 // The map is one store's. The header states the shared one; a project install's own store (the
-// first that has it, `install`) is named here.
-function Topics({ topics, install, shared }) {
+// first that has it, `install`) is named here. Each topic is a pill that narrows the fact list
+// below to it (`picked`, `onPick`); the thin bar under a pill is its count against the largest.
+function Topics({ topics, install, shared, picked, onPick }) {
   if (!topics.length) return null
+  const sorted = [...topics].sort(byFamily)
+  const max = Math.max(1, ...sorted.map((t) => t.n))
   return (
     <section className="panel pm-topics" aria-labelledby="pm-topics">
       <div className="panel-head">
@@ -36,11 +49,26 @@ function Topics({ topics, install, shared }) {
         {install && !shared ? <span className="mono dim">{installLabel(install)}</span> : null}
         <span className="mono dim">{plural(topics.length, 'topic')}</span>
       </div>
-      <ul className="hbars">
-        {topics.map((t) => (
-          <li key={t.topic}>
-            <span className="hb-label">{t.topic}</span>
-            <span className="mono hb-n">{plural(t.n, 'fact')}</span>
+      <ul className="pm-chips">
+        {sorted.map((t, i) => (
+          <li
+            key={t.topic}
+            className={i && familyOf(t.topic) !== familyOf(sorted[i - 1].topic) ? 'fam-start' : ''}
+          >
+            <button
+              type="button"
+              className={`chip-f pm-chip${picked === t.topic ? ' on' : ''}`}
+              aria-pressed={picked === t.topic}
+              onClick={() => onPick(picked === t.topic ? null : t.topic)}
+            >
+              <span className="pm-chip-row">
+                <span className="pm-chip-name">{t.topic}</span>
+                <span className="mono pm-chip-n">{plural(t.n, 'fact')}</span>
+              </span>
+              <span className="hbar" aria-hidden="true">
+                <span style={{ width: `${Math.round((t.n / max) * 100)}%` }} />
+              </span>
+            </button>
           </li>
         ))}
       </ul>
@@ -118,6 +146,7 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
     () => (tab === 'memory' ? soft(api.item('memory', 'MEMORY')) : Promise.resolve(null)),
     ['memory-map', tab, dataRev, facts],
   )
+  const [topic, setTopic] = React.useState(null)
   const notes = countOf(notebook)
   const counts = { memory: facts, notebook: notes }
   // No rules figure: each rules file heads its own list with its count and cost.
@@ -149,11 +178,18 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
       ) : folder ? (
         <>
           {tab === 'memory' && (
-            <Topics topics={topicsOf(map?.body)} install={map?.install} shared={map?.shared} />
+            <Topics
+              topics={topicsOf(map?.body)}
+              install={map?.install}
+              shared={map?.shared}
+              picked={topic}
+              onPick={setTopic}
+            />
           )}
           <Library
             key={tab}
             lock={tab}
+            topic={tab === 'memory' ? topic : null}
             base={`#/personal/${tab}`}
             selected={item}
             dataRev={dataRev}
