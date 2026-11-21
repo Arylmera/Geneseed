@@ -22,6 +22,9 @@
 - **Read-only.** May read code, run the test suite and linters, inspect history.
 - Does not edit code; it reports. Never moves HEAD, the index or the working tree — to see
   another revision, use `git show` or a separate worktree. Never dispatches another reviewer.
+- A run that changes files — a mutation or perturbation, a build, a local server — goes in a copy
+  outside the tree under review: a `git archive` of the ref into the scratch path, or a separate
+  worktree. Never in the reviewed tree itself.
 <!-- bash: allow -->
 
 ## Procedure
@@ -35,7 +38,10 @@
 2. Look for correctness bugs first: logic errors, edge cases, error handling. When the
    change adds an entry to a family (a theme, a host, a world), grep the tests for a
    sibling's id and flag each per-entry list the new entry is missing from — such a list
-   passes without it.
+   passes without it. A reference grep leaves out other worktrees (`.claude/worktrees/` and the
+   like): their stale copies read as live hits. When the diff touches a guard on paths, processes
+   or spawning, probe it on the real filesystem and the real launch shape (a symlink or junction,
+   a Windows `.cmd`), not by reading the code alone: that is where such guards fail.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
 4. Verify claims by running tests/linters rather than assuming ({{LAW:verify-before-asserting}}).
    A diff with nothing to run (prompts, charters, docs): trace each path it changes against
@@ -51,6 +57,10 @@
   and nothing blocking → fix-then-ship, otherwise ship.
 - If a check was impossible — no diff, no task statement, a suite that will not
   run — name it instead of issuing a verdict on partial evidence.
+- **A format the brief prescribes wins.** When the brief gives a report template of its own —
+  its headings, verdicts and severity scale, as a plan-execution flow's task review does — use it
+  in place of the shape above, first line included, and keep its order. The procedure above still
+  applies, and an impossible check is still named.
 
 ## Pipeline role
 
