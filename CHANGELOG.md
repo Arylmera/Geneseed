@@ -11,6 +11,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Changed
 
 - **Foreman mode delegates less.** A worker costs a fixed start (about 80k tokens of instructions and tools on Claude Code, read again on every turn) and a blind review, and a month of measured sessions put a Foreman commit at about 55 % more tokens than a direct one. The session now delegates only a task that runs a command longer than about a minute, work that runs beside other work in flight, or a change to five or more files (was three). When unsure, it does the task inline (was: delegate). It always starts a worker as the `developer` agent, never as a general-purpose one.
+- **Foreman review rounds are bounded.** A task gets one full blind review and at most one delta review (only the diff since the last review); non-blocking findings are fixed and proven by the session's re-run, with no new review, and a task that still fails goes to you. A failing verdict goes back to the worker in one message, at once, because a worker resumed after its prompt cache expired pays its whole context again (such rewrites after a pause were 20 % of measured worker cost).
 
 ## [6.0.4] — 2026-11-18
 

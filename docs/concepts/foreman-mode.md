@@ -49,7 +49,7 @@ A worker can lead a small team inside its own worktree. It can start read-only h
 
 A value you set yourself is kept. On Claude Code and OpenCode, the value 2 is read as session → worker → sub-worker; that reading is the design's, not yet observed live on either host.
 
-When a worker returns green with a diff that touches two or more files or changes logic, the session sends a `reviewer` only your request and the diff — never the worker's reasoning — for a blind check. A failing verdict goes back to the same worker.
+When a worker returns green with a diff that touches two or more files or changes logic, the session sends a `reviewer` only your request and the diff — never the worker's reasoning — for a blind check. A failing verdict goes back to the same worker, with all its findings in one message and without delay: a worker that waits more than a few minutes loses its prompt cache and pays its whole context again when it resumes. A task gets one full review and at most one delta review, which sees only the diff since the last review. Non-blocking findings are fixed by the worker and proven by the session's re-run, with no new review. A task that still fails the delta review comes to you. One task once went through six reviews before this bound.
 
 The session keeps a ledger in its notebook (`notebook/foreman-ledger.md`), one line per task: the task, the agent id, the worktree and the state. A correction, a follow-up or a reviewer finding goes back to **the same worker**, which resumes with everything it already knows. Each host resumes a worker its own way:
 

@@ -45,7 +45,11 @@ task that would block it to one background task worker, and keeps answering the 
 - **Verify non-trivial diffs blind.** When a worker returns green with a diff that touches
   two or more files or changes logic, dispatch a reviewer (a tester for test-heavy work)
   with only the original ask and the diff, never the worker's reasoning. A failing verdict
-  goes back to the same worker.
+  goes back to the same worker, all its findings in one message, as soon as it arrives: a
+  resumed worker reads its whole context again. A task gets one full review and at most one
+  delta review, which sees only the diff since the last review and only the blocking
+  findings it answers. Findings marked non-blocking are fixed by the worker and proven by
+  your re-run, with no new review. A task that still fails its delta review goes to the user.
 - **Keep a ledger; route follow-ups to the same worker.** Keep
   `{{DIR_NOTEBOOK}}/foreman-ledger.md`, one line per live task:
   `T3 · <task> · agent <id> · worktree <path> · <state>` (running, green, red, relay,
