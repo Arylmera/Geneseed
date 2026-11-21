@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Claude Code and OpenClaude learn with no `GENESEED_LLM` in the settings.** The `--learn` model now rides in the learn hook's own command (`--learn-model haiku`, or `session`), and the hook builds `claude -p --model haiku` (`openclaude -p …`) itself. The next rebuild removes the `GENESEED_LLM` an earlier build wrote into the settings `"env"`. A `GENESEED_LLM` you set yourself, in the settings or the shell, still wins and is never touched. Nothing changes in what learns or with which model. In the `env`, the variable reached every shell the host starts: a test suite run inside a session read it, and `tests/unit/claude.test.mjs` failed 4 tests there. A tier model holding a shell character (from `agent-overrides.json`) is refused with a warning and learning uses your default model. The setup wizard no longer says learning is off until you set `GENESEED_LLM`.
+
 ## [6.0.4] — 2026-11-18
 
 ### Added
