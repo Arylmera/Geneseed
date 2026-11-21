@@ -763,31 +763,33 @@ export function learnLastNote(last, now = Date.now()) {
  * Whether `learn` can run (D12, D9), per host of the installs present. One wording for `status` and
  * `doctor`. Pure: the caller reads the files.
  *
- * Only the Claude-shaped hook needs `$GENESEED_LLM`, and it reads the HOOK's env — which Claude
- * Code builds from the shell AND from the `"env"` object of the settings files. This verb runs in a
- * terminal or in the web daemon, which see neither, so `settingsEnv` carries those objects in.
- * Reading only `process.env` called a learning install dormant (6.0.3, on an install that learned).
- * Who set the command is said too: a value equal to what the manifest recorded (`recorded`) is
- * Geneseed's, from the `--learn` choice (`active (haiku)`); any other is the user's (`active (set by
- * you)`). With no command, `--learn off` reads `off` and anything else `dormant`.
+ * The Claude-shaped hook runs `$GENESEED_LLM` when the user set one, read from the HOOK's env — which
+ * Claude Code builds from the shell AND from the `"env"` object of the settings files, so `settingsEnv`
+ * carries those objects in (this verb runs in a terminal or the web daemon, which see neither). Else it
+ * runs the command its `--learn-model` gives (O13), which the manifest records (`baked`). A command equal
+ * to what is Geneseed's (`recorded`: `baked`, or an older build's `settings_env` value) reads as the
+ * `--learn` choice (`active (haiku)`); any other is the user's (`active (set by you)`). With no command,
+ * `--learn off` reads `off` and anything else `dormant`.
  * OpenCode's learn plugin distils with the session's own model and reads no `$GENESEED_LLM` at all.
  * Bob's Stop payload carries no transcript, so learn returns at once there: not dormant, n/a.
  *
  * `last` is `readLearnLast()`: a failed verdict appends ` · last run failed <date>: <reason>`, a run still marked
  * running past its `by` ` · last run stuck since <date>`. The file is machine-wide: it holds the latest run of any install.
- * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, learn?: string|null }]`;
+ * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, baked?: string|null, learn?: string|null }]`;
  * with none, the env alone answers, as before.
  */
 export function learnState(env = process.env, installs = [], last = null) {
   if (!installs.length) return env.GENESEED_LLM ? `active${learnLastNote(last)}` : LEARN_UNSET;
   const byHost = new Map();
-  for (const { host, settingsEnv = [], recorded = null, learn = null } of installs) {
+  for (const { host, settingsEnv = [], recorded = null, baked = null, learn = null } of installs) {
     let state;
     if (host === 'opencode') state = 'active (session model)';
     else if (host === 'bob') state = 'n/a (Bob sends no transcript)';
     else {
       // The files run user < project < local, and Claude Code applies the later one: search from the end.
-      const llm = [...settingsEnv].reverse().find((e) => isDict(e) && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+      // A `$GENESEED_LLM` wins in the hook (O13); without one, the hook runs the command its `--learn-model` gives.
+      const set = [...settingsEnv].reverse().find((e) => isDict(e) && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+      const llm = set || baked || '';
       if (!llm) state = learn === 'off' ? 'off' : LEARN_UNSET;
       else if (recorded && recorded === llm) state = `active (${/--model\s+(\S+)/.exec(llm)?.[1] ?? 'session model'})`;
       else state = 'active (set by you)';

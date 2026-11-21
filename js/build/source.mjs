@@ -609,6 +609,30 @@ export function splitTier(text) {
   return m ? { text: text.slice(0, m.index) + text.slice(m.index + m[0].length), tier: m[1] }
     : { text, tier: 'standard' };
 }
+/**
+ * The sub-agent effort a seat runs at on Claude Code (`effort:` in its frontmatter, Claude Code
+ * 2.1.78+). An agent source names it on a line of its own, `<!-- effort: low|medium -->`, directly
+ * above its tier line, or directly above `## When to dispatch` when it has none; no marker writes
+ * no line, so the seat inherits the session's effort.
+ *
+ * ONLY THE TWO LOW LEVELS, ON PURPOSE. A marker steps a seat DOWN from the session, the way a tier
+ * does (`strong` is the parent's model, never a bigger one): exploration and reading seats lose
+ * nothing at low effort and keep the parent's window out of the dumb zone sooner. A verification
+ * seat (reviewer, tester, security) carries no marker, so it runs at whatever the user chose,
+ * which is where effort pays. `high` and above are not markable: raising a seat over the session
+ * would spend the user's tokens on a level they did not pick.
+ *
+ * Stripped from every output, whole, like the tier line (`splitEffort`).
+ */
+export const EFFORT_MARKER_RE = /^[ \t]*<!--[ \t]*effort:[ \t]*(low|medium)[ \t]*-->[ \t]*\r?\n/m;
+/** The efforts a marker may name; an unmarked agent writes no `effort:` line. */
+export const MARKED_EFFORTS = Object.freeze(['low', 'medium']);
+/** `{ text, effort }`: the spec without its effort line, and the effort it named (null when none). */
+export function splitEffort(text) {
+  const m = EFFORT_MARKER_RE.exec(text);
+  return m ? { text: text.slice(0, m.index) + text.slice(m.index + m[0].length), effort: m[1] }
+    : { text, effort: null };
+}
 export function aliasesOf(text) {
   const m = ALIASES_RE.exec(text);
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];

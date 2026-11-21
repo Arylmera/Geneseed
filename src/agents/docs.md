@@ -2,6 +2,7 @@
 
 > {{DESC_DOCS}}
 
+<!-- effort: medium -->
 ## When to dispatch
 - A feature is complete and its README / API docs / changelog must follow.
 - Existing docs have drifted from the code a change touched.

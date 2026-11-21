@@ -2,6 +2,7 @@
 
 > {{DESC_STEWARD}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a defence of the long term against short-term wins.

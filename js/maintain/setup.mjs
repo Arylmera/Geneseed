@@ -528,11 +528,9 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
     lines.push(['warn', 'build failed — see the output above']);
   }
   if (ok && f.settings) {
+    // No word about learning here: it follows `--learn` (default light) and needs no `$GENESEED_LLM` (O13);
+    // `geneseed status` says whether it runs.
     lines.push(['ok', `${f.hookGroups} hook groups wired in ${f.settings}`]);
-    if (!process.env.GENESEED_LLM) {
-      lines.push(['info', 'memory learning is off until you set GENESEED_LLM '
-        + '(see docs/reference/env-context.md)']);
-    }
   }
   if (emit === 'files') {
     lines.push(['info', `point your tool's instructions at ${f.rootFile}`]);

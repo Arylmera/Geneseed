@@ -439,10 +439,14 @@ const COST_DENIED = [
  * cannot name tools it has never seen, so a read-only agent in a session with such a server can
  * still write through it, until this becomes an allowlist (`tools:`).
  */
-function claudeAgentFrontmatter(stem, text, model = null) {
+function claudeAgentFrontmatter(stem, text, model = null, effort = null) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
   // `model` is `agentModel(...).model`: the one precedence, resolved by the caller.
   if (model) fm.push(`model: ${model}`);
+  // `effort` is the seat's `<!-- effort: -->` marker (`splitEffort`); none inherits the session's.
+  // Claude Code only: OpenCode's nearest key (`variant`) names provider-specific variants, so a
+  // marker there could name one the user's model lacks; the user's own `variant` override stays.
+  if (effort) fm.push(`effort: ${effort}`);
   const list = [];
   if (isReadonly(text)) {
     list.push('Write', 'Edit', 'NotebookEdit', 'Agent', 'Task');
@@ -890,7 +894,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     written.push(dest);
   };
 
-  for (const { text, src: source, rel, licenceOf, tier = 'standard' } of items) {
+  for (const { text, src: source, rel, licenceOf, tier = 'standard', effort = null } of items) {
     // A credited skill's upstream licence: copied verbatim beside its SKILL.md, held like a side
     // file until that claim holds. Routed by `licenceOf`, since `source` is the upstream's file.
     if (licenceOf) {
@@ -955,7 +959,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let userOnly = false;
     if (folder === 'agents') {
       if (bobDialect) fm = bobAgentFrontmatter(stem, text);
-      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, agentModel(tier, agentOverride(ov, stem).model, tiersHere).model);
+      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, agentModel(tier, agentOverride(ov, stem).model, tiersHere).model, effort);
       else fm = opencodeAgentFrontmatter(stem, text, ov, theme, tier, tiersHere);
       dest = path.join(agentsDir, `${stem}.md`);
       body = stripAgentSkillLinks(body);

@@ -395,7 +395,10 @@ global emit and leaves the install intact*) proves a refused emit leaves the pri
    **Agents only:** decide the model tier. No marker is `standard`; a read-only, read-and-summarise
    seat adds `<!-- tier: light -->`, and a judgement seat that must run on the session model adds
    `<!-- tier: strong -->`, on a line of its own directly above `## When to dispatch` (the build
-   strips it; `--tiers auto` reads it). A seat that writes code is never `light`.
+   strips it; `--tiers auto` reads it). A seat that writes code is never `light`. Then the
+   effort: no marker inherits the session's; a seat that only reads, argues or writes prose may
+   step down with `<!-- effort: low|medium -->` directly above the tier line (or the heading).
+   A seat that verifies work or writes code stays unmarked.
 2. One row in the hand-authored table in `src/AGENT.md.tmpl` (the `## 3.` table for agents, the `## 4.` one for skills).
    Gated both ways: a row with no file, and a file with no row.
 3. `DESC_<NAME>` in **all fourteen** themes. Theme parity catches a missing one; nothing catches

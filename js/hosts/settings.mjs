@@ -46,6 +46,7 @@ import { SHIM_MARK, claudeHookShell, hookPrefix, shimHome } from './shim.mjs';
 import { GLOBAL_MANIFEST, ownHookVerb } from './hosts.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { askDecision } from './hooks-prims.mjs';
+import { LEARN_MODEL_RE, LEARN_SESSION } from './learn-command.mjs';
 
 // `readJsonc` moved to ../lib/json.mjs so the hook path can parse a settings file (A2 L2).
 export { readJsonc };
@@ -900,7 +901,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   gates = {}) {
   // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
   const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true,
-    externalGate = true, testNote = true, ownBranchPass = true } = gates ?? {};
+    externalGate = true, testNote = true, ownBranchPass = true, learnModel = null } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -1007,7 +1008,12 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     + down;
   // `--no-rule-store` on learn: with process 1 off a rule write runs with no prompt, so the change
   // report must not count it as approved (`storeReport`). Bob's learn reports every change already.
-  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
+  // `--learn-model` (O13): the model learn distils with, or `session`, baked here instead of the settings `env`
+  // (js/hosts/learn-command.mjs says why). Absent means no learning. Checked again against LEARN_MODEL_RE, since
+  // this string runs in a shell; a value that fails is left out (the emit has already fallen back to `session`).
+  const lm = typeof learnModel === 'string' && (learnModel === LEARN_SESSION || LEARN_MODEL_RE.test(learnModel))
+    ? ` --learn-model ${learnModel}` : '';
+  const learn = `${run} learn ${mem}${h}${lm}${doneGate === false ? ' --no-done-gate' : ''}`
     + `${testNote === false ? ' --no-test-note' : ''}${ruleFlags('learn', doctrines, excluded)} || exit 0`;
   const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
