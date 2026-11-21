@@ -365,6 +365,8 @@ const WITHHELD = [
   ['web/', 'the React sources, the vite config and package-lock. web/dist is TRACKED, so the '
     + 'console never needs building at install time'],
   ['.github/', 'CI configuration for this repository'],
+  ['changes/', 'changelog fragments waiting for the next release; the release folds them into '
+    + 'CHANGELOG.md, which ships'],
   ['install', 'the clone-only installer: checks Node and git, then runs `setup`. An npm install '
     + 'already has Node, and its own front door is `npx geneseed setup`'],
   ['install.cmd', 'the Windows twin of `install`, same argument'],

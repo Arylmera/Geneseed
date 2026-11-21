@@ -767,8 +767,9 @@ function withoutVerifiedBlock(text) {
  * WHY. Nine pages each carried their own sentence, written at different times, and they
  * disagreed: two said OpenClaude had never been run while the canary ran it weekly, and three
  * said nothing about Bob had been seen live after two live sessions. A claim with a date can
- * only stay true where someone will look for it. `CHANGELOG.md` and `docs/adr/` are dated
- * records of what was true then, so they are exempt; the block itself is where the words belong.
+ * only stay true where someone will look for it. `CHANGELOG.md`, its pending fragments under
+ * `changes/` and `docs/adr/` are dated records of what was true then, so they are exempt; the
+ * block itself is where the words belong.
  */
 export function strayClaimProblems(root = ROOT) {
   const problems = [];
@@ -778,7 +779,8 @@ export function strayClaimProblems(root = ROOT) {
       + 'place that says what was checked against each host');
   }
   for (const rel of checkoutTextFiles(root)) {
-    if (!rel.endsWith('.md') || rel === 'CHANGELOG.md' || rel.startsWith('docs/adr/')) continue;
+    if (!rel.endsWith('.md') || rel === 'CHANGELOG.md' || rel.startsWith('changes/')
+      || rel.startsWith('docs/adr/')) continue;
     let text;
     try { text = readText(path.join(root, ...rel.split('/'))); } catch { continue; }
     if (rel === VERIFIED_FILE) text = withoutVerifiedBlock(text);

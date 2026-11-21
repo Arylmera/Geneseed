@@ -8,4 +8,6 @@ Issues and pull requests are welcome. Three places answer most questions before 
 
 Keep pull requests small and focused: one concern per PR, the proof in its description (the template lists the commands). A change too big to review in one sitting — agent-written ones especially — is split into a stack of PRs, each green on its own. Security problems go through [SECURITY.md](SECURITY.md), not a public issue.
 
+Do not edit `CHANGELOG.md` in a pull request. A `feat`, `fix` or `perf` PR adds one fragment, `changes/<slug>.<type>.md`, and the release folds the fragments into the version's section. [changes/README.md](changes/README.md) has the format, and the `pr-title` check enforces it.
+
 Adding a theme is one JSON file in `themes/` with the same voice-token keys; `geneseed doctor` tells you what is missing. Adding any other tracked file needs a row, with a reason, in `tests/unit/package_manifest.test.mjs`.

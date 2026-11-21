@@ -205,6 +205,12 @@ Protected skills are *scanned*, not listed: `linkedSkillIds` (`js/build/source.m
 `{{DIR_SKILLS}}/<name>` link outside the §4 catalogue table, so writing a new link protects its
 target automatically.
 
+**A PR never edits `CHANGELOG.md`; it adds a fragment.** A `feat`, `fix` or `perf` PR, and any
+breaking PR, adds `changes/<slug>.<type>.md`. The `pr-title` check fails without one, unless the PR
+has the `no-changelog` label. `## [Unreleased]` stays empty, and a suite test fails if it is not.
+At release, `node tests/changelog.mjs --fold <version>` seals the fragments as the version's
+section and deletes them. Commit that with the version bump. Format: `changes/README.md`.
+
 **Adding any tracked file fails the packaging suite** until it has a row, with a written reason, in
 the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 
