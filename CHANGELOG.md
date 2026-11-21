@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Agents start lighter on Claude Code and OpenClaude.** Every agent now carries a `disallowedTools` list of session-only tools it never needs (artifacts, workflows, user cards and files, scheduling, cross-session messaging, the desktop app's own MCP servers). Each loaded tool's schema sits in an agent's context and is read again on every turn; measured on Claude Code 2.1.318, the list takes an agent's start from 60.9k to 43.0k tokens. It is a denylist on purpose: every MCP server it does not name stays available, so a worker keeps the servers of whatever machine it runs on. `SendMessage`, `Agent`, `Skill` and `ToolSearch` stay. Read-only agents keep their own denies, with the list after them on the same line.
+
 ## [6.0.4] — 2026-11-18
 
 ### Added
