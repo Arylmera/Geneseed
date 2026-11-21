@@ -110,7 +110,8 @@ const VERBS = {
     load: () => import('../js/hosts/hooks-learn.mjs'),
     fn: 'cmdLearn',
     // `--host` only keys the global stand-down's marker (js/hosts/hosts.mjs); learn has no dialect.
-    flags: { '--memory': 'memory', '--host': 'host' },
+    // `--learn-model` (O13): the model the emit chose, turned into the command by js/hosts/learn-command.mjs.
+    flags: { '--memory': 'memory', '--host': 'host', '--learn-model': 'learnModel' },
     switches: {
       '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate', '--no-test-note': 'noTestNote',
       '--no-rule-store': 'noRuleStore',

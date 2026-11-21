@@ -35,6 +35,7 @@ import {
 import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { pickStored, storedLine } from './memory-search.mjs';
+import { learnCommandFor } from './learn-command.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -657,9 +658,11 @@ export function cmdLearn(args) {
   // is the documented, deliberate behaviour (docs/reference/env-context.md) for someone running
   // `learn` by hand to see what would have been sent, and `hookEvent` being unset is exactly what
   // tells the two apart.
-  const llm = process.env.GENESEED_LLM;
+  // O13: the user's `$GENESEED_LLM` wins (a custom CLI or model); else the command the emit's `--learn-model`
+  // names on this host (js/hosts/learn-command.mjs); neither means learning is off for this install.
+  const llm = process.env.GENESEED_LLM || learnCommandFor(args.host, args.learnModel);
   if (hookEvent && !llm) {
-    err('[learn] $GENESEED_LLM unset — nothing to distil.\n');
+    err('[learn] no learn model (--learn off, and $GENESEED_LLM unset) — nothing to distil.\n');
     return 0;
   }
 
@@ -850,6 +853,9 @@ function startDistil(meta, args, install, hookEvent, llm) {
     sweepJobs(dir);
     const file = path.join(dir, `job-${Date.now()}-${process.pid}.json`);
     writeFileSync(file, `${JSON.stringify(job)}\n`);
+    // The worker takes its model command from its OWN env, never from the job (ADR 0002: a job is data). A
+    // command derived from `--learn-model` is put there for it to inherit; the spawn itself is unchanged.
+    if (!process.env.GENESEED_LLM) process.env.GENESEED_LLM = llm;
     spawnWorker(file);
     dropQueue();
   } catch (e) {

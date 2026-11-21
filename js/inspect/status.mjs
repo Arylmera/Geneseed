@@ -293,12 +293,16 @@ export function learnInstalls(targets = installTargets()) {
       const dir = path.join(root, spec.projectMarker);
       files.push(path.join(dir, 'settings.json'), path.join(dir, 'settings.local.json'));
     }
-    // What the manifest recorded Geneseed wrote (D5): a value equal to it is Geneseed's, any other is the user's.
+    // `baked`: the command the learn hook derives from its `--learn-model` (O13), as the emit recorded it — what the
+    // hook runs with no `$GENESEED_LLM`. `recorded`: the value that is Geneseed's, that command, or on an install no
+    // build has reached since O13 the older `settings_env` record (which the hook only runs while it is in `env`).
     const cfg = claudeCfg(root, scope, host);
-    const recorded = claudeReadManifest(cfg).managed?.settings_env?.GENESEED_LLM;
+    const managed = claudeReadManifest(cfg).managed;
+    const baked = typeof managed?.learn_command === 'string' ? managed.learn_command : null;
+    const recorded = baked ?? managed?.settings_env?.GENESEED_LLM;
     let learn = null;
     try { learn = learnOfDir(cfg, host); } catch { /* no carrier: the default */ }
-    out.push({ host, settingsEnv: files.map(envOf), recorded: typeof recorded === 'string' ? recorded : null, learn });
+    out.push({ host, settingsEnv: files.map(envOf), recorded: typeof recorded === 'string' ? recorded : null, baked, learn });
   }
   return out;
 }
