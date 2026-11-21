@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Foreman mode delegates less.** A worker costs a fixed start (about 80k tokens of instructions and tools on Claude Code, read again on every turn) and a blind review, and a month of measured sessions put a Foreman commit at about 55 % more tokens than a direct one. The session now delegates only a task that runs a command longer than about a minute, work that runs beside other work in flight, or a change to five or more files (was three). When unsure, it does the task inline (was: delegate). It always starts a worker as the `developer` agent, never as a general-purpose one.
+
 ## [6.0.4] — 2026-11-18
 
 ### Added
