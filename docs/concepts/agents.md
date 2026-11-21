@@ -21,6 +21,7 @@ An **agent** is a specialist the main session can hand a piece of work to. Each 
 | `researcher` | searches the open web, cross-checks every claim against two sources, returns sourced findings |
 | `architect` | produces a design or implementation plan before code is written |
 | `developer` | implements a scoped change in an isolated worktree, self-checked, ready for the tester |
+| `crew-lead` | leads a pipeline crew in its own worktree: picks the crew, runs the hand-offs, and returns one result with proof, holding every member's result first |
 | `tester` | writes, runs and diagnoses tests |
 | `reviewer` | reviews a change for correctness and quality before it merges |
 | `security` | audits changes that touch the security surface |

@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Runs the pre-push scan: correctness first, craft second.",
   "DESC_TESTER": "Builds the test rigs, runs them, traces the crash.",
   "DESC_DEVELOPER": "Codes the scoped patch in its own fork, then hands it over.",
+  "DESC_CREW_LEAD": "Runs the crew from its own fork, routes the relay, ships one verified build.",
   "DESC_ARCHITECT": "Maps the run before a single line hits the deck.",
   "DESC_DOCS": "Writes the user-facing data once the code goes live.",
   "DESC_SECURITY": "Breaks and checks ICE on the security surface.",

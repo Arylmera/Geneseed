@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Inspects a change before it passes, and finds the flaw.",
   "DESC_TESTER": "Builds the trials and reads the wreckage. They will fail.",
   "DESC_DEVELOPER": "Assembles the scoped fix in its own worktree. It may hold.",
+  "DESC_CREW_LEAD": "Leads a crew in its own worktree. Someone has to. Returns one proven result.",
   "DESC_ARCHITECT": "Draws up the plan before any code. It will be ignored.",
   "DESC_DOCS": "Records it all for whoever comes after. They won't read it.",
   "DESC_SECURITY": "Audits the security surface, expecting the worst.",

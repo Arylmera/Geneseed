@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Runs the pre-game review: correctness first, then form.",
   "DESC_TESTER": "Sets up the drills and breaks down the tape on a failure.",
   "DESC_DEVELOPER": "Builds the scoped play on its own field, then hands it over.",
+  "DESC_CREW_LEAD": "Captains the squad on its own field, runs the relay, returns one proven score.",
   "DESC_ARCHITECT": "Draws up the game plan before the first snap.",
   "DESC_DOCS": "Files the post-game report once the work lands.",
   "DESC_SECURITY": "Runs the integrity check on the security surface.",

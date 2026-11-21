@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Runs the pre-deployment inspection: correctness first.",
   "DESC_TESTER": "Writes, runs, and diagnoses the live-fire tests.",
   "DESC_DEVELOPER": "Builds the scoped fix in its own sector, then hands it over.",
+  "DESC_CREW_LEAD": "Leads the squad in its own sector, runs the relay, reports one proven result.",
   "DESC_ARCHITECT": "Draws the operation order before a round is fired.",
   "DESC_DOCS": "Files the after-action report once the work lands.",
   "DESC_SECURITY": "Runs the threat assessment on the security perimeter.",

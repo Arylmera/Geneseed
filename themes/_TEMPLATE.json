@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "<one-line description: reviews a change for correctness and quality before merge>",
   "DESC_TESTER": "<one-line description: writes, runs, and diagnoses tests>",
   "DESC_DEVELOPER": "<one-line description: implements the scoped change in an isolated worktree, self-checked, ready for the tester>",
+  "DESC_CREW_LEAD": "<one-line description: leads a pipeline crew in its own worktree, runs the relay, returns one proven envelope>",
   "DESC_ARCHITECT": "<one-line description: produces a design/plan before code>",
   "DESC_DOCS": "<one-line description: writes user-facing docs after code lands>",
   "DESC_SECURITY": "<one-line description: audits changes touching the security surface>",

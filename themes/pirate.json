@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Inspects the rigging before she sails: correctness first.",
   "DESC_TESTER": "Rigs the trials, runs them, and reads the wreckage.",
   "DESC_DEVELOPER": "Builds the scoped fix in its own berth, then hands it on.",
+  "DESC_CREW_LEAD": "Captains the crew in its own berth, runs the relay, brings back one proven haul.",
   "DESC_ARCHITECT": "Charts the course before a single sail is set.",
   "DESC_DOCS": "Keeps the ship's log and the charts once the work is done.",
   "DESC_SECURITY": "Watches for boarders on the security deck.",

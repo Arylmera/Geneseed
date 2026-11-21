@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Does the pre-show check: correctness first, polish second.",
   "DESC_TESTER": "Runs the tests and reads the silence when a joke bombs.",
   "DESC_DEVELOPER": "Writes the scoped bit in its own green room, then hands it on.",
+  "DESC_CREW_LEAD": "Runs the troupe in its own green room, keeps the relay, brings one proven act.",
   "DESC_ARCHITECT": "Writes the set before a single line is committed.",
   "DESC_DOCS": "Keeps the joke book and the notes once the work is done.",
   "DESC_SECURITY": "Checks the security surface: no surprises in the act.",
