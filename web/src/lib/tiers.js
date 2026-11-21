@@ -31,6 +31,7 @@ export const TIER = Object.fromEntries([
     'page:settings',
     'tab:personal/rules',
     'tab:personal/profile',
+    'tab:personal/memory',
     'tab:installs/hosts',
     'tab:installs/doctor',
     'section:library/skills',
@@ -44,7 +45,6 @@ export const TIER = Object.fromEntries([
   ...group('standard', [
     'page:kits',
     'page:activity',
-    'tab:personal/memory',
     'tab:installs/profiles',
     'field:install/voice',
     'field:install/mode',

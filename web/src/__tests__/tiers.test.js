@@ -34,6 +34,9 @@ describe('view-level table', () => {
       'page:settings': E,
       'tab:personal/rules': E,
       'tab:personal/profile': E,
+      // Memory is where a user looks for what the agent remembers; the default level is
+      // Essentials, so a Standard row hid the only way to list the facts.
+      'tab:personal/memory': E,
       'tab:installs/hosts': E,
       'tab:installs/doctor': E,
       'section:library/skills': E,
@@ -45,7 +48,6 @@ describe('view-level table', () => {
       'field:install/posture': E,
       'page:kits': S,
       'page:activity': S,
-      'tab:personal/memory': S,
       'tab:installs/profiles': S,
       'field:install/voice': S,
       'field:install/mode': S,
@@ -73,6 +75,7 @@ describe('view-level table', () => {
     expect(visible('page:loops', 'standard')).toBe(false)
     expect(visible('section:library/wiki', 'standard')).toBe(false)
     expect(visible('tab:installs/doctor', 'essentials')).toBe(true)
+    expect(visible('tab:personal/memory', 'essentials')).toBe(true)
     expect(visible('section:settings/danger', 'standard')).toBe(false)
     expect(visible('section:settings/danger', 'power')).toBe(true)
   })
