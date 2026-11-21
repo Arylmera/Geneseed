@@ -2,6 +2,7 @@
 
 > {{DESC_ADVOCATE}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs the strongest case for the motion.

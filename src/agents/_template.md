@@ -42,6 +42,10 @@
   seats) or `strong` (judgement seats that must run on the session model), put the marker
   `<!-- tier: light -->` on a line of its own directly above `## When to dispatch`; the build
   strips it from every output. A seat that writes code is never `light`.
+- Effort: an unmarked agent inherits the session's effort. A seat that only reads, argues or
+  writes prose may step down with `<!-- effort: low -->` or `<!-- effort: medium -->` on a line
+  of its own directly above the tier marker (or above `## When to dispatch` with no tier); Claude
+  Code writes it as `effort:`. A seat that verifies work or writes code stays unmarked.
 - Caution: the build detects the phrase "Read-only" anywhere in the file — a
   write-capable {{AGENT}}'s spec must not contain it, or its emit is locked down.
 

@@ -197,7 +197,9 @@ test('with the option off an agent is its pre-marker text: the strip removes the
     }
     marked += 1;
     assert.equal(text, lines.filter((_, i) => i !== at).join('\n'), `${f}: the strip removed more than the marker line`);
-    assert.equal(lines[at - 1], '', `${f}: the marker must follow a blank line`);
+    // A blank line, or the seat's effort line (`effort.test.mjs`), which the build strips too.
+    assert.ok(lines[at - 1] === '' || /^<!-- effort: (low|medium) -->$/.test(lines[at - 1]),
+      `${f}: the marker must follow a blank line or the effort line`);
     assert.equal(lines[at + 1], '## When to dispatch', `${f}: the marker must sit directly above the heading`);
     assert.doesNotMatch(text, /<!--\s*tier:/, f);
   }

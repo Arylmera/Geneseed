@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Reading seats step their effort down on Claude Code.** An agent source can carry `<!-- effort: low|medium -->`, and a Claude Code install writes it as `effort:` in the agent's frontmatter. `explorer` runs at `low`; the ten council debaters, `docs` and `memory-curator` at `medium`. The verification seats (`reviewer`, `tester`, `security`, `performance`) and `developer` carry no marker and keep your session's effort, where effort pays. A marker can only step down, never up. OpenCode and Bob are unchanged.
+
 ### Changed
 
 - **Agents start lighter on Claude Code and OpenClaude.** Every agent now carries a `disallowedTools` list of session-only tools it never needs (artifacts, workflows, user cards and files, scheduling, cross-session messaging, the desktop app's own MCP servers). Each loaded tool's schema sits in an agent's context and is read again on every turn; measured on Claude Code 2.1.318, the list takes an agent's start from 60.9k to 43.0k tokens. It is a denylist on purpose: every MCP server it does not name stays available, so a worker keeps the servers of whatever machine it runs on. `SendMessage`, `Agent`, `Skill` and `ToolSearch` stay. Read-only agents keep their own denies, with the list after them on the same line.

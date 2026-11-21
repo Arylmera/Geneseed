@@ -37,7 +37,7 @@ import { normcase, comparePaths } from '../lib/paths.mjs';
 import {
   CREDIT_RE, GATE_SWITCHES, PACK_ORDER, WORKFLOW_PROVIDER_HEADING, kitMembers, linkTargetOf, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
-import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, LEARN_MARKER, TIERS_MARKER, splitTier } from './source.mjs';
+import { CONTEXT_WINDOW_MARKER, DEFAULT_CONTEXT_WINDOW, DEFAULT_LEARN, DEFAULT_TIERS, LEARN_MARKER, TIERS_MARKER, splitEffort, splitTier } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
 import { PROJECT_NOTES_DIR } from '../hosts/spec-feedback.mjs';
 import { PORTABLE_MACHINE_DIR } from '../lib/machine-dir.mjs';
@@ -867,11 +867,14 @@ export function renderAll(cfg, themeName, {
         && VENDORED_SKILL_DIRS.has(sp[1])) text = vendoredWithCatalogueLine(text, sp[1], cfg.src);
     // An agent's tier line is read here and stripped, so no host's output carries it
     // (`splitTier`); the emit reads the tier off the item.
+    // The effort line likewise (`splitEffort`); an agent item carries `effort`, null when unmarked.
     let tier;
+    let effort = null;
     if (text !== null && sp[0] === 'agents' && sp.length === 2 && sp[1].endsWith('.md')) {
+      ({ text, effort } = splitEffort(text));
       ({ text, tier } = splitTier(text));
     }
-    items.push(tier === undefined ? { rel: outRel, text, src: file } : { rel: outRel, text, src: file, tier });
+    items.push(tier === undefined ? { rel: outRel, text, src: file } : { rel: outRel, text, src: file, tier, effort });
     // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The
     // token is gone from `text`, so the raw source is scanned; an unknown key or a null
     // licenseFile yields no copy. A vendored folder's VENDOR.md carries a credit too, but the
