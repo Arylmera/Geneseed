@@ -48,7 +48,10 @@ export function useSkillStaging(items, keys, onAction) {
   const change = (key) => {
     const set = setOf(key)
     const was = new Set(excludedOf(items, key))
-    return { off: [...set].filter((n) => !was.has(n)).sort(), on: [...was].filter((n) => !set.has(n)).sort() }
+    return {
+      off: [...set].filter((n) => !was.has(n)).sort(),
+      on: [...was].filter((n) => !set.has(n)).sort(),
+    }
   }
   const staged = keys.filter((k) => {
     const c = change(k)
@@ -62,7 +65,11 @@ export function useSkillStaging(items, keys, onAction) {
   }
   const apply = async (key, install) => {
     // runAction resolves to the job id, or undefined when the server refused it.
-    const job = await onAction('install', { host: install.host, path: install.path, excludeSkills: [...setOf(key)].sort() })
+    const job = await onAction('install', {
+      host: install.host,
+      path: install.path,
+      excludeSkills: [...setOf(key)].sort(),
+    })
     if (job) store.startApply('skills', key)
     else store.fail('skills', key)
   }

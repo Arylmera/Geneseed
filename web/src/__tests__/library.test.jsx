@@ -158,19 +158,41 @@ describe('Library', () => {
         items:
           section === 'skills'
             ? [
-                { name: 'both', klass: 'design', installs: [CL, OC], ships: { [CL]: 'on', [OC]: 'on' } },
-                { name: 'cl-only', klass: 'design', installs: [CL], ships: { [CL]: 'on', [OC]: 'absent' } },
-                { name: 'oc-gone', klass: 'design', installs: [CL], ships: { [CL]: 'on', [OC]: 'excluded' } },
+                {
+                  name: 'both',
+                  klass: 'design',
+                  installs: [CL, OC],
+                  ships: { [CL]: 'on', [OC]: 'on' },
+                },
+                {
+                  name: 'cl-only',
+                  klass: 'design',
+                  installs: [CL],
+                  ships: { [CL]: 'on', [OC]: 'absent' },
+                },
+                {
+                  name: 'oc-gone',
+                  klass: 'design',
+                  installs: [CL],
+                  ships: { [CL]: 'on', [OC]: 'excluded' },
+                },
               ]
             : [],
       }),
     )
-    const counts = { skills: 3, agents: 9, byInstall: { [CL]: { skills: 3, agents: 7 }, [OC]: { skills: 2, agents: 4 } } }
+    const counts = {
+      skills: 3,
+      agents: 9,
+      byInstall: { [CL]: { skills: 3, agents: 7 }, [OC]: { skills: 2, agents: 4 } },
+    }
     try {
       localStorage.removeItem('geneseed-library-scope')
       render(<Library section="skills" overview={overview(counts)} />)
       await waitFor(() => expect(document.querySelectorAll('.lib-scope-opt')).toHaveLength(3))
-      const names = () => [...document.querySelectorAll('a[href^="#/item/skill/"]')].map((a) => a.getAttribute('href').split('/').pop())
+      const names = () =>
+        [...document.querySelectorAll('a[href^="#/item/skill/"]')].map((a) =>
+          a.getAttribute('href').split('/').pop(),
+        )
       await waitFor(() => expect(names()).toEqual(['both', 'cl-only', 'oc-gone']))
       expect(document.querySelectorAll('.lr-dots').length).toBeGreaterThan(0)
       fireEvent.click(document.querySelectorAll('.lib-scope-opt input')[2])

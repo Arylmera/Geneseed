@@ -601,7 +601,11 @@ export default function Library({
                       onChange={() => setScopeKey(k)}
                     />
                     {k ? (
-                      <i className="lr-dot" style={dotColour(fleetKeys.indexOf(k))} aria-hidden="true" />
+                      <i
+                        className="lr-dot"
+                        style={dotColour(fleetKeys.indexOf(k))}
+                        aria-hidden="true"
+                      />
                     ) : null}
                     <span className="lib-scope-name">{k ? installLabel(k) : 'All installs'}</span>
                     <span className="mono dim">

@@ -25,7 +25,8 @@ const STATE_TEXT = {
 }
 
 function chipTitle(state, tag, row, kind) {
-  if (state === 'kit-off') return `${row.name} is in the ${row.kit} kit, which is off in ${tag}: turn it on in Kits`
+  if (state === 'kit-off')
+    return `${row.name} is in the ${row.kit} kit, which is off in ${tag}: turn it on in Kits`
   if (kind === 'agent') {
     if (state === 'absent') return `${tag} does not ship ${row.name}`
     if (row.locked) return `${row.name} is a core agent: it ships with every install`
