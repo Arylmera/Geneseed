@@ -46,6 +46,7 @@ import { SHIM_MARK, claudeHookShell, hookPrefix, shimHome } from './shim.mjs';
 import { GLOBAL_MANIFEST, ownHookVerb } from './hosts.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { askDecision } from './hooks-prims.mjs';
+import { LEARN_MODEL_RE, LEARN_SESSION } from './learn-command.mjs';
 
 // `readJsonc` moved to ../lib/json.mjs so the hook path can parse a settings file (A2 L2).
 export { readJsonc };
@@ -900,7 +901,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   gates = {}) {
   // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
   const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true,
-    externalGate = true, testNote = true, ownBranchPass = true } = gates ?? {};
+    externalGate = true, testNote = true, ownBranchPass = true, learnModel = null } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -1007,7 +1008,12 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     + down;
   // `--no-rule-store` on learn: with process 1 off a rule write runs with no prompt, so the change
   // report must not count it as approved (`storeReport`). Bob's learn reports every change already.
-  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
+  // `--learn-model` (O13): the model learn distils with, or `session`, baked here instead of the settings `env`
+  // (js/hosts/learn-command.mjs says why). Absent means no learning. Checked again against LEARN_MODEL_RE, since
+  // this string runs in a shell; a value that fails is left out (the emit has already fallen back to `session`).
+  const lm = typeof learnModel === 'string' && (learnModel === LEARN_SESSION || LEARN_MODEL_RE.test(learnModel))
+    ? ` --learn-model ${learnModel}` : '';
+  const learn = `${run} learn ${mem}${h}${lm}${doneGate === false ? ' --no-done-gate' : ''}`
     + `${testNote === false ? ' --no-test-note' : ''}${ruleFlags('learn', doctrines, excluded)} || exit 0`;
   const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
@@ -1392,6 +1398,14 @@ export function wireClaudeExcludes(p, excludes) {
 export const CLAUDE_ENV = Object.freeze({ CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
 
 /**
+ * The top-level key a Claude Code install sets so the Reliquary is the one memory home: Claude Code's
+ * own auto memory off (`autoMemoryEnabled`, docs code.claude.com/docs/en/memory). Recorded as
+ * `managed.settings_memory` and merged like the listing keys (`wireClaudeListing`), so uninstall and
+ * deactivate take back only our `false`. Claude only: OpenClaude's auto memory is not verified.
+ */
+export const CLAUDE_MEMORY = Object.freeze({ autoMemoryEnabled: false });
+
+/**
  * Add-if-absent into `env`, the `wireClaudeExcludes` shape: a key the user already set, to any
  * value, is theirs and stays. Returns the `{key: value}` pairs actually written, which the
  * manifest records so uninstall removes only those.
@@ -1530,12 +1544,15 @@ export function unwireClaudeEnv(p, recorded) {
  *   untouched and unrecorded, so uninstall never takes it.
  * A commented file is never rewritten: the wanted changes are printed for a hand merge and the
  * keys already owned stay recorded as they are on file.
+ *
+ * `label` names the keys in the messages: the same merge also owns `autoMemoryEnabled`
+ * (`CLAUDE_MEMORY`, `managed.settings_memory`), under its own record.
  */
-export function wireClaudeListing(p, wanted = {}, recorded = {}) {
+export function wireClaudeListing(p, wanted = {}, recorded = {}, label = 'skill-listing') {
   // Parsed, so every number is the `JsonNumber` the renderers require (`jsonDumpsCompact` below).
   const want = parseJson(JSON.stringify(wanted));
   const prior = isDict(recorded) ? recorded : {};
-  const loaded = readSettingsForMerge(p, 'Its skill-listing keys were not wired.');
+  const loaded = readSettingsForMerge(p, `Its ${label} keys were not wired.`);
   // A file that cannot be read changes nothing, so what this install owns stays on record.
   if (!loaded) return { ...prior };
   const [config, hadComments] = loaded;
@@ -1558,7 +1575,7 @@ export function wireClaudeListing(p, wanted = {}, recorded = {}) {
     const add = Object.fromEntries(Object.entries(record).filter(([k, v]) => !deepEquals(config[k], v)));
     const drop = Object.keys(config).filter((k) => !has(next, k));
     process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
-      + '(your edits are kept). Merge its skill-listing keys by hand: set '
+      + `(your edits are kept). Merge its ${label} keys by hand: set `
       + `${jsonDumpsCompact(add)}${drop.length ? `, remove ${drop.join(', ')}` : ''}\n`);
     return Object.fromEntries(Object.keys(prior).filter(owned).map((k) => [k, config[k]]));
   }
@@ -1567,7 +1584,7 @@ export function wireClaudeListing(p, wanted = {}, recorded = {}) {
   } catch (e) {
     if (!isOsError(e)) throw e;
     process.stderr.write(`[geneseed] WARN: could not write ${p} (${e.message}) — its `
-      + `skill-listing keys were not wired. Set them by hand: ${jsonDumpsCompact(want)}\n`);
+      + `${label} keys were not wired. Set them by hand: ${jsonDumpsCompact(want)}\n`);
     return Object.fromEntries(Object.keys(prior).filter(owned).map((k) => [k, config[k]]));
   }
   return record;

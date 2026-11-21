@@ -54,13 +54,13 @@ test("learn plugin: a store document is no fact, and the index rebuild matches t
     const output = ["ARCHIVE-INDEX", "TODO", "fresh"].map(chunk).join("\n---FILE---\n")
     const viaCore = coreWriteMemories(output, a, new Set(["kept"]))
     const viaPlugin = await GeneseedLearn.writeMemories(output, b, new Set(["kept"]))
-    assert.deepEqual(viaCore, { created: ["fresh"], updated: [], archived: [] })
+    assert.deepEqual(viaCore, { created: ["fresh"], updated: [], archived: [], skipped: [] })
     assert.deepEqual(viaPlugin, viaCore)
     const [left, right] = [await snapshot(a), await snapshot(b)]
     assert.deepEqual(right, left)
     // The pointer to the store document is carried, the missing fact's goes, the fact's moved (D4).
     assert.equal(left["MEMORY.md"], [
-      "# Memory Index", "", "Each topic file lists its facts; open the one the task needs.", "",
+      "# Memory Index", "", "Each topic file lists its facts; open the one the task needs, or search every fact: `geneseed memory search \"<words>\"` (OpenCode: the `memory_search` tool).", "",
       "- [project](topics/project.md) — 2 facts", "",
       "## Notes", "A line a person wrote.",
       "- [Archive hub](archive-index.md) — old material", ""].join("\n"))

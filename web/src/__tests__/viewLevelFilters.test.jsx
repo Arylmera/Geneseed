@@ -78,10 +78,10 @@ describe('view level filters the surfaces', () => {
   it('Tabs show visible tabs plus the current one', () => {
     const labels = () => [...document.querySelectorAll('nav.tabs a')].map((a) => a.textContent)
     const { unmount } = at('essentials', <Tabs page="personal" current="rules" />)
-    expect(labels()).toEqual(['Rules', 'Profile'])
+    expect(labels()).toEqual(['Rules', 'Profile', 'Memory'])
     unmount()
     at('essentials', <Tabs page="personal" current="notebook" />)
-    expect(labels()).toEqual(['Rules', 'Profile', 'Notebook'])
+    expect(labels()).toEqual(['Rules', 'Profile', 'Memory', 'Notebook'])
   })
 
   it('Library at Essentials lists Skills and Agents and defaults to Skills', () => {

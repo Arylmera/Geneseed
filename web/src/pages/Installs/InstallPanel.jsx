@@ -12,14 +12,25 @@ const TIER_BENEFIT =
 const TIER_COST =
   "About 1 500 tokens at every session start, growing with your rules. The hook budget is fixed at 9 000 characters, and the tier loads before this project's docs, so a large tier can push them down to a lazy listing."
 
-// `--context-window`: what each value writes into Claude Code's settings.json (CONTEXT_WINDOWS in
-// js/build/source.mjs). Offered on Claude Code only: no other host reads the keys.
-const CONTEXT_WINDOW_OPTIONS = ['200k', '1m']
-const CONTEXT_WINDOW_NOTE = {
-  '200k':
-    'For a 200k-token model: each skill description is cut to 80 characters and the listing budget is 1.3% of the window, so every skill keeps its description.',
-  '1m': 'For a 1M-token model: each skill description is cut to 120 characters, at the default budget of 1% of the window.',
+// `--context-window`: the model window the install is built for (CONTEXT_WINDOWS in
+// js/build/source.mjs). Every host with a relay gate reads it for the task worker's relay ceiling
+// (RELAY_CEILINGS, js/hosts/hooks-relay.mjs); Claude Code also gets the skill-listing keys.
+const CONTEXT_WINDOW_OPTIONS = ['200k', '250k', '1m']
+const CONTEXT_WINDOW_HOSTS = ['claude', 'opencode', 'openclaude']
+const RELAY_NOTE = {
+  '200k': 'A Foreman worker hands off past 120k tokens of context.',
+  '250k': 'A Foreman worker hands off past 150k tokens of context.',
+  '1m': 'A Foreman worker hands off past 300k tokens of context.',
 }
+const LISTING_NOTE = {
+  '200k':
+    'Each skill description is cut to 80 characters and the listing budget is 1.3% of the window, so every skill keeps its description.',
+  '250k':
+    'Each skill description is cut to 80 characters, within the same listing budget as on 200k.',
+  '1m': 'Each skill description is cut to 120 characters, at the default budget of 1% of the window.',
+}
+const contextWindowNote = (host, w) =>
+  `For a ${w === '1m' ? '1M' : w}-token model. ${RELAY_NOTE[w]}${host === 'claude' ? ` ${LISTING_NOTE[w]}` : ''}`
 
 // The hosts whose agents take a model; each one's routing and pins are set on the Models page, so
 // this panel only says what they are and links there (the `--tiers` value rides every rebuild from
@@ -240,7 +251,7 @@ export default function InstallPanel({
       ) : null}
       {(active || absent) &&
       canAct &&
-      inst.host === 'claude' &&
+      CONTEXT_WINDOW_HOSTS.includes(inst.host) &&
       canSee('field:install/context-window') ? (
         <div className="ip-block">
           <label className="dp-field">
@@ -252,7 +263,7 @@ export default function InstallPanel({
               onChange={(v) => onPick('contextWindow', v)}
             />
           </label>
-          <p className="sub">{CONTEXT_WINDOW_NOTE[choice.contextWindow || '200k']}</p>
+          <p className="sub">{contextWindowNote(inst.host, choice.contextWindow || '200k')}</p>
         </div>
       ) : null}
       {active && MODEL_HOSTS.includes(inst.host) ? (

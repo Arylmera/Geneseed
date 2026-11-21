@@ -516,7 +516,7 @@ test("learn: flattenV2 keeps user/assistant text and the last assistant model", 
     { type: "assistant", model: { providerID: "p", id: "m" }, content: [
       { type: "reasoning", text: "hidden" }, { type: "text", text: "answer" }, { type: "tool", name: "x" }] },
   ])
-  assert.deepEqual(out, { notes: "user: question\n\nassistant: answer", model: { providerID: "p", id: "m" } })
+  assert.deepEqual(out, { notes: "user: question\n\nassistant: answer", model: { providerID: "p", id: "m" }, lines: ["user: question", "assistant: answer"] })
 })
 
 test("learn: an execution end distils the transcript into memory/", async () => {
@@ -750,4 +750,36 @@ test("activity: a V2 sub-agent, its step files, and a compaction land on the par
   assert.equal(e.context_at_compaction, 3000)
   assert.equal(e.turns, 2)
   cleanup()
+})
+
+// The relay ceiling on V2 (js/hosts/hooks-relay.mjs; the guard's half): the stream's
+// `session.created` names a child session's parent and agent, `session.step.ended` its tokens.
+// With no `Context window:` line beside this plugin the window is 200k, so the ceiling is 120k.
+// Past it a `developer` child may only commit: a test run is renamed to the reason, a commit and a
+// read-only look pass. The parent session, and a child under the ceiling, are untouched.
+test("guard: a developer child past the relay ceiling may only commit", async () => {
+  const { ctx, hooks, emit, drained } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const before = hooks.tool["execute.before"]
+  const step = async (sessionID, ctxTokens) => {
+    emit("session.step.ended", { sessionID, tokens: { input: 2, output: 10, cache: { read: ctxTokens - 1002, write: 1000 } } })
+    emit("test.barrier", {}); await until(drained)
+  }
+  emit("session.created", { sessionID: "w1", parentID: "root", agent: "developer" })
+  emit("session.created", { sessionID: "root", agent: "build" })
+  await step("w1", 130000)
+  await step("root", 400000)
+  const call = (sessionID, command) => ({ tool: "bash", sessionID, input: { command } })
+  const test = call("w1", "npm test")
+  await before(test)
+  assert.match(test.tool, new RegExp(`${REFUSED}Relay ceiling: your context is 130k tokens, past 120k`))
+  for (const ok of [call("w1", "git add -A && git commit -m \"wip\""), call("w1", "git status"), call("root", "npm test")]) {
+    const was = ok.input.command
+    await before(ok)
+    assert.equal(ok.tool, "bash", `${ok.sessionID}: ${was}`)
+  }
+  await step("w1", 110000)
+  const under = call("w1", "npm test")
+  await before(under)
+  assert.equal(under.tool, "bash", "under the ceiling")
 })

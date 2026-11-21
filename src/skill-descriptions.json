@@ -3,7 +3,7 @@
   "brainstorm": "New feature or project with no design, \"brainstorm\", \"interview me\": spec first.",
   "brick-forge": "New or changed loop brick, \"make a brick\", \"change the test brick\": write it.",
   "bruno": "Bruno API collection, .bru files, OpenCollection YAML: create, convert, test.",
-  "codebase-design": "\"Where should the seam go\", module interface, glossary term, ADR: deep modules.",
+  "codebase-design": "\"Where should the seam go\", module interface, glossary, ADR, architecture audit.",
   "commit": "About to commit changes: stage only the task's paths, one focused message.",
   "compose-ops": "compose.yaml, docker-compose, Dockerfile: health, volumes, pins, secrets.",
   "council": "\"Convene a council\", \"debate this\", \"argue both sides\": viewpoints, a ruling.",

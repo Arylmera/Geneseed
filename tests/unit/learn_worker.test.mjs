@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { wireClaudeEnv, unwireClaudeEnv } from '../../js/hosts/settings.mjs';
-import { learnEnvCommand } from '../../js/build/emit-claude.mjs';
+import { learnModelArg } from '../../js/build/emit-claude.mjs';
+import { learnCommandFor } from '../../js/hosts/learn-command.mjs';
 import { leanArgv } from '../../js/hosts/hooks-learn.mjs';
 import { commandOnPath, learnCommandNotes } from '../../js/inspect/doctor.mjs';
 import { learnInstalls } from '../../js/inspect/status.mjs';
@@ -91,8 +92,9 @@ test('wireClaudeEnv without a record stays add-if-absent (the legacy shape)', ()
   });
 });
 
-// D4: the command, per host and choice.
-test('learnEnvCommand: the command the emit writes', () => {
+// D4, then O13: the command per host and choice. The emit bakes `--learn-model <m>` into the learn hook (learnModelArg)
+// and the hook turns it into the command (learnCommandFor); each row states the command the two give together.
+test('learnModelArg + learnCommandFor: the command the learn hook runs', () => {
   const rows = [
     ['claude light = haiku', ['light', 'claude'], 'claude -p --model haiku'],
     ['claude standard = sonnet', ['standard', 'claude'], 'claude -p --model sonnet'],
@@ -104,9 +106,14 @@ test('learnEnvCommand: the command the emit writes', () => {
     ['openclaude off = nothing', ['off', 'openclaude'], null],
     ['bob = nothing', ['light', 'bob'], null],
     ['a model name holding a space cannot ride in the command', ['light', 'claude', { light: 'a b' }], 'claude -p'],
+    // The command line runs in a shell: a shell character falls back to the session model too.
+    ['a model holding a shell character falls back to session', ['light', 'claude', { light: 'x$(id)' }], 'claude -p'],
+    // Bedrock and Vertex ids keep their `.` `:` `@`.
+    ['a Bedrock id rides whole', ['light', 'claude', { light: 'us.anthropic.claude-haiku-4-5-20251001-v1:0' }], 'claude -p --model us.anthropic.claude-haiku-4-5-20251001-v1:0'],
+    ['a Vertex id rides whole', ['light', 'claude', { light: 'claude-haiku-4-5@20251001' }], 'claude -p --model claude-haiku-4-5@20251001'],
   ];
   for (const [what, [learn, host, map], want] of rows) {
-    assert.equal(learnEnvCommand(learn, host, map ?? {}, {}), want, what);
+    assert.equal(learnCommandFor(host, learnModelArg(learn, host, map ?? {}, {})), want, what);
   }
 });
 
@@ -146,7 +153,7 @@ function rig(extra = {}) {
   fs.mkdirSync(path.join(inst, 'memory'), { recursive: true });
   fs.writeFileSync(path.join(inst, '.geneseed-manifest.json'), '{}');   // an install: its memory/ is a store a job may name
   const transcript = path.join(sb.path, 't.jsonl');
-  fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows' } })}\n`
+  fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: 'why does the build fail on windows '.repeat(8) } })}\n`
     + `${JSON.stringify({ message: { role: 'assistant', content: 'cp1252 is the console code page' } })}\n`);
   const reply = path.join(sb.path, 'reply.md');
   fs.writeFileSync(reply, '---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact.\n');
@@ -181,6 +188,9 @@ test('Stop and SubagentStop call no model; PreCompact and SessionEnd do (D8)', (
     // The one run also asked the queued sub-agent's lesson: two calls in all, one session.
     assert.equal(r.calls().length, 2);
     fs.rmSync(r.fact);
+    // PreCompact mined the transcript: SessionEnd has something to distil only after the session went on (O8).
+    fs.appendFileSync(r.transcript, `${JSON.stringify({ message: { role: 'user', content: 'and now the same failure on macos '.repeat(8) } })}
+`);
     r.run({ ...base, hook_event_name: 'SessionEnd' });
     assert.ok(fs.existsSync(r.fact), 'SessionEnd distils');
     assert.equal(r.calls().length, 3, 'the queue was taken: one call this time');
@@ -199,7 +209,7 @@ test('SessionEnd starts a detached worker: the hook returns first, the job runs,
     assert.equal(fs.readdirSync(jobs).filter((n) => /^job-.*\.json$/.test(n)).length, 1, 'the job is written');
     assert.ok(!fs.existsSync(r.fact), 'the hook did not wait for the model');
     assert.ok(await until(() => fs.existsSync(r.fact)), 'the worker wrote the memory');
-    assert.ok(await until(() => fs.readdirSync(jobs).length === 0), 'the worker deleted its job');
+    assert.ok(await until(() => fs.readdirSync(jobs).filter((n) => n.startsWith('job-')).length === 0), 'the worker deleted its job (the session cursor stays beside it)');
   } finally { r.sb.cleanup(); }
 });
 
@@ -490,4 +500,44 @@ test('the scratch folder holding the prompt is removed after an answered run and
     workerRun(r, { ...tmpEnv, GENESEED_LLM: `node -e "setTimeout(()=>{},15000)"`, GENESEED_LLM_TIMEOUT: '1' });
     assert.deepEqual(fs.readdirSync(tmp).filter((n) => n.startsWith('geneseed-learn-')), [], 'timed-out run leaves no scratch');
   } finally { r.sb.cleanup(); }
+});
+
+// O13: with no `$GENESEED_LLM`, the hook runs the command its `--learn-model` gives, on its own host's CLI. A fake
+// `claude` on PATH stands in for the real one and logs its argv: the model rides as `--model haiku`, and `session`
+// adds no `--model`. With neither, the hook says there is no learn model and calls nothing.
+test('the learn hook derives its command from --learn-model when $GENESEED_LLM is unset', () => {
+  const r = rig({ GENESEED_LEARN_INLINE: '1' });
+  try {
+    delete r.env.GENESEED_LLM;
+    const bin = path.join(r.sb.path, 'shims');
+    fs.mkdirSync(bin, { recursive: true });
+    if (process.platform === 'win32') {
+      fs.writeFileSync(path.join(bin, 'claude.cmd'), `@"${process.execPath}" "${FAKE_LLM}" %*\r\n`);
+    } else {
+      fs.writeFileSync(path.join(bin, 'claude'), `#!/bin/sh\nexec "${process.execPath}" "${FAKE_LLM}" "$@"\n`, { mode: 0o755 });
+    }
+    r.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    r.env.FAKE_LLM_STDIN = '1';
+    const ev = (session) => ({ session_id: session, transcript_path: r.transcript, cwd: r.sb.path, hook_event_name: 'SessionEnd' });
+    const none = r.run(ev('s0'));
+    assert.match(none.stderr, /no learn model/);
+    assert.deepEqual(r.calls(), [], 'no command, no call');
+    r.run(ev('s1'), ['--learn-model', 'haiku']);
+    const [first] = r.calls().map((l) => JSON.parse(l));
+    assert.ok(first, 'the derived command ran');
+    assert.ok(first.includes('-p') && first[first.indexOf('--model') + 1] === 'haiku', JSON.stringify(first));
+    assert.ok(fs.existsSync(r.fact), 'its reply was stored');
+    r.run(ev('s2'), ['--learn-model', 'session']);
+    const second = JSON.parse(r.calls()[1]);
+    assert.ok(second.includes('-p') && !second.includes('--model'), JSON.stringify(second));
+  } finally { r.sb.cleanup(); }
+});
+
+// O13: `baked` is what the hook runs; an older build's `settings_env` record only says whose a value is. An install whose
+// manifest holds `learn_command` learns with an empty settings env; one with only the old record and no env is dormant.
+test('learnState runs the baked command; an old settings_env record alone is no command', () => {
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{}], recorded: HAIKU, baked: HAIKU }]), 'claude: active (haiku)');
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{}], recorded: HAIKU, baked: null }]), 'claude: dormant ($GENESEED_LLM unset)');
+  assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{ GENESEED_LLM: 'llm -m x' }], recorded: HAIKU, baked: HAIKU }]),
+    'claude: active (set by you)');
 });

@@ -654,27 +654,52 @@ describe('Installs / Hosts', () => {
     )
   })
 
-  it('no other host offers the context window', async () => {
-    vi.mocked(api.installs).mockResolvedValueOnce({
-      installs: [
-        {
-          id: 'opencode:global',
-          host: 'opencode',
-          scope: 'global',
-          path: '/home/u/.config/opencode',
-          state: 'active',
-          default: true,
-          theme: 'neutral',
-          footprint: 'lean',
-          posture: 'peer',
-          mode: 'direct',
-          trust: 'balanced',
-        },
-      ],
-      postures: ['peer'],
-      modes: ['direct'],
-      trusts: ['balanced'],
-    })
+  // The window sets the relay ceiling on every host with a relay gate (Claude Code, OpenClaude,
+  // OpenCode); only Claude Code also gets the skill-listing keys. Bob has no relay gate: no picker.
+  const oneInstall = (host, path) => ({
+    installs: [
+      {
+        id: `${host}:global`,
+        host,
+        scope: 'global',
+        path,
+        state: 'active',
+        default: true,
+        theme: 'neutral',
+        footprint: 'lean',
+        posture: 'peer',
+        mode: 'direct',
+        trust: 'balanced',
+      },
+    ],
+    postures: ['peer'],
+    modes: ['direct'],
+    trusts: ['balanced'],
+  })
+
+  it('OpenCode offers the context window for its relay ceiling, without the listing note', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(
+      oneInstall('opencode', '/home/u/.config/opencode'),
+    )
+    render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    await screen.findByRole('button', { name: 'Apply and rebuild' })
+    const sel = screen.getByRole('combobox', { name: /context window/ })
+    expect([...sel.options].map((o) => o.value)).toEqual(['200k', '250k', '1m'])
+    expect(
+      screen.getByText(
+        'For a 200k-token model. A Foreman worker hands off past 120k tokens of context.',
+      ),
+    ).toBeTruthy()
+    fireEvent.change(sel, { target: { value: '250k' } })
+    expect(
+      screen.getByText(
+        'For a 250k-token model. A Foreman worker hands off past 150k tokens of context.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('Bob does not offer the context window', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(oneInstall('bob', '/home/u/.bob'))
     render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
     await screen.findByRole('button', { name: 'Apply and rebuild' })
     expect(screen.queryByRole('combobox', { name: /context window/ })).toBeNull()

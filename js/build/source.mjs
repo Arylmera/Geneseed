@@ -609,6 +609,30 @@ export function splitTier(text) {
   return m ? { text: text.slice(0, m.index) + text.slice(m.index + m[0].length), tier: m[1] }
     : { text, tier: 'standard' };
 }
+/**
+ * The sub-agent effort a seat runs at on Claude Code (`effort:` in its frontmatter, Claude Code
+ * 2.1.78+). An agent source names it on a line of its own, `<!-- effort: low|medium -->`, directly
+ * above its tier line, or directly above `## When to dispatch` when it has none; no marker writes
+ * no line, so the seat inherits the session's effort.
+ *
+ * ONLY THE TWO LOW LEVELS, ON PURPOSE. A marker steps a seat DOWN from the session, the way a tier
+ * does (`strong` is the parent's model, never a bigger one): exploration and reading seats lose
+ * nothing at low effort and keep the parent's window out of the dumb zone sooner. A verification
+ * seat (reviewer, tester, security) carries no marker, so it runs at whatever the user chose,
+ * which is where effort pays. `high` and above are not markable: raising a seat over the session
+ * would spend the user's tokens on a level they did not pick.
+ *
+ * Stripped from every output, whole, like the tier line (`splitEffort`).
+ */
+export const EFFORT_MARKER_RE = /^[ \t]*<!--[ \t]*effort:[ \t]*(low|medium)[ \t]*-->[ \t]*\r?\n/m;
+/** The efforts a marker may name; an unmarked agent writes no `effort:` line. */
+export const MARKED_EFFORTS = Object.freeze(['low', 'medium']);
+/** `{ text, effort }`: the spec without its effort line, and the effort it named (null when none). */
+export function splitEffort(text) {
+  const m = EFFORT_MARKER_RE.exec(text);
+  return m ? { text: text.slice(0, m.index) + text.slice(m.index + m[0].length), effort: m[1] }
+    : { text, effort: null };
+}
 export function aliasesOf(text) {
   const m = ALIASES_RE.exec(text);
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
@@ -728,9 +752,11 @@ export const GATE_SWITCHES = [
 ];
 
 /**
- * `--context-window 200k|1m`: the model context the install is built for, and the Claude Code
- * settings it writes for the skill listing. ONE table, so the flag, the carrier marker, the
- * rebuild argv, the profile and the console read the same two values.
+ * `--context-window 200k|250k|1m`: the model context the install is built for, and the Claude
+ * Code settings it writes for the skill listing. ONE table, so the flag, the carrier marker, the
+ * rebuild argv, the profile and the console read the same values. The relay ceiling a task
+ * worker hands off at follows the same value (js/hosts/hooks-relay.mjs `RELAY_CEILINGS`, gated
+ * against this table's keys both ways).
  *
  * WHY. Claude Code builds its skill listing under a character budget: context window x bytes
  * per token (3, or 4 for some older models) x `skillListingBudgetFraction` (default 0.01). That
@@ -747,6 +773,8 @@ export const GATE_SWITCHES = [
  *   (7 800 characters) keeps all of them with twenty third-party skills beside them. The
  *   fraction is a ceiling, not a cost: a listing that fits uses only its own length, so the
  *   extra 1 800 characters (about 600 tokens, 0.3 % of the window) are spent only when filled.
+ * - `250k` (added 2026-11-21: the work machine's OpenCode models have 250k windows): the `200k`
+ *   cap, with the fraction scaled to the same 7 800 characters (250k x 3 x 0.0104).
  * - `1m`: a fresh install fits even at the default cap (11 482 of 30 000), so the fraction stays
  *   at its default. The cap 120 is for a machine with many skills: this laptop's 143-skill
  *   listing (47 617 characters) fits whole at 19 427 with it, where today 53 lose their text.
@@ -756,9 +784,23 @@ export const GATE_SWITCHES = [
  */
 export const CONTEXT_WINDOWS = Object.freeze({
   '200k': Object.freeze({ skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.013 }),
+  '250k': Object.freeze({ skillListingMaxDescChars: 80, skillListingBudgetFraction: 0.0104 }),
   '1m': Object.freeze({ skillListingMaxDescChars: 120 }),
 });
 export const DEFAULT_CONTEXT_WINDOW = '200k';
+/**
+ * The smart zone of each `--context-window`: how full a context may get before the agent hands
+ * off, and the size a plan slice or a worker's ticket aims to stay under (`{{SMART_ZONE}}`, in
+ * the handoff and plan skills). Its own table, NOT a key of `CONTEXT_WINDOWS`: every key there is
+ * written into the user's Claude Code settings.
+ *
+ * WHY NOT A FIXED FRACTION. Attention degrades with the tokens in play, not with the share of the
+ * window they fill (Dex Horthy's smart and dumb zones; Matt Pocock grows wary near 150k even on a
+ * 1M window). So the 1M window buys room, not a proportionally larger zone: `200k` stops at half,
+ * well before Claude Code's auto-compaction; `1m` at 250k, a quarter. The agent cannot read its
+ * exact count, so the value is an order of magnitude to estimate against, not a meter.
+ */
+export const SMART_ZONES = Object.freeze({ '200k': '100k', '1m': '250k' });
 /** The carrier marker, written only when the value is not the default (the kits line's contract). */
 export const CONTEXT_WINDOW_MARKER = 'Context window';
 

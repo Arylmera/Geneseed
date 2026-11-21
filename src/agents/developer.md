@@ -67,10 +67,14 @@ Send its output to a file, and read only the count line and the failing test nam
 for a background run's completion notice; never poll it with a monitor or a sleep loop.
 Count your proof runs (one run of a check command); these bounds are starting values
 ({{DOCTRINE:bound-the-loop}}). After the 3rd run in a row that leaves the same test red,
-return `STATUS: ERROR` with the findings. At about 150k tokens of context, or after about
+return `STATUS: ERROR` with the findings. Past the relay ceiling (300k tokens of context on a
+1M-token window, 150k on 250k, 120k on 200k: the install's context window), or after about
 20 proof runs, hand off: commit your work in progress, and return `STATUS: RELAY` with a
 handoff note (the failing tests, what you tried, the next step). A hand-off is no failure.
-As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
+You cannot see your context; on Claude Code and OpenClaude the gates measure it and, past the
+ceiling, refuse every call but `git add`, a read-only git look and `git commit`. As a lead, hold
+every member's result before you end; a member's `STATUS: RELAY` goes to a fresh member on the
+same worktree and branch with its note, at most twice per task, as the mode says for yours. Report `T<n> · <task> · files: <write set> · <state>`
 at start and on each change, as the mode says. Return the branch, its commit list, any
 uncommitted work, and the raw test + lint output — the parent re-runs it before any merge.
 That output is a full run to completion, with the runner's own count line, never a

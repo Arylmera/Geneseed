@@ -257,6 +257,30 @@ test('the process-home sandbox covers every variable that decides where home is'
   for (const v of HOME_VARS) assert.equal(process.env[v], before[v], `${v} was not restored`);
 });
 
+// THE SESSION'S OWN VARIABLES. A suite run from inside a Claude Code session inherits that session's
+// env: `CLAUDECODE=1`, and `GENESEED_LLM` when the install learns (6.0.4 writes it into the settings
+// `env`, and Claude Code exports it to every shell). The Claude emit reads both in process, so a run
+// from a session took a different branch from CI's: four tests of `claude.test.mjs` failed there on
+// a clean main. The sandbox clears them, and puts back exactly what was there.
+test('the process-home sandbox clears the session variables the emit reads, and restores them', () => {
+  const saved = { GENESEED_LLM: process.env.GENESEED_LLM, CLAUDECODE: process.env.CLAUDECODE };
+  process.env.GENESEED_LLM = 'claude -p --model haiku';
+  process.env.CLAUDECODE = '1';
+  try {
+    sandboxProcessHome();
+    try {
+      assert.equal(process.env.GENESEED_LLM, undefined, 'GENESEED_LLM reached the sandboxed process');
+      assert.equal(process.env.CLAUDECODE, undefined, 'CLAUDECODE reached the sandboxed process');
+    } finally { restoreProcessHome(); }
+    assert.equal(process.env.GENESEED_LLM, 'claude -p --model haiku', 'GENESEED_LLM was not restored');
+    assert.equal(process.env.CLAUDECODE, '1', 'CLAUDECODE was not restored');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
 // Restoring ABSENCE as absence. Putting an empty string back where nothing was set would leave
 // the home resolver reading '' — a subtler wrong than leaving the sandbox in place, because
 // every path built on it would be relative to the current directory.

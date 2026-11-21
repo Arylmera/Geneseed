@@ -21,12 +21,13 @@ export const BaseBadge = () => (
 // The list pane, shared by the Library, the Loops page and the Docs (all three-pane: a rail
 // of sections, this list, a reader): the pane itself (LibList), its rows, and the filter.
 
-// The filter: a plain substring over title, name (what a link says) and description, any case.
+// The filter: a plain substring over title, name (what a link says), description and topic
+// (a memory fact's heading), any case.
 export function filterRows(rows, q) {
   const ql = (q || '').trim().toLowerCase()
   if (!ql) return rows
   return rows.filter((r) =>
-    `${r.title || ''} ${r.name || ''} ${r.desc || ''}`.toLowerCase().includes(ql),
+    `${r.title || ''} ${r.name || ''} ${r.desc || ''} ${r.topic || ''}`.toLowerCase().includes(ql),
   )
 }
 

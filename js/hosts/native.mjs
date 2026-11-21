@@ -405,6 +405,28 @@ const BASH_MARKER = '<!-- bash: allow -->';
 const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
 
 /**
+ * Tools no Adept needs, denied to EVERY Claude-dialect agent for what their schemas cost, not for
+ * safety. A sub-agent starts with each loaded tool's schema in its context and reads it again on
+ * every turn: measured 2026-11-21 (`claude -p --agent`, Claude Code 2.1.318), this list took the
+ * start of an agent from 60.9k to 43.0k tokens. A DENYLIST and not an allowlist, on purpose: an
+ * allowlist must name every MCP server (`mcp__*` in `tools:` grants none, measured the same day),
+ * so a worker would lose whatever servers the machine has — a work PC's are not this one's. Here
+ * every MCP server not named stays. Each entry is a session-only tool: artifacts and workflows,
+ * user-facing cards and files, scheduling, cross-session messaging, and the desktop app's own
+ * servers (`visualize`, `ccd_*`, `terminal`). A name the host does not have is ignored.
+ * `SendMessage` stays (the worker's status lines and hand-back), and so do `Agent`, `Skill` and
+ * `ToolSearch`. STILL OPEN: the desktop app names a claude.ai connector by a per-account uuid
+ * (`mcp__<uuid>__…`), which no fixed list can name; only its CLI name is denied here.
+ */
+const COST_DENIED = [
+  'Artifact', 'ArtifactComments', 'ArtifactData', 'Workflow', 'SendUserFile', 'ReportFindings',
+  'SearchPlugins', 'SuggestPluginInstall', 'SuggestSkills', 'ListAgents', 'DesignSync',
+  'SendToProject', 'SendToProjectContext', 'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList',
+  'RemoteTrigger', 'PushNotification', 'mcp__claude_ai_Claude_Docs', 'mcp__visualize',
+  'mcp__ccd_session', 'mcp__ccd_session_mgmt', 'mcp__ccd_turn', 'mcp__ccd_pr', 'mcp__terminal',
+];
+
+/**
  * `_build_emit._claude_agent_frontmatter`. A read-only spec gets a `disallowedTools` DENYLIST;
  * each opt-in marker takes its tools back off the list. Order is emit order.
  *
@@ -417,12 +439,17 @@ const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
  * cannot name tools it has never seen, so a read-only agent in a session with such a server can
  * still write through it, until this becomes an allowlist (`tools:`).
  */
-function claudeAgentFrontmatter(stem, text, model = null) {
+function claudeAgentFrontmatter(stem, text, model = null, effort = null) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
   // `model` is `agentModel(...).model`: the one precedence, resolved by the caller.
   if (model) fm.push(`model: ${model}`);
+  // `effort` is the seat's `<!-- effort: -->` marker (`splitEffort`); none inherits the session's.
+  // Claude Code only: OpenCode's nearest key (`variant`) names provider-specific variants, so a
+  // marker there could name one the user's model lacks; the user's own `variant` override stays.
+  if (effort) fm.push(`effort: ${effort}`);
+  const list = [];
   if (isReadonly(text)) {
-    const list = ['Write', 'Edit', 'NotebookEdit', 'Agent', 'Task'];
+    list.push('Write', 'Edit', 'NotebookEdit', 'Agent', 'Task');
     if (!text.includes(WEBFETCH_MARKER)) list.push('WebFetch');
     // Bash AND PowerShell: docs `tools-reference.md` says denying Bash turns PowerShell off
     // only for settings rules and `--disallowedTools` — agent frontmatter is not named there,
@@ -430,8 +457,10 @@ function claudeAgentFrontmatter(stem, text, model = null) {
     // (Claude verdict R1). Monitor is the third shell: it runs a `command` in the background.
     // The one opt-in marker lifts all three together.
     if (!text.includes(BASH_MARKER)) list.push('Bash', 'PowerShell', 'Monitor');
-    fm.push(`disallowedTools: ${list.join(', ')}`);
   }
+  // The safety denies first, then the cost list, on the one line the host reads.
+  list.push(...COST_DENIED);
+  fm.push(`disallowedTools: ${list.join(', ')}`);
   return fm;
 }
 
@@ -865,7 +894,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     written.push(dest);
   };
 
-  for (const { text, src: source, rel, licenceOf, tier = 'standard' } of items) {
+  for (const { text, src: source, rel, licenceOf, tier = 'standard', effort = null } of items) {
     // A credited skill's upstream licence: copied verbatim beside its SKILL.md, held like a side
     // file until that claim holds. Routed by `licenceOf`, since `source` is the upstream's file.
     if (licenceOf) {
@@ -930,7 +959,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let userOnly = false;
     if (folder === 'agents') {
       if (bobDialect) fm = bobAgentFrontmatter(stem, text);
-      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, agentModel(tier, agentOverride(ov, stem).model, tiersHere).model);
+      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, agentModel(tier, agentOverride(ov, stem).model, tiersHere).model, effort);
       else fm = opencodeAgentFrontmatter(stem, text, ov, theme, tier, tiersHere);
       dest = path.join(agentsDir, `${stem}.md`);
       body = stripAgentSkillLinks(body);

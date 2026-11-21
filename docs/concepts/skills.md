@@ -56,11 +56,12 @@ The skill *bodies* are read only when used. The *descriptions* are listed to the
 
 Claude Code builds the skill list under a character budget: the model's context window, times about 3 characters per token, times `skillListingBudgetFraction` (default 0.01). That is about 6 000 characters on a 200k-token model and 30 000 on a 1M one. Its bundled skills always keep their text. When the list is over budget, the other skills that are used least lose their description and show as a bare name, and the agent no longer knows when to use them. A fresh install on a 200k model lost all of them.
 
-`geneseed build --context-window 200k|1m` (default `200k`) tells the build which model the install is for. On a Claude Code emit it writes two keys into the settings file Geneseed already merges (`settings.json`, or `settings.local.json` for a project):
+`geneseed build --context-window 200k|250k|1m` (default `200k`) tells the build which model the install is for. On Claude Code, OpenClaude and OpenCode it also sets the ceiling past which a Foreman task worker must hand off: 120k, 150k and 300k tokens ([Foreman mode](foreman-mode.md)). On a Claude Code emit it writes two keys into the settings file Geneseed already merges (`settings.json`, or `settings.local.json` for a project):
 
 | `--context-window` | `skillListingMaxDescChars` | `skillListingBudgetFraction` | Budget at 3 characters per token |
 | --- | --- | --- | --- |
 | `200k` | 80 | 0.013 | 7 800 |
+| `250k` | 80 | 0.0104 | 7 800 |
 | `1m` | 120 | not set (default 0.01) | 30 000 |
 
 `skillListingMaxDescChars` cuts *every* skill's description to that length, Claude Code's own and other plugins' included, so each one costs less. Simulated on a fresh install (the 14 bundled skills and 46 Geneseed skills, no usage yet):
@@ -69,6 +70,8 @@ Claude Code builds the skill list under a character budget: the model's context 
 - `1m`: a fresh install fits even without a cap. The cap is for a machine with many skills: a 143-skill list of 47 617 characters fits whole in 19 427.
 
 The keys are merged one by one. A key you set yourself is yours: the build never changes it, and uninstall never removes it. A key the build wrote moves with the setting (from `200k` to `1m` the cap goes to 120 and the fraction is removed), and uninstall removes it. A settings file with comments is never rewritten: the build prints the keys to merge by hand, and a key you merge that way is yours, so the build does not record it and uninstall leaves it. Project settings outrank your user settings, so a project install leaves any listing key that `~/.claude/settings.json` already sets (by a global install or by hand) to that file. A new project install with no `--context-window` and no `--reset` takes the value of the machine's global install; a profile, the console and the wizard pass their own value. A project built before the global install wrote its keys keeps its own until its next rebuild. The first build that writes the keys prints one line that names them and how to choose the other value. Claude Code reads these keys from about version 2.1.129; an older version keeps them and ignores them.
+
+The same choice sets the **smart zone**, on every host: the context size at which the handoff skill tells the agent to write its state down and start fresh, and the size the plan skill gives each slice. It is `100k` tokens on `200k` and `250k` on `1m`. It is not a fixed share of the window, because a model reasons worse as tokens pile up whatever room is left: the 1M window gives a long task more room, not a zone five times larger. The agent cannot read its exact token count, so it estimates against this order of magnitude.
 
 OpenClaude (checked on 0.31) and IBM Bob read neither key, and OpenCode does not cap its list, so on those hosts the option writes nothing. Every host records the choice: a `Context window: 1m` line in the install's instruction file, written only when it is not the default. Rebuilds, upgrades, `profile save` and the console read it back. The `setup` wizard keeps it without asking. Set it with the flag, a profile's `contextWindow` key, or the console's **Context window** picker on a Claude Code install.
 

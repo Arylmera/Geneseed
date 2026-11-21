@@ -34,12 +34,39 @@ import {
 } from './memory-files.mjs';
 import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
 import { gitRootOf } from './gitref.mjs';
+import { pickStored, storedLine } from './memory-search.mjs';
+import { learnCommandFor } from './learn-command.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
 const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/;
 const MAX_NOTES_CHARS = 16000;
+const MIN_NOTES_CHARS = 200;   // below this, the new part of a session is too trivial to mine
+
+// ---- learn cursor twin: BEGIN
+/** Messages before the cursor that ride along as context, so the first new turn is not read cold. */
+export const CONTEXT_MESSAGES = 2;
+
+/**
+ * Split a session's messages at its cursor (how many were already mined): `fresh` is what a distil mines, `context`
+ * the last CONTEXT_MESSAGES before it, and `next` the cursor a successful distil moves to. A cursor that is not a
+ * whole number inside the list (a compacted session now holds fewer messages than it did) starts over at 0.
+ *
+ * WHY: every distil re-read the last 16k of the whole session, so a 3-turn session was mined 3 times over turn 1
+ * and a long one by each PreCompact and SessionEnd over the same text. Each region is now mined once.
+ */
+export function freshWindow(items, cursor) {
+  const at = Number.isInteger(cursor) && cursor >= 0 && cursor <= items.length ? cursor : 0;
+  return { context: items.slice(Math.max(0, at - CONTEXT_MESSAGES), at), fresh: items.slice(at), next: items.length };
+}
+
+/** The notes of a window: the context marked as not to be mined, then the new turns; no marks without context. */
+export function windowNotes(contextText, freshText) {
+  if (!contextText) return freshText;
+  return `CONTEXT (earlier turns, already mined; read them to follow the new ones, never distil from them):\n${contextText}\n\nNEW TURNS (distil from these):\n${freshText}`;
+}
+// ---- learn cursor twin: END
 // Host payloads name the finished subagent inconsistently. Never `agent_id`: it is one dispatch's
 // id, so a lesson keyed on it is a file per dispatch that no later dispatch ever reads.
 const SUBAGENT_NAME_FIELDS = ['agent_name', 'agent_type', 'subagent_type', 'agent'];
@@ -142,7 +169,10 @@ function flattenTranscript(p, read) {
   }
 }
 
-function flattenText(raw) {
+const flattenText = (raw) => flattenMessages(raw).join('\n\n');
+
+/** A JSONL transcript as its `role: text` messages, one entry per message that has text. */
+function flattenMessages(raw) {
   const acc = [];
   for (let line of splitLines(raw)) {
     line = line.trim();
@@ -155,7 +185,7 @@ function flattenText(raw) {
     const text = contentText(msg.content === undefined ? obj.content : msg.content).trim();
     if (text) acc.push(`${role}: ${text}`);
   }
-  return acc.join('\n\n');
+  return acc;
 }
 
 /**
@@ -205,30 +235,27 @@ export function readNotes(raw, meta = hookMeta(raw), read = tailReader()) {
 }
 
 /**
- * The prompt: the plugin's head, the stored facts as `slug \u2014 description` (so the model can
+ * The prompt: the plugin's head, the stored facts as `slug — description` (so the model can
  * merge into one or archive it), the topics in use, then the notes.
  *
  * THE FACT LINES ARE CAPPED at MAX_STORED_CHARS. A store of hundreds of facts would otherwise
  * outgrow the notes, and the prompt rides on the model CLI's command line, which Windows caps
- * at 32 767 characters (16 000 of notes + the head + this stays under it). A fact past the
- * cap is only unlisted: `writeMemories` still refuses to create its slug. The plugin's
- * `buildPrompt` is the twin.
+ * at 32 767 characters (16 000 of notes + the head + this stays under it). WHICH facts fit is
+ * `pickStored`'s call: the newest ten, then the best matches for the notes. An alphabetical cut
+ * showed 94 of 1 200 and hid the fact the previous distil had just written, so it was created again
+ * (F12). A fact past the cap is only unlisted: `writeMemories` still refuses to create its slug and
+ * skips a near-duplicate of it. The plugin's `buildPrompt` is the twin.
  */
 const MAX_STORED_CHARS = 8000;
 export function buildLearnPrompt(notes, facts) {
   const parts = [learnPromptHead(), ''];
   if (facts.size) {
-    parts.push('ALREADY STORED \u2014 \'slug \u2014 description\', to update or archive, never to create:');
-    let used = 0;
-    let shown = 0;
-    for (const [slug, { desc }] of facts) {
-      const line = desc ? `- ${slug} \u2014 ${desc}` : `- ${slug}`;
-      if (used + line.length > MAX_STORED_CHARS) break;
-      parts.push(line);
-      used += line.length + 1;
-      shown += 1;
+    parts.push('ALREADY STORED — \'slug — description\', to update or archive, never to create:');
+    const shown = pickStored(facts, notes, MAX_STORED_CHARS);
+    for (const slug of shown) parts.push(storedLine(slug, facts.get(slug).desc));
+    if (shown.length < facts.size) {
+      parts.push(`(${facts.size - shown.length} more stored facts not shown: the newest and the closest to the notes are listed)`);
     }
-    if (shown < facts.size) parts.push(`(${facts.size - shown} more stored facts not shown)`);
     parts.push('', 'TOPICS IN USE:',
       [...new Set([...facts.values()].map((f) => f.topic))].sort().join(', '), '');
   }
@@ -631,9 +658,11 @@ export function cmdLearn(args) {
   // is the documented, deliberate behaviour (docs/reference/env-context.md) for someone running
   // `learn` by hand to see what would have been sent, and `hookEvent` being unset is exactly what
   // tells the two apart.
-  const llm = process.env.GENESEED_LLM;
+  // O13: the user's `$GENESEED_LLM` wins (a custom CLI or model); else the command the emit's `--learn-model`
+  // names on this host (js/hosts/learn-command.mjs); neither means learning is off for this install.
+  const llm = process.env.GENESEED_LLM || learnCommandFor(args.host, args.learnModel);
   if (hookEvent && !llm) {
-    err('[learn] $GENESEED_LLM unset — nothing to distil.\n');
+    err('[learn] no learn model (--learn off, and $GENESEED_LLM unset) — nothing to distil.\n');
     return 0;
   }
 
@@ -683,7 +712,7 @@ function distil(notes, memDir, llm, hookEvent) {
   // A zero exit with nothing said is a lapsed login or a swallowed error, never an answer: NOTHING is the answer.
   if (hookEvent && proc.returncode === 0 && !output.trim()) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
-    const { created, updated, archived } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
+    const { created, updated, archived, skipped } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
     if (run) run.facts += created.length + updated.length;
     // Prose is no memory file: a model that answers "Please run /login" exited 0 and stored nothing. A reply with
     // a name: line that merely repeats stored facts is a duplicate, not a failure.
@@ -699,6 +728,7 @@ function distil(notes, memDir, llm, hookEvent) {
       err(`[learn] archived ${archived.length} memory file(s) to `
         + `${path.join(memDir, 'archive')}: ${archived.join(', ')}\n`);
     }
+    for (const line of skipped) err(`[learn] ${line}\n`);
     if (!created.length && !updated.length && !archived.length) {
       err('[learn] nothing new to store (all duplicates).\n');
     }
@@ -800,6 +830,7 @@ function startDistil(meta, args, install, hookEvent, llm) {
   if (!transcript && !agents.length) return 0;
   const job = {
     v: 1, event: hookEvent, host: args.host || 'claude', memory: args.memory ?? null, transcript, agents,
+    session: typeof meta.session_id === 'string' && meta.session_id ? meta.session_id : null,
   };
   const dropQueue = () => { if (queue) { try { unlinkSync(queue); } catch { /* the sweep gets it */ } } };
   const dir = jobDir();
@@ -822,6 +853,9 @@ function startDistil(meta, args, install, hookEvent, llm) {
     sweepJobs(dir);
     const file = path.join(dir, `job-${Date.now()}-${process.pid}.json`);
     writeFileSync(file, `${JSON.stringify(job)}\n`);
+    // The worker takes its model command from its OWN env, never from the job (ADR 0002: a job is data). A
+    // command derived from `--learn-model` is put there for it to inherit; the spawn itself is unchanged.
+    if (!process.env.GENESEED_LLM) process.env.GENESEED_LLM = llm;
     spawnWorker(file);
     dropQueue();
   } catch (e) {
@@ -861,14 +895,60 @@ function runJob(job, llm) {
   }
 }
 
+/**
+ * THE SESSION CURSOR (D5): how many of a session's messages a distil has already mined, kept per session in the
+ * job folder (`cursor-<session>.json`, swept after a week with the jobs). PreCompact and SessionEnd each used to
+ * re-read the last 16k of the same transcript; now each mines only what the other left. A missing or unreadable
+ * file is cursor 0, which re-mines once: the cost of losing it is one repeated read, never a lost fact.
+ */
+function cursorFile(session) {
+  const dir = jobDir();
+  return dir ? path.join(dir, `cursor-${sessionKey(session)}.json`) : null;
+}
+function readCursor(session) {
+  try {
+    const n = JSON.parse(readFileSync(cursorFile(session), 'utf8')).n;
+    return Number.isInteger(n) && n >= 0 ? n : 0;
+  } catch { return 0; }
+}
+function writeCursor(session, n) {
+  try {
+    mkdirSync(jobDir(), { recursive: true });
+    writeFileSync(cursorFile(session), `${JSON.stringify({ n })}\n`);
+  } catch { /* a cursor is a favour: without it the next run re-mines */ }
+}
+const CONTEXT_CHARS = 2000;
+
+/**
+ * The transcript's distil for a session: only the messages past its cursor, with the last two before it as marked
+ * context. New text under MIN_NOTES_CHARS is no distil and moves no cursor, so small turns pile up until they are
+ * worth one. The cursor moves only after a distil that said something usable (`run.fail` unset): a failed model call
+ * leaves the region to the next run. A job with no session id has no cursor and reads the tail, as before.
+ */
+function distilTranscript(job, memDir, llm) {
+  const event = job.event || 'SessionEnd';
+  const session = typeof job.session === 'string' && job.session ? job.session : null;
+  if (!session) {
+    const payload = { transcript_path: job.transcript };
+    const notes = tail(readNotes(JSON.stringify(payload), payload), MAX_NOTES_CHARS);
+    if (notes.trim()) distil(notes, memDir, llm, event);
+    return;
+  }
+  let all = [];
+  try { all = flattenMessages(readText(job.transcript)); } catch { /* an unreadable transcript has nothing new */ }
+  const { context, fresh, next } = freshWindow(all, readCursor(session));
+  const freshText = fresh.join('\n\n');
+  if (freshText.length < MIN_NOTES_CHARS) return;
+  const kept = tail(freshText, MAX_NOTES_CHARS);
+  const notes = windowNotes(tail(context.join('\n\n'), CONTEXT_CHARS), kept);
+  distil(notes, memDir, llm, event);
+  if (!run?.fail) writeCursor(session, next);
+}
+
 function runJobIn(job, llm) {
   const memDir = typeof job.memory === 'string' ? resolveMemoryDir(job.memory) : null;
   try {
-    if (typeof job.transcript === 'string' && job.transcript) {
-      const payload = { transcript_path: job.transcript };
-      const notes = tail(readNotes(JSON.stringify(payload), payload), MAX_NOTES_CHARS);
-      if (notes.trim()) distil(notes, memDir, llm, job.event || 'SessionEnd');
-    }
+    if (typeof job.transcript === 'string' && job.transcript) distilTranscript(job, memDir, llm);
     for (const row of Array.isArray(job.agents) ? job.agents.slice(0, MAX_LESSON_AGENTS) : []) {
       const agent = resolveAgentName(row?.agent);
       if (!agent || !memDir || !row.payload) continue;

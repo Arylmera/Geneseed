@@ -188,6 +188,14 @@ export function sandboxProcessHome() {
   // Claude Code's version as it tells its hooks: a suite run from inside it would drop AGENTS.md.
   saved.AI_AGENT = envGet('AI_AGENT');
   envDelete('AI_AGENT');
+  // The session's own variables, which the Claude emit reads in process: `CLAUDECODE` (set in every
+  // Claude Code session) and `GENESEED_LLM` (6.0.4 writes it into a learning install's settings
+  // `env`, and Claude Code exports it to the shell). Inherited, they made a run from a session take
+  // a branch CI never takes. A test that wants them sets them itself (`withShellLlm`).
+  for (const v of ['CLAUDECODE', 'GENESEED_LLM']) {
+    saved[v] = envGet(v);
+    envDelete(v);
+  }
   PROCESS_HOMES.push([sb, saved]);
   return sb.path;
 }

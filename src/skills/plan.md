@@ -24,7 +24,7 @@
    which the work can be verified and reviewed. Cut the steps as **vertical slices** —
    thin end-to-end pieces, each green and verifiable on its own, never one horizontal
    layer at a time — and give each a `Blocked by:` line naming the slices it waits on
-   (`none` when it can start now). Size each slice to finish in one fresh context. When the
+   (`none` when it can start now). Size each slice to finish in one fresh context, under about {{SMART_ZONE}} tokens. When the
    code fights the change, the first slice is a prefactor, behaviour unchanged, that makes
    the change easy. Sequence a wide refactor as expand → migrate
    callers in batches → contract, so every slice leaves the build green. A step records

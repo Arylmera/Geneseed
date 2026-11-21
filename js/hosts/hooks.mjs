@@ -72,6 +72,7 @@ import {
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
+import { relayDue, relayReason } from './hooks-relay.mjs';
 
 // ======================================================================================
 // git-gate — Doctrine process 5's tool-boundary backstop
@@ -112,6 +113,10 @@ const MAX_COMMAND_CHARS = 64 * 1024;
 // can type). `currentBranch`/`gitRootOf`/`loopLaunched` live in `./gitref.mjs` — the one
 // fs-only reader this file shares with `js/loop/cli.mjs`'s commit-message writer.
 
+
+// ---- relay segments twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries a copy
+// (tests/twins.mjs). What the relay lets a worker run past its ceiling, and the segment classes
+// the git gate shares with it; edit here, then `node tests/twins.mjs --write`.
 // No newline, backtick, or `$(` substitution anywhere — these can smuggle a second command (or
 // a shared-branch target) past every check below, so the command is refused before it is even
 // split. `<`/`>` are refused too: a redirect can both hide a second effect and, as the review
@@ -134,8 +139,39 @@ const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/;
 // letter (`C:/…`) via its `:`, so tightening it here costs nothing the loop's own writer uses.
 const ARG_RE = '[\\w./:@^~=+,-]+';
 const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`);
-const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`);
 const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`);
+
+// A Foreman worker's local commit or merge: `git commit`/`git merge` with no global option
+// (`-C`, `-c`, `--git-dir`, `--work-tree` could aim it at another tree), its arguments plain
+// `ARG_RE` tokens plus at most one quoted message (`-m`, `-am`, `--message`). Nothing else is
+// quoted, so a quoted separator only splits the command into a segment that fails.
+const SEG_LOCAL_RE = new RegExp(`^git\\s+(?:commit|merge)(?:\\s+${ARG_RE})*`
+  + `(?:\\s+(?:-[a-zA-Z]*m|--message)\\s+(?:"[^"]*"|'[^']*'))?(?:\\s+${ARG_RE})*$`);
+const SEG_CD_RE = new RegExp(`^cd\\s+(${ARG_RE})$`);
+
+// What a shell can run inside an argument: PowerShell's `(...)`, `@(...)`, `$(...)`, `$var`,
+// `{...}` blocks and backtick escapes; bash's `$(...)`, `${...}` and backticks. Refused anywhere,
+// quoted or not, so a message can never carry a second command.
+const SUBSHELL_CHARS_RE = /[()@${}`]/;
+
+/**
+ * What a worker past the relay ceiling may still run (`./hooks-relay.mjs`): the commit of its work
+ * in progress, and nothing that grows the context further. The same segment classes the worktree
+ * pass reads above, so the set is one the git gate already trusts: `git add`, a read-only look, a
+ * `git commit` (`SEG_LOCAL_RE`, merge excluded), after at most one leading `cd <path>`. No unsafe or
+ * subshell character, so `git commit -m x; npm test` cannot ride along. Whether the commit itself
+ * passes Consent Before Push is still the rest of `gitDecide`'s call.
+ */
+export function relayMayRun(command) {
+  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command) || SUBSHELL_CHARS_RE.test(command)) return false;
+  const segments = command.split(/&&|\|\||[;|]/).map((x) => x.trim()).filter(Boolean);
+  if (segments.length && SEG_CD_RE.test(segments[0])) segments.shift();
+  return segments.length > 0 && segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg)
+    || (/^git\s+commit\b/.test(seg) && SEG_LOCAL_RE.test(seg)));
+}
+// ---- relay segments twin: END
+
+const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`);
 // A fetch writes only remote-tracking refs, FETCH_HEAD and tags git will not clobber, never a
 // local branch, as long as no refspec names a destination (`a:b`, `+a:b`) and no option names a
 // program (`--upload-pack=<cmd>` runs one). So: a few flags that take no value, then at most one
@@ -195,17 +231,6 @@ export function loopExempt(command, cwd) {
     || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch));
 }
 
-// A Foreman worker's local commit or merge: `git commit`/`git merge` with no global option
-// (`-C`, `-c`, `--git-dir`, `--work-tree` could aim it at another tree), its arguments plain
-// `ARG_RE` tokens plus at most one quoted message (`-m`, `-am`, `--message`). Nothing else is
-// quoted, so a quoted separator only splits the command into a segment that fails.
-const SEG_LOCAL_RE = new RegExp(`^git\\s+(?:commit|merge)(?:\\s+${ARG_RE})*`
-  + `(?:\\s+(?:-[a-zA-Z]*m|--message)\\s+(?:"[^"]*"|'[^']*'))?(?:\\s+${ARG_RE})*$`);
-const SEG_CD_RE = new RegExp(`^cd\\s+(${ARG_RE})$`);
-// What a shell can run inside an argument: PowerShell's `(...)`, `@(...)`, `$(...)`, `$var`,
-// `{...}` blocks and backtick escapes; bash's `$(...)`, `${...}` and backticks. Refused anywhere,
-// quoted or not, so a message can never carry a second command.
-const SUBSHELL_CHARS_RE = /[()@${}`]/;
 // The doctrine's shared branches, by name: never a worker's branch, whatever the repo says.
 const SHARED_BRANCH_RE = /^(?:main|master|develop|development|(?:release|hotfix)(?:\/.*)?)$/i;
 
@@ -262,6 +287,7 @@ export function worktreeExempt(command, cwd, agentId) {
     return false;
   }
 }
+
 
 // A plain push of one named branch: `[-u|--set-upstream] <remote> <ref>`, nothing else. The
 // remote's first character is alphanumeric so a flag (`-f`, `--all`, `--delete`) is never read
@@ -1070,6 +1096,9 @@ export function gitDecide(args, payload) {
   // Claude an ask is the strongest verdict the hook has; on Bob, `law-4` exits 2.
   const doomed = catastrophic(command, lossSegments);
   if (doomed) return ask(args, 'git-gate', 'law-4', 'catastrophic', { name: doomed, says });
+  // A task worker past the relay ceiling may only commit and hand off (`relayMayRun`).
+  const relay = relayDue(payload, args.root);
+  if (relay !== null && !relayMayRun(ti.command)) return deny(args, 'git-gate', 'relay', relayReason(relay));
   // `--no-deletion-gate`: the install switched Law IV's real-loss boundary off (user decision,
   // 2026-10-17). Only this check stands down — the catastrophic class above, ops 2 and process 5
   // below still run.
@@ -1527,6 +1556,9 @@ export function ruleDecide(args, payload) {
   // `path` beside the real target must not hide it from any gate below.
   const paths = [...new Set(RULE_PATH_KEYS.map((k) => ti[k]).filter((v) => typeof v === 'string' && v))];
   if (!paths.length) return 0;
+  // A task worker past the relay ceiling writes nothing more: it commits and hands off.
+  const relay = relayDue(payload, args.root);
+  if (relay !== null) return deny(args, 'rule-gate', 'relay', relayReason(relay));
   // A diff past the command bound is not read, for `MAX_COMMAND_CHARS`' reason: on Bob a scan past
   // the hook timeout lets the write through with no secrets check. Same `unverified` ask, law-4.
   if (typeof ti.diff === 'string' && ti.diff.length > MAX_COMMAND_CHARS) {

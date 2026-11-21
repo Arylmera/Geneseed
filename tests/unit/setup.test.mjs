@@ -407,8 +407,6 @@ function summaryAfterEmit(emit, extraEnv = {}) {
 
 const NEXT = 'what was installed and what each piece does: '
   + 'https://github.com/Arylmera/Geneseed/blob/main/docs/understand/on-your-machine.md';
-const LEARN_OFF = 'memory learning is off until you set GENESEED_LLM '
-  + '(see docs/reference/env-context.md)';
 const p = (...s) => path.join('<H>', ...s);
 
 // The end of setup names the file each host really loads, where it really is, the hooks a
@@ -441,28 +439,24 @@ test('the end-of-setup summary tells the truth for every host', () => {
     'claude-global': [
       ['ok', `CLAUDE.md written to ${p('.claude', 'CLAUDE.md')}`],
       ['ok', `10 hook groups wired in ${p('.claude', 'settings.json')}`],
-      ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     claude: [
       ['ok', `CLAUDE.md written to ${p('proj', 'CLAUDE.md')}`],
       ['ok', `10 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
-      ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     'bob-global': [
       ['ok', `geneseed.md written to ${p('.bob', 'rules', 'geneseed.md')}`],
       ['ok', `4 hook groups wired in ${p('.bob', 'settings', 'settings.json')}`],
-      ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW IBM Bob session to load it"],
       ['info', NEXT],
     ],
     'openclaude-global': [
       ['ok', `CLAUDE.md written to ${p('.openclaude', 'CLAUDE.md')}`],
       ['ok', `10 hook groups wired in ${p('.openclaude', 'settings.json')}`],
-      ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW OpenClaude session to load it"],
       ['info', NEXT],
     ],
@@ -478,9 +472,10 @@ test('the end-of-setup summary tells the truth for every host', () => {
     assert.deepEqual(got, want, emit);
     assert.ok(!got.some(([, t]) => t.includes('is not there')), `${emit}: the Finding 5 regression`);
   }
-  // With a model CLI configured, learning is on and the summary says nothing about it.
-  assert.ok(!summaryAfterEmit('claude-global', { GENESEED_LLM: 'claude -p' })
-    .some(([, t]) => t === LEARN_OFF));
+  // Learning follows --learn and needs no $GENESEED_LLM (O13), so no summary row speaks of the variable.
+  for (const emit of Object.keys(cases)) {
+    assert.ok(!summaryAfterEmit(emit).some(([, t]) => t.includes('GENESEED_LLM')), `${emit} names GENESEED_LLM`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

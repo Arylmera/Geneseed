@@ -10,14 +10,14 @@ import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { claimer, learnModel, loadAgentOverrides, loadTierMap, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
-  CLAUDE_ENV, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
+  CLAUDE_ENV, CLAUDE_MEMORY, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   unwireClaudeEnv, unwireClaudeExcludes, unwireClaudeListing, unwireClaudeSettings, wireClaudeEnv,
   wireClaudeExcludes, wireClaudeListing,
 } from '../hosts/settings.mjs';
 import { CONTEXT_WINDOWS } from './source.mjs';
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { claudeCfg, claudeReadManifest, installTargets } from '../hosts/installs.mjs';
+import { LEARN_MODEL_RE, LEARN_SESSION, learnCommandFor } from '../hosts/learn-command.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
 import { foldOnEmit } from './fold.mjs';
 import { migrateProjectNotes } from './notes-migrate.mjs';
@@ -222,34 +222,24 @@ export function emitClaudeRender(cfg, job) {
   };
 }
 
-/** Every `GENESEED_LLM` an install of a Claude-family host recorded (its manifest's `settings_env`), as a set. */
-function recordedByAnyInstall() {
-  const found = new Set();
-  try {
-    for (const [host, scope, root] of installTargets()) {
-      if (host !== 'claude' && host !== 'openclaude') continue;
-      const cmd = claudeReadManifest(claudeCfg(root, scope, host)).managed?.settings_env?.[LEARN_ENV_KEY];
-      if (typeof cmd === 'string') found.add(cmd);
-    }
-  } catch { /* an unreadable machine registry: only this install's record counts */ }
-  return found;
-}
-
-/** The `env` key the hook's learn reads its model command from (`js/hosts/hooks-learn.mjs`). */
-export const LEARN_ENV_KEY = 'GENESEED_LLM';
-
 /**
- * The command the emit writes into `env.GENESEED_LLM` for `learn` (spec 2026-11-18-learn-model-row, D4):
- * `<cli> -p --model <model>`, or `<cli> -p` for `session` (the user's default model), with `<cli>` the
- * host's own (`claude`, `openclaude`). null writes nothing: `off`, and Bob (`from: 'n/a'`). Pure.
- * The lean flags are NOT here: learn appends them at run time, to a command whose first word is the CLI.
+ * The `--learn-model` value the emit bakes into the learn hook's command (O13, D15): the `--learn` choice's
+ * model, `session` for the user's default model, or null for no learning (`off`, and Bob, `from: 'n/a'`).
+ * The hook turns it into `<cli> -p [--model <m>]` (`learnCommandFor`). A tier model that is not a safe id for a
+ * shell command line (LEARN_MODEL_RE; the tier map is a file the user edits) falls back to `session`, with
+ * `report` saying so: learning keeps running, on the default model. Pure but for `report`.
+ * @param {string} learn @param {string} host @param {object} [map] @param {object} [env]
+ * @param {(line: string) => void} [report]
  */
-export function learnEnvCommand(learn, host, map = {}, env = {}) {
-  const cli = host === 'openclaude' ? 'openclaude' : host === 'claude' ? 'claude' : null;
+export function learnModelArg(learn, host, map = {}, env = {}, report = (_line) => {}) {
+  if (host !== 'claude' && host !== 'openclaude') return null;
   const { model, from } = learnModel(learn, map, env, host);
-  if (!cli || from === 'off' || from === 'n/a') return null;
-  // `GENESEED_LLM` is split on whitespace: a model name holding one cannot ride in it.
-  return model && !/\s/.test(model) ?`${cli} -p --model ${model}` : `${cli} -p`;
+  if (from === 'off' || from === 'n/a') return null;
+  if (!model) return LEARN_SESSION;
+  if (LEARN_MODEL_RE.test(model)) return model;
+  report(`[geneseed] WARN: the learn model ${JSON.stringify(model)} cannot ride in a hook command line `
+    + '(letters, digits and . _ - : / @ only): learning uses your default model instead.\n');
+  return LEARN_SESSION;
 }
 
 /**
@@ -329,6 +319,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
     unwireClaudeEnv(path.join(cfgDir, oldSf), get(old, 'settings_env'));
     unwireClaudeListing(path.join(cfgDir, oldSf), get(old, 'settings_listing'));
+    unwireClaudeListing(path.join(cfgDir, oldSf), get(old, 'settings_memory'));
   }
   // The merge prunes recorded groups that are no longer canonical and returns the
   // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
@@ -336,41 +327,38 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // `doctrines` decides whether the git-gate group is part of the canonical claim set. It
   // travels from `cfg` rather than being re-read off the deployment: this is the emit that
   // DECIDES the install's packs, so the marker on disk is still the previous build's.
+  // The learn model rides in the learn hook's own argv (O13), never in the settings `env`: see
+  // js/hosts/learn-command.mjs for why. The command it gives is recorded, for status and doctor.
+  const learnArg = learnModelArg(gates.learn, host, loadTierMap(cfgDir, () => {}), process.env,
+    (line) => process.stderr.write(line));
   const [, managedHooks] = mergeClaudeSettings(
     settingsPath, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
-    doctrines, excludeRules, host, cfgDir, gates,
+    doctrines, excludeRules, host, cfgDir, { ...gates, learnModel: learnArg },
   );
   managed.settings_hooks = managedHooks;
+  const learnCommand = learnCommandFor(host, learnArg);
+  if (learnCommand) managed.learn_command = learnCommand;
   // The subagent depth cap, Claude Code only (`CLAUDE_ENV` says why). The record is what this
   // install wrote, prior plus new, so uninstall never takes a key the user set themselves.
   if (host === 'claude' || host === 'openclaude') {
-    // Claude only for the depth cap; both hosts for the learn model (`learnEnvCommand`). The record is
-    // what Geneseed owns on file after the merge (`wireClaudeEnv`'s replace-if-ours form), so the model
-    // can change on a rebuild and a value the user set never lands in it.
+    // Claude only for the depth cap. The record is what Geneseed owns on file after the merge
+    // (`wireClaudeEnv`'s replace-if-ours form): an older build's `GENESEED_LLM` is in it, and since no key here
+    // names it any more, the reconcile removes it while it still holds that value. A value the user set stays.
     const priorEnv = oldSf === settingsName && isDict(get(old, 'settings_env')) ? old.settings_env : {};
     /** @type {Record<string, string>} */
     const want = host === 'claude' ? { ...CLAUDE_ENV } : {};
-    const llm = learnEnvCommand(gates.learn, host, loadTierMap(cfgDir, () => {}), process.env);
-    // A shell that names a command of its own is the user's (D5): the settings `env` would override it in a
-    // session, so Geneseed stops managing the key, and removes its own value if it is still on file. A shell
-    // that holds a value some build recorded is only a session that inherited ours (the session's settings `env`
-    // reached it), and ours stays ours: a rebuild run from inside a session (the console, an agent, `rebuild-all`)
-    // must not give the key up, and a session of install A holds A's value while a rebuild reaches install B. The
-    // same for an install that has a record while the process runs inside Claude Code (`CLAUDECODE`, set by the app
-    // in every session: seen in a real session's environment), whatever the inherited value was.
-    const shellLlm = process.env.GENESEED_LLM;
-    const recordedLlm = Object.hasOwn(priorEnv, LEARN_ENV_KEY) ? priorEnv[LEARN_ENV_KEY] : null;
-    const shellIsUsers = Boolean(shellLlm) && shellLlm !== recordedLlm && !recordedByAnyInstall().has(shellLlm)
-      && !(recordedLlm !== null && process.env.CLAUDECODE);
-    if (llm && !shellIsUsers) want[LEARN_ENV_KEY] = llm;
-    if (shellIsUsers && recordedLlm !== null) {
-      process.stderr.write(`[geneseed] $GENESEED_LLM is set in your shell (${JSON.stringify(shellLlm)}): Geneseed stops managing `
-        + `env.GENESEED_LLM in ${settingsName} and removes its own value (${JSON.stringify(recordedLlm)}) if it is still there.\n`);
-    }
     const env = wireClaudeEnv(settingsPath, want, priorEnv);
     if (Object.keys(env).length) managed.settings_env = env;
   }
   if (host === 'claude') {
+    // ONE MEMORY HOME (CLAUDE_MEMORY). Claude Code's own auto memory is a second writer beside the
+    // Reliquary: every session wrote both stores and loaded both indexes (about 3k tokens for its
+    // MEMORY.md alone), and the facts drifted apart. So the install turns it off, recorded like the
+    // listing keys: a `false` the user set is theirs and stays unrecorded, and uninstall or
+    // deactivate removes ours while it still holds that value, which turns Claude's memory back on.
+    const priorMemory = oldSf === settingsName && isDict(get(old, 'settings_memory')) ? old.settings_memory : {};
+    const memory = wireClaudeListing(settingsPath, CLAUDE_MEMORY, priorMemory, 'native-memory');
+    if (Object.keys(memory).length) managed.settings_memory = memory;
     // The skill-listing budget of `--context-window` (`CONTEXT_WINDOWS` says why and why Claude
     // Code only). The record is what this install owns on file, so a value can change on a rebuild.
     const priorListing = oldSf === settingsName && isDict(get(old, 'settings_listing')) ? old.settings_listing : {};

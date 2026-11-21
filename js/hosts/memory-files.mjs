@@ -16,7 +16,7 @@
  */
 import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
@@ -24,6 +24,7 @@ import { normcase } from '../lib/paths.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
+import { DUPLICATE_SIMILARITY, isMapText, mapBody, nearestFact } from './memory-search.mjs';
 
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
 const FILE_SEP_RE = /^---FILE---[^\S\n]*$/m;
@@ -47,7 +48,6 @@ export const MEMORY_SEED = '# Memory Index\n';
  * facts and lost the newest ones, which is why it was split.
  */
 const TOPICS = 'topics';
-const MAP_HINT = 'Each topic file lists its facts; open the one the task needs.';
 // A fact pointer: `- [title](slug.md)` in a legacy flat index, `- [title](../slug.md)` in a
 // topic file. The slug may not hold a `/`, so a map line (`topics/x.md`) is never a fact.
 const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/;
@@ -177,8 +177,9 @@ function topicSlug(raw) {
 const topicOf = (fm) => topicSlug(fmGet(fm, 'topic') || fmGet(fm, 'type'));
 
 /**
- * Every fact on disk, in the index's sort order: slug -> { desc, topic }. Top level only, so
- * `archive/` and `agents/` are never facts. Exported for learn's prompt, which lists them.
+ * Every fact on disk, in the index's sort order: slug -> { desc, topic, body, mtime }. Top level only,
+ * so `archive/` and `agents/` are never facts. Exported for learn's prompt, which lists them. `body`
+ * and `mtime` (ms) are what `./memory-search.mjs` ranks by: the text, and which facts are newest.
  */
 export function readFacts(memDir) {
   const facts = new Map();
@@ -186,8 +187,9 @@ export function readFacts(memDir) {
     const s = stem(name);
     if (isReservedStem(s)) continue;
     try {
-      const [fm] = frontmatter(readText(path.join(memDir, name)));
-      facts.set(s, { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm) });
+      const file = path.join(memDir, name);
+      const [fm, body] = frontmatter(readText(file));
+      facts.set(s, { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm), body: body.trim(), mtime: statSync(file).mtimeMs });
     } catch { continue; }
   }
   return facts;
@@ -218,13 +220,14 @@ export function indexNotes(memDir, generated) {
   return (readLines(path.join(memDir, 'MEMORY.md')) ?? []).filter((l) => {
     const t = l.trim();
     const flat = FACT_LINE_RE.exec(t);
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
+    return t && t !== MEMORY_SEED.trim() && !isMapText(t) && !MAP_LINE_RE.test(t)
       && !(flat && generated(flat[2]));
   });
 }
 
 /**
- * Rewrite MEMORY.md as the map: one line per topic file with its fact count.
+ * Rewrite MEMORY.md as the map: one line per topic file with its fact count, at most
+ * MAP_TOPIC_LINES of them and a count of the rest (`mapBody`, `./memory-search.mjs`).
  *
  * LINES THE MAP DID NOT GENERATE ARE CARRIED, so a note the user wrote into the index
  * survives. `generated(slug)` says which legacy flat fact pointers a rebuild has just moved into
@@ -236,12 +239,10 @@ function writeMap(memDir, generated) {
   const idx = path.join(memDir, 'MEMORY.md');
   const carried = indexNotes(memDir, generated);
   const tdir = path.join(memDir, TOPICS);
-  const topics = globMd(tdir).map(stem).sort().map((t) => {
-    const n = (readLines(path.join(tdir, `${t}.md`)) ?? [])
-      .filter((l) => FACT_LINE_RE.test(l.trim())).length;
-    return `- [${t}](${TOPICS}/${t}.md) — ${n} fact${n === 1 ? '' : 's'}`;
-  });
-  const body = [...(topics.length ? ['', MAP_HINT, '', ...topics] : []),
+  const counts = new Map(globMd(tdir).map(stem).map((t) => [t, (readLines(path.join(tdir, `${t}.md`)) ?? [])
+    .filter((l) => FACT_LINE_RE.test(l.trim())).length]));
+  const map = mapBody(counts);
+  const body = [...(map.length ? ['', ...map] : []),
     ...(carried.length ? ['', ...carried] : [])];
   writeIfChanged(idx, body.length ? `${MEMORY_SEED}${body.join('\n')}\n` : MEMORY_SEED);
 }
@@ -373,16 +374,24 @@ export function archiveFact(memDir, slug) {
  * case variant of a stored slug would overwrite it. An update or archive therefore acts on
  * the STORED spelling, whatever case the model used.
  *
- * Returns `{ created, updated, archived }`, each a list of slugs.
+ * A CREATE THAT REPEATS A STORED FACT IS NOT WRITTEN (D9). The prompt lists the stored facts that match the
+ * notes (`pickStored`), but a model can still restate one under a new slug, and a store that grows a copy per
+ * distil is the failure this guards (a work machine reached ~1 200 facts in a week). A create whose
+ * `nearestFact` similarity reaches DUPLICATE_SIMILARITY is skipped and named in `skipped`, for the caller to
+ * report: never silent, because a false skip loses a fact. The fix is the model's to make, as an `action: update`.
+ *
+ * Returns `{ created, updated, archived, skipped }`; the first three are lists of slugs, `skipped` of
+ * `<slug>: near-duplicate of <stored slug>, skipped` lines.
  */
 export function writeMemories(modelOutput, memDir, existing) {
   const stored = new Map([...existing].map((s) => [s.toLowerCase(), s]));
   const done = new Set();
-  const res = { created: [], updated: [], archived: [] };
+  const res = { created: [], updated: [], archived: [], skipped: [] };
+  let corpus = null;   // the stored facts, read once and only when a create needs them
   for (let chunk of modelOutput.split(FILE_SEP_RE)) {
     chunk = chunk.trim();
     if (!chunk || chunk.toUpperCase() === 'NOTHING') continue;
-    const [fm] = frontmatter(chunk);
+    const [fm, text] = frontmatter(chunk);
     const name = fmGet(fm, 'name').trim();
     const key = name.toLowerCase();
     const action = fmGet(fm, 'action').trim().toLowerCase() || 'create';
@@ -391,6 +400,15 @@ export function writeMemories(modelOutput, memDir, existing) {
     if (slug && action !== 'create' && hasForce(memDir, slug)) continue;
     const body = `${stripAction(chunk).replace(/\n+$/, '')}\n`;
     if (action === 'create' && !slug) {
+      corpus ??= readFacts(memDir);
+      const fact = { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm), body: text.trim() };
+      const near = nearestFact(corpus, { slug: name, ...fact });
+      if (near && near.similarity >= DUPLICATE_SIMILARITY) {
+        res.skipped.push(`${name}: near-duplicate of ${near.slug}, skipped`);
+        done.add(key);
+        continue;
+      }
+      corpus.set(name, fact);
       writeText(path.join(memDir, `${name}.md`), body);
       existing.add(name);
       stored.set(key, name);
@@ -745,31 +763,33 @@ export function learnLastNote(last, now = Date.now()) {
  * Whether `learn` can run (D12, D9), per host of the installs present. One wording for `status` and
  * `doctor`. Pure: the caller reads the files.
  *
- * Only the Claude-shaped hook needs `$GENESEED_LLM`, and it reads the HOOK's env — which Claude
- * Code builds from the shell AND from the `"env"` object of the settings files. This verb runs in a
- * terminal or in the web daemon, which see neither, so `settingsEnv` carries those objects in.
- * Reading only `process.env` called a learning install dormant (6.0.3, on an install that learned).
- * Who set the command is said too: a value equal to what the manifest recorded (`recorded`) is
- * Geneseed's, from the `--learn` choice (`active (haiku)`); any other is the user's (`active (set by
- * you)`). With no command, `--learn off` reads `off` and anything else `dormant`.
+ * The Claude-shaped hook runs `$GENESEED_LLM` when the user set one, read from the HOOK's env — which
+ * Claude Code builds from the shell AND from the `"env"` object of the settings files, so `settingsEnv`
+ * carries those objects in (this verb runs in a terminal or the web daemon, which see neither). Else it
+ * runs the command its `--learn-model` gives (O13), which the manifest records (`baked`). A command equal
+ * to what is Geneseed's (`recorded`: `baked`, or an older build's `settings_env` value) reads as the
+ * `--learn` choice (`active (haiku)`); any other is the user's (`active (set by you)`). With no command,
+ * `--learn off` reads `off` and anything else `dormant`.
  * OpenCode's learn plugin distils with the session's own model and reads no `$GENESEED_LLM` at all.
  * Bob's Stop payload carries no transcript, so learn returns at once there: not dormant, n/a.
  *
  * `last` is `readLearnLast()`: a failed verdict appends ` · last run failed <date>: <reason>`, a run still marked
  * running past its `by` ` · last run stuck since <date>`. The file is machine-wide: it holds the latest run of any install.
- * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, learn?: string|null }]`;
+ * `installs` is `[{ host, settingsEnv?: object[], recorded?: string|null, baked?: string|null, learn?: string|null }]`;
  * with none, the env alone answers, as before.
  */
 export function learnState(env = process.env, installs = [], last = null) {
   if (!installs.length) return env.GENESEED_LLM ? `active${learnLastNote(last)}` : LEARN_UNSET;
   const byHost = new Map();
-  for (const { host, settingsEnv = [], recorded = null, learn = null } of installs) {
+  for (const { host, settingsEnv = [], recorded = null, baked = null, learn = null } of installs) {
     let state;
     if (host === 'opencode') state = 'active (session model)';
     else if (host === 'bob') state = 'n/a (Bob sends no transcript)';
     else {
       // The files run user < project < local, and Claude Code applies the later one: search from the end.
-      const llm = [...settingsEnv].reverse().find((e) => isDict(e) && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+      // A `$GENESEED_LLM` wins in the hook (O13); without one, the hook runs the command its `--learn-model` gives.
+      const set = [...settingsEnv].reverse().find((e) => isDict(e) && e.GENESEED_LLM)?.GENESEED_LLM || env.GENESEED_LLM || '';
+      const llm = set || baked || '';
       if (!llm) state = learn === 'off' ? 'off' : LEARN_UNSET;
       else if (recorded && recorded === llm) state = `active (${/--model\s+(\S+)/.exec(llm)?.[1] ?? 'session model'})`;
       else state = 'active (set by you)';

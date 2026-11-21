@@ -50,6 +50,9 @@ request or merge the branch.
      release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any
      `user-rules.md`, agent, skill and instruction files, and gate machinery (check scripts, CI-only
      harnesses, coverage thresholds; not ordinary unit tests).
+   - **Merge danger.** A PR whose Merge danger names a one-way door never arms, whatever its tier
+     and the rule's line: what cannot be walked back gets a human merge. When unsure which door
+     it is, it is one-way.
    - **The rule's line for the tier.** `sensitive` never arms, whatever the rule says.
      `docs-tests` accepts `auto | human | reviewer | never`; `normal` accepts `human | reviewer
      | never` (`auto` is not valid there). A missing or other value counts as `human`. `auto`
@@ -96,7 +99,7 @@ request or merge the branch.
 ## Done when
 - The diff passed review with no `blocking` finding, and the PR is open (or the branch is merged) with a Summary / Evidence / Merge danger
   body, and nothing unrelated rides along.
-- Auto-merge is armed only under the user's standing rule, never for a sensitive diff, on a
+- Auto-merge is armed only under the user's standing rule, never for a sensitive diff or a one-way door, on a
   forge that requires checks, on the reviewed head, and disarmed before any later push — or it
   is off and the user was told once this session how to turn it on.
 - A branch merged while you are still working is deleted, local and remote, or the user
