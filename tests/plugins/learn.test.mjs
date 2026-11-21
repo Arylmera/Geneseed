@@ -732,7 +732,7 @@ test("retrieval + guard through the plugin: a just-written fact is listed with 1
     await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
     assert.ok(await until(() => prompts.length >= 2))
     assert.ok(prompts[1].includes(`- zz-stdin — ${said}`), "the fact just written is in the next prompt")
-    await new Promise((r) => setTimeout(r, 300))
+    await new Promise((r) => setTimeout(r, 3000))
     assert.ok(!fsSyncExists(path.join(mem, "zz-stdin-again.md")), "a restated fact is skipped by the guard")
   } finally { restore() }
 })
