@@ -126,17 +126,27 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     // two names), because a read-only agent that can dispatch can spawn a writer. `WebFetch`,
     // unless the spec carries the webfetch marker. The three shells (`Bash`, `PowerShell`, and
     // `Monitor`, which runs a command in the background), unless it carries the bash marker.
+    // After those safety denies comes the COST list, the same on every agent, writers included:
+    // session-only tools whose schemas an agent would carry on every turn (artifacts, workflows,
+    // user cards, scheduling, cross-session messaging, the desktop app's own MCP servers).
+    // `SendMessage`, `Agent`, `Skill`, `ToolSearch` and every other MCP server stay.
+    const cost = 'Artifact, ArtifactComments, ArtifactData, Workflow, SendUserFile, ReportFindings, '
+      + 'SearchPlugins, SuggestPluginInstall, SuggestSkills, ListAgents, DesignSync, SendToProject, '
+      + 'SendToProjectContext, ScheduleWakeup, CronCreate, CronDelete, CronList, RemoteTrigger, '
+      + 'PushNotification, mcp__claude_ai_Claude_Docs, mcp__visualize, mcp__ccd_session, '
+      + 'mcp__ccd_session_mgmt, mcp__ccd_turn, mcp__ccd_pr, mcp__terminal';
     const denied = (name) => read(cfg, 'agents', `${name}.md`).match(/^disallowedTools: .*$/m)?.[0];
     // skeptic: no marker.
     assert.equal(denied('skeptic'),
-      'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch, Bash, PowerShell, Monitor');
+      `disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch, Bash, PowerShell, Monitor, ${cost}`);
     // researcher: the webfetch marker lifts exactly WebFetch; the shells stay denied.
     assert.equal(denied('researcher'),
-      'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, Bash, PowerShell, Monitor');
+      `disallowedTools: Write, Edit, NotebookEdit, Agent, Task, Bash, PowerShell, Monitor, ${cost}`);
     // explorer: the bash marker lifts the three shells together, and never the dispatch.
-    assert.equal(denied('explorer'), 'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch');
-    // tester writes test files: not read-only, no denylist.
-    assert.equal(denied('tester'), undefined);
+    assert.equal(denied('explorer'), `disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch, ${cost}`);
+    // tester and developer write: no safety denies, the cost list alone.
+    assert.equal(denied('tester'), `disallowedTools: ${cost}`);
+    assert.equal(denied('developer'), `disallowedTools: ${cost}`);
 
     // THE HOOK PATH IS THE POINT OF THE CLASS. A hook's cwd is the user's project, so nothing
     // relative resolves — it must be absolute, and it must be the STABLE SHIM rather than this
