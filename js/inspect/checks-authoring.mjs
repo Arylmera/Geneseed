@@ -13,7 +13,7 @@
  * `node --check` over every OpenCode plugin. See `doctor.mjs` for what that allow-list costs.
  */
 import path from 'node:path';
-import { PLUGIN_SRC, SRC, TIER_MARKER_RE } from '../build/source.mjs';
+import { EFFORT_MARKER_RE, PLUGIN_SRC, SRC, TIER_MARKER_RE } from '../build/source.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
@@ -57,6 +57,7 @@ const ALLOWED_COMMENT_RES = [
   new RegExp(`^harness:\\s*(?:${HARNESS_IDS})(?:\\s*,\\s*(?:${HARNESS_IDS}))*$`),
   /^bash:\s*allow$/,                         // js/hosts/native.mjs BASH_MARKER
   /^tier:\s*(strong|light)$/,                // js/build/source.mjs TIER_MARKER_RE
+  /^effort:\s*(low|medium)$/,                // js/build/source.mjs EFFORT_MARKER_RE
   /^banned: ok$/,                            // checks-counts.mjs kitProblems: a kit line that names a banned string
 ];
 
@@ -167,6 +168,28 @@ export function tierMarkerProblem(text) {
   return '';
 }
 
+/**
+ * The effort marker's shape in one agent spec, or '' when it holds: the tier marker's contract
+ * (`tierMarkerProblem`), one line higher. It sits after a blank line and directly above the tier
+ * line, or directly above `## When to dispatch` when the seat has no tier, so stripping both lines
+ * leaves the pre-marker text byte for byte.
+ */
+export function effortMarkerProblem(text) {
+  const lines = text.split(/\r?\n/);
+  const at = lines.map((l, i) => (/^\s*<!--\s*effort:/.test(l) ? i : -1)).filter((i) => i >= 0);
+  if (!at.length) return '';
+  if (at.length > 1) return 'has more than one effort marker';
+  if (!EFFORT_MARKER_RE.test(`${lines[at[0]]}\n`)) {
+    return `the effort marker '${lines[at[0]].trim()}' is not '<!-- effort: low|medium -->' on a line of its own`;
+  }
+  const next = lines[at[0] + 1];
+  if (next !== '## When to dispatch' && !TIER_MARKER_RE.test(`${next}\n`)) {
+    return "the effort marker is not directly above the tier marker or '## When to dispatch'";
+  }
+  if (lines[at[0] - 1] !== '') return 'the effort marker does not follow a blank line';
+  return '';
+}
+
 export function authoringProblems() {
   const problems = [];
   for (const folder of ['agents', 'skills']) {
@@ -180,6 +203,8 @@ export function authoringProblems() {
       }
       const tierWhy = folder === 'agents' ? tierMarkerProblem(text) : '';
       if (tierWhy) problems.push(`[authoring] agents/${path.basename(spec)}: ${tierWhy}`);
+      const effortWhy = folder === 'agents' ? effortMarkerProblem(text) : '';
+      if (effortWhy) problems.push(`[authoring] agents/${path.basename(spec)}: ${effortWhy}`);
       if (!firstBlockquote(text)) {
         problems.push(`[authoring] ${folder}/${path.basename(spec)} has no '>' purpose line `
           + '(its OpenCode description would render empty)');

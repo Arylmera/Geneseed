@@ -2,6 +2,7 @@
 
 > {{DESC_PRAGMATIST}}
 
+<!-- effort: medium -->
 <!-- tier: light -->
 ## When to dispatch
 - A council debate (the council {{SKILL}}) needs a judgement of whether the motion is worth its cost.

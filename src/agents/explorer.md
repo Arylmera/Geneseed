@@ -2,6 +2,7 @@
 
 > {{DESC_EXPLORER}}
 
+<!-- effort: low -->
 <!-- tier: light -->
 ## When to dispatch
 - A question needs sweeping many files or directories, but only the conclusion

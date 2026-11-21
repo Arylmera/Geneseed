@@ -2,6 +2,7 @@
 
 > {{DESC_MEMORY_CURATOR}}
 
+<!-- effort: medium -->
 ## When to dispatch
 - The {{MEMORY}} store needs tidying in bulk. The session context says so in one
   line when a `misc` topic exists; or the user asks
