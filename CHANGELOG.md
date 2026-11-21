@@ -8,8 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.1.0] — 2026-11-21
+
 ### Added
 
+- **Search every memory fact.** `geneseed memory search "<words>" [--limit n]` ranks the facts by BM25 over slug, description, topic and body. On OpenCode the `memory_search` tool does the same, on V1 and V2. The memory map's hint names both.
+- **codebase-design gains an audit mode**, ported from Matt Pocock's `improve-codebase-architecture` (credited). It starts only on an explicit ask ("audit the architecture", "where should we refactor"). It ranks hot spots by churn × friction, writes its report to the notebook and never edits code. A picked candidate goes through the design interview, then becomes a plan file or a wayfinder ticket.
 - **Reading seats step their effort down on Claude Code.** An agent source can carry `<!-- effort: low|medium -->`, and a Claude Code install writes it as `effort:` in the agent's frontmatter. `explorer` runs at `low`; the ten council debaters, `docs` and `memory-curator` at `medium`. The verification seats (`reviewer`, `tester`, `security`, `performance`) and `developer` carry no marker and keep your session's effort, where effort pays. A marker can only step down, never up. OpenCode and Bob are unchanged.
 
 ### Changed
@@ -24,6 +28,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **Agents start lighter on Claude Code and OpenClaude.** Every agent now carries a `disallowedTools` list of session-only tools it never needs (artifacts, workflows, user cards and files, scheduling, cross-session messaging, the desktop app's own MCP servers). Each loaded tool's schema sits in an agent's context and is read again on every turn; measured on Claude Code 2.1.318, the list takes an agent's start from 60.9k to 43.0k tokens. It is a denylist on purpose: every MCP server it does not name stays available, so a worker keeps the servers of whatever machine it runs on. `SendMessage`, `Agent`, `Skill` and `ToolSearch` stay. Read-only agents keep their own denies, with the list after them on the same line.
 - **Foreman mode delegates less.** A worker costs a fixed start (about 80k tokens of instructions and tools on Claude Code, read again on every turn) and a blind review, and a month of measured sessions put a Foreman commit at about 55 % more tokens than a direct one. The session now delegates only a task that runs a command longer than about a minute, work that runs beside other work in flight, or a change to five or more files (was three). When unsure, it does the task inline (was: delegate). It always starts a worker as the `developer` agent, never as a general-purpose one.
 - **Foreman review rounds are bounded.** A task gets one full blind review and at most one delta review (only the diff since the last review); non-blocking findings are fixed and proven by the session's re-run, with no new review, and a task that still fails goes to you. A failing verdict goes back to the worker in one message, at once, because a worker resumed after its prompt cache expired pays its whole context again (such rewrites after a pause were 20 % of measured worker cost).
+- **The memory map is bounded.** `MEMORY.md` is injected at every session start and listed every topic: at 300 topics it passed 13 KB, and the OpenCode context plugin drops a session file above 16 KB whole. It now lists the 25 largest topics plus `misc`, and one line counts the rest, reached by the search above. 300 topics give a map under 2 KB, and every topic keeps its file.
+- **Memory learning distils each transcript region once and stops re-creating facts.** A per-session cursor sends only the new turns, so a quiet window no longer re-mines the whole session tail. Fresh text under 200 characters waits for more. The ALREADY STORED list in the prompt holds the 10 newest facts plus the best BM25 matches for the notes, not the first 8 000 characters in alphabetical order. A new fact whose similarity to a stored one reaches 0.7 is skipped and reported as a near-duplicate. This runs on OpenCode and on the Claude-family hosts.
+
+### Fixed
+
+- The Memory tab of the web console was hidden at the default Essentials level, so there was no visible way to list or search stored facts. It now shows at every level, and the list filter also matches a fact's topic.
+- On Windows, an atomic write over a file that another process held open failed with `EPERM`, so a learn run that succeeded could still read as `running`, later as stuck. `writeTextAtomic` now retries the rename for about 2 s before it throws. The memory index, fold state and web API writes share the fix.
+- An `Agent` call with no `subagent_type` was not counted in usage. Claude Code runs `general-purpose` for it, and usage now counts it under that name.
 
 ## [6.0.4] — 2026-11-18
 
