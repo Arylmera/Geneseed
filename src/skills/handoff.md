@@ -4,7 +4,7 @@
 
 {{CREDIT:mattpocock-skills:skills/productivity/handoff/SKILL.md}}
 
-**Trigger:** the context window is filling, a session is ending mid-task, or work is passing to another agent or developer.
+**Trigger:** the context nears about {{SMART_ZONE}} tokens (the smart zone: past it the model's choices get worse well before the window is full), a session is ending mid-task, or work is passing to another agent or developer.
 
 ## Procedure
 1. Capture the state in the worklog (`WORKLOG.md` or the task's plan file, in your {{NOTEBOOK}}; in the repository only when the user asks), whose first line names its task or branch so a stale one is never resumed: the goal, what's done, the step in progress, and the exact next step.
