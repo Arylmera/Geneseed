@@ -83,7 +83,7 @@ A **pipeline** is the opt-in alternative: a small crew of agents working one tas
 | research | `explorer`; add `researcher` when the question leaves the repository |
 | review or audit | `reviewer` + `skeptic` |
 
-The session does not run the crew itself. It starts one **crew lead** in the background and goes back to you. The crew lead picks the crew from the whole agent roster — `security`, `architect`, `performance`, `reviewer` and so on, as the task needs, never fewer than the minimum — and passes the work from one agent to the next. On Claude Code each crew member is its own subagent. On a host where the crew lead cannot start subagents, it plays each role in turn. The `pipeline` skill has the table per host.
+The session does not run the crew itself. It starts one **crew lead** in the background, the `crew-lead` agent, and goes back to you. The crew lead picks the crew from the whole agent roster — `security`, `architect`, `performance`, `reviewer` and so on, as the task needs, never fewer than the minimum — and passes the work from one agent to the next. On Claude Code each crew member is its own subagent. On a host where the crew lead cannot start subagents, it plays each role in turn. The `pipeline` skill has the table per host.
 
 The crew works in its own git worktree and branch. When worktrees are unavailable it falls back to the main tree, one pipeline at a time, and says so. Two pipelines whose sets of files overlap do not run at once.
 

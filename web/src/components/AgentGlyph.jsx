@@ -33,6 +33,17 @@ export const GLYPHS = {
       <path d="M14 52h36M14 50v4M50 50v4" opacity=".5" />
     </>
   ),
+  // Leads the crew: one lead node wired to three members, the relay passing from each to the next.
+  'crew-lead': (
+    <>
+      <path d="M32 22L16 44M32 22v22M32 22l16 22" opacity=".4" />
+      <circle className="ag-pulse ag-f" cx="32" cy="17" r="6" />
+      <circle className="ag-f" cx="16" cy="47" r="4" />
+      <circle className="ag-f" cx="32" cy="47" r="4" />
+      <circle className="ag-f" cx="48" cy="47" r="4" />
+      <path className="ag-draw ag-late" pathLength="100" d="M20 47h8M36 47h8" />
+    </>
+  ),
   // Forges the change: an editor window, code brackets and a blinking cursor.
   developer: (
     <>

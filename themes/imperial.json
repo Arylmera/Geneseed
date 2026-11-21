@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Sits in judgement of a change before it passes the gate.",
   "DESC_TESTER": "Forges the trials, runs them, and reads their auguries.",
   "DESC_DEVELOPER": "Forges the sanctioned change in its own sealed worktree.",
+  "DESC_CREW_LEAD": "Commands the crew in its own sealed worktree; returns one proven envelope.",
   "DESC_ARCHITECT": "Draws the battle-plan before any line goes to war.",
   "DESC_DOCS": "Inscribes the records once the work is done.",
   "DESC_SECURITY": "Wards the gates of every security-touching change.",

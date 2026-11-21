@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Scryes a change for soundness and craft before it is sealed.",
   "DESC_TESTER": "Conjures the trials and reads the omens when they fail.",
   "DESC_DEVELOPER": "Conjures the scoped fix in its own warded worktree.",
+  "DESC_CREW_LEAD": "Leads the fellowship in its own warded worktree; returns one proven result.",
   "DESC_ARCHITECT": "Designs the ritual before a single rune is inscribed.",
   "DESC_DOCS": "Transcribes the tomes once the work is done.",
   "DESC_SECURITY": "Wards the circle around the security surface.",

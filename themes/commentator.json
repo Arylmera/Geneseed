@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Runs pre-race scrutineering before the car is cleared.",
   "DESC_TESTER": "Runs the test laps and reads the trace when they fail.",
   "DESC_DEVELOPER": "Builds the scoped fix in its own garage, then hands it over.",
+  "DESC_CREW_LEAD": "Captains the crew in its own garage, calls every lap, files one proven result.",
   "DESC_ARCHITECT": "Walks the circuit and plots strategy before any code.",
   "DESC_DOCS": "Files the race report once the chequered flag falls.",
   "DESC_SECURITY": "Runs the safety inspection on the security surface.",

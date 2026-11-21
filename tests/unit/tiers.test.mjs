@@ -85,7 +85,7 @@ test('the seats are the spec table: four strong, twelve light, every other agent
   const tierOf = (name) => items.find((i) => i.rel === `agents/${name}.md`).tier ?? 'standard';
   assert.deepEqual(items.filter((i) => i.tier === 'strong').map((i) => path.basename(i.rel, '.md')).sort(), STRONG);
   assert.deepEqual(items.filter((i) => i.tier === 'light').map((i) => path.basename(i.rel, '.md')).sort(), LIGHT);
-  for (const name of ['developer', 'tester', 'docs', 'memory-curator']) assert.equal(tierOf(name), 'standard', name);
+  for (const name of ['developer', 'crew-lead', 'tester', 'docs', 'memory-curator']) assert.equal(tierOf(name), 'standard', name);
 });
 
 test('the kit seats react-reviewer, spring-reviewer and spring-security are strong, like the core judgement seats', () => {
@@ -454,7 +454,7 @@ test('the doctor covers a project Claude install too, and skips a tier whose age
   assert.match(both[0], /standard tier's 'sonnet' alias/);
   assert.match(both[1], /light tier's 'haiku' alias/);
   // Pin every standard agent (the project's overrides live in `.claude/`): no alias is in play for that tier.
-  const pins = Object.fromEntries(['developer', 'tester', 'docs', 'memory-curator'].map((a) => [a, { model: 'opus' }]));
+  const pins = Object.fromEntries(['developer', 'crew-lead', 'tester', 'docs', 'memory-curator'].map((a) => [a, { model: 'opus' }]));
   fs.writeFileSync(path.join(d, '.claude', 'agent-overrides.json'), JSON.stringify({ agents: pins }));
   const light = mine(BEDROCK_ENV);
   assert.equal(light.length, 1, light.join('\n'));

@@ -17,6 +17,7 @@
   "DESC_REVIEWER": "Checks the car over before it goes out: correctness first.",
   "DESC_TESTER": "Sends the test runs and reads the data when they go wrong.",
   "DESC_DEVELOPER": "Builds the scoped fix in its own garage, then hands it over.",
+  "DESC_CREW_LEAD": "Runs the pit crew in its own garage, calls every stop, brings one proven car.",
   "DESC_ARCHITECT": "Sorts the strategy before a single line is committed.",
   "DESC_DOCS": "Writes up the debrief and the notes once the work is done.",
   "DESC_SECURITY": "Combs through the security surface.",
