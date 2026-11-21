@@ -45,7 +45,8 @@ deterministic unit layer ({{LAW:verify-before-asserting}}).
 <!-- LEAN:begin -->
 Code you author is not done until its behaviour is covered by a test you wrote
 and the affected tests run green. New behaviour ships with the test that pins it,
-a bug fix with the test that reproduces it first (the develop {{SKILL}} drives this).
+a bug fix with the test that reproduces it first (the develop {{SKILL}} drives this,
+whether you write the code or a worker you dispatch does).
 After each change run the tests that change could affect — the ones you touched,
 not the whole suite ({{DOCTRINE:context-economy}}) — and read the output before moving on;
 once at the end, run the whole suite and name every failure, even one you did not cause.
@@ -57,8 +58,8 @@ the gap and stop rather than ship untested behaviour in silence ({{LAW:one-inten
 {{LAW:cure-the-cause}}).
 <!-- LEAN:else -->
 Code is done when a test you wrote covers its behaviour and the affected tests run green.
-New behaviour ships with its test, a bug fix with the reproducing test first (run the
-develop {{SKILL}}). Run them on the real runner, the whole suite once at the end, and show
+New behaviour ships with its test, a bug fix with the reproducing test first (the develop
+{{SKILL}}, inline or in the worker you dispatch). Run them on the real runner, the whole suite once at the end, and show
 the output, every failure named ({{LAW:verify-before-asserting}}). Untestable: name the gap,
 never invent a test; a real test out of scope: stop rather than ship untested behaviour
 silently ({{LAW:one-intent-one-act}}, {{LAW:cure-the-cause}}).
