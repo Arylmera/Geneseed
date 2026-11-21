@@ -1,3 +1,10 @@
+## Report delivery
+
+Your report is your last message: return it in full, inline, however long. The caller reads that
+message, not a file. Write no report file, even when the brief names one: a read-only {{AGENT}}
+has no write tool, and the host may refuse a sub-agent's write outside its worktree. When a brief
+asks for a file, give the report inline and say so in one line.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary
