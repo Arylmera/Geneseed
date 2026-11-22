@@ -858,6 +858,18 @@ test("the shell-write twin block is byte-identical to js/hosts/hooks.mjs", async
   assert.equal(cut(guardSrc), cut(hookSrc), "the guard's shell-write block drifted from js/hosts/hooks.mjs")
 })
 
+// Which Context Mode `language` is a shell, and which one: one block, carried by both gates.
+test("the shell-language twin block is byte-identical to js/hosts/hooks.mjs", async () => {
+  const cut = (s, file) => {
+    const b = s.indexOf("// ---- shell-language twin: BEGIN"), e = s.indexOf("// ---- shell-language twin: END")
+    assert.ok(b >= 0 && e > b, `twin markers missing in ${file}`)
+    return s.slice(b, e)
+  }
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  assert.equal(cut(guardSrc, "the guard"), cut(hookSrc, "hooks.mjs"), "the guard's shell-language block drifted from js/hosts/hooks.mjs")
+})
+
 test("a shell write to a protected check is refused; a read of it passes", async () => {
   const repo = path.join(tmp, "shellw")
   await fs.mkdir(path.join(repo, ".git"), { recursive: true })

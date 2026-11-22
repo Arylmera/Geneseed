@@ -1097,18 +1097,24 @@ function consentBenign(command) {
  * `PowerShell` call. Code in any other language is a program, not read here. The twin of
  * `pickCommand` and `nestedCalls` in adapters/opencode/plugins/geneseed-guard.js.
  */
+// ---- shell-language twin: BEGIN — js/hosts/hooks.mjs and adapters/opencode/plugins/geneseed-guard.js
+// carry this block byte for byte (tests/plugins/guard.test.mjs). The shell a Context Mode `language`
+// names: `shell` and the `sh` family run the code with `-c` (`shell` is Git Bash on Windows, `sh`
+// elsewhere: v2.2.2 `src/core/sandbox/runtimes.ts`), `powershell` as a script. Any other language is
+// a program, not read: null.
 const POSIX_LANGUAGES = new Set(['shell', 'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
 function languageShell(language) {
   if (typeof language !== 'string') return null;
   const name = path.basename(language.trim().toLowerCase().replace(/\\/g, '/')).replace(/\.exe$/, '');
-  if (POSIX_LANGUAGES.has(name)) return 'Bash';
-  return name === 'powershell' || name === 'pwsh' ? 'PowerShell' : null;
+  if (POSIX_LANGUAGES.has(name)) return 'bash';
+  return name === 'powershell' || name === 'pwsh' ? 'powershell' : null;
 }
+// ---- shell-language twin: END
 export function shellCallsOf(payload) {
   const ti = (payload && payload.tool_input) || {};
   if (typeof ti.command === 'string') return [payload];
   const calls = [];
-  const shell = languageShell(ti.language);
+  const shell = { bash: 'Bash', powershell: 'PowerShell' }[languageShell(ti.language)];
   if (shell && typeof ti.code === 'string') calls.push([shell, ti.code]);
   for (const item of Array.isArray(ti.commands) ? ti.commands : []) {
     const command = typeof item === 'string' ? item : item && typeof item.command === 'string' ? item.command : '';
@@ -1119,7 +1125,13 @@ export function shellCallsOf(payload) {
 
 /** Every shell call the payload carries, in order, until one gets a verdict (`shellCallsOf`). */
 export function gitDecide(args, payload) {
-  for (const call of shellCallsOf(payload)) {
+  const calls = shellCallsOf(payload);
+  // The bound on one command holds for the whole call: a batch is read command by command, so
+  // its total, not its longest, is what the host's hook timeout has to cover.
+  if (calls.length > 1 && calls.reduce((n, c) => n + c.tool_input.command.length, 0) > MAX_COMMAND_CHARS) {
+    return ask(args, 'git-gate', 'law-4', 'unverified', {});
+  }
+  for (const call of calls) {
     const printed = PRINTED;
     const rc = gitDecideOne(args, call);
     if (rc !== 0 || PRINTED !== printed) return rc;
@@ -1698,7 +1710,9 @@ export function normaliseBobPayload(payload) {
  * So this verb cannot name `git-gate` for one tool and `rule-gate` for another the way
  * Claude's two separate `PreToolUse` matchers do; it is the two fused, dispatched on the
  * PAYLOAD rather than on a matcher: a `command` field is a shell call and gets the git
- * checks, a path field is a write and gets the rule checks. Nothing here decides anything
+ * checks, a path field is a write and gets the rule checks. A Context Mode shell call (`code`
+ * beside a shell `language`, or a `commands` list: `shellCallsOf`) gets the git checks first,
+ * then the rule checks when those pass. Nothing here decides anything
  * the two named gates do not — it only removes the need for a matcher the host does not have.
  */
 function toolGate(args) {

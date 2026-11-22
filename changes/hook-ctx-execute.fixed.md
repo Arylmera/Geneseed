@@ -5,6 +5,6 @@
   `Monitor`, and the gate read only `tool_input.command`, so `rm -rf /` or a force push through
   either tool reached no gate. The matcher now also routes `mcp__.*__ctx_(execute|batch).*`. The
   gate reads `code` when `language` names a shell, in that shell's dialect, and judges every
-  `commands` entry as a command of its own. Bob's `tool-gate` sends such a payload to the shell
+  `commands` entry as a command of its own, with the 64 KB bound on the batch as a whole. Bob's `tool-gate` sends such a payload to the shell
   gate first. Rebuild the install to get the new matcher. Code in `javascript`, `typescript` or
   `python` is still not read.

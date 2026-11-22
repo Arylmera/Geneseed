@@ -1656,17 +1656,21 @@ function nestedCalls(args) {
   }
   return out
 }
-// The shell a call's `language` names, or null when it names none. Context Mode's `ctx_execute`
-// (v2.2.2, `src/core/tools/execute.ts`) sends `{ language, code }`: `shell` and the `sh` family run
-// the code with `-c` (`shell` is Git Bash on Windows, `sh` elsewhere: `src/core/sandbox/runtimes.ts`),
-// `powershell` as a script. Any other language is a program, not read here.
-const POSIX_LANGUAGES = new Set(["shell", "sh", "bash", "zsh", "dash", "ksh", "fish"])
-function shellLanguage(args) {
-  if (typeof args?.language !== "string") return null
-  const name = path.basename(args.language.trim().toLowerCase().replace(/\\/g, "/")).replace(/\.exe$/, "")
-  if (POSIX_LANGUAGES.has(name)) return "bash"
-  return name === "powershell" || name === "pwsh" ? "powershell" : null
+// Context Mode's `ctx_execute` (v2.2.2, `src/core/tools/execute.ts`) sends `{ language, code }`.
+// ---- shell-language twin: BEGIN — js/hosts/hooks.mjs and adapters/opencode/plugins/geneseed-guard.js
+// carry this block byte for byte (tests/plugins/guard.test.mjs). The shell a Context Mode `language`
+// names: `shell` and the `sh` family run the code with `-c` (`shell` is Git Bash on Windows, `sh`
+// elsewhere: v2.2.2 `src/core/sandbox/runtimes.ts`), `powershell` as a script. Any other language is
+// a program, not read: null.
+const POSIX_LANGUAGES = new Set(['shell', 'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
+function languageShell(language) {
+  if (typeof language !== 'string') return null;
+  const name = path.basename(language.trim().toLowerCase().replace(/\\/g, '/')).replace(/\.exe$/, '');
+  if (POSIX_LANGUAGES.has(name)) return 'bash';
+  return name === 'powershell' || name === 'pwsh' ? 'powershell' : null;
 }
+// ---- shell-language twin: END
+const shellLanguage = (args) => languageShell(args?.language)
 // The dialect the shell gate reads a command in: the call's language first, then the tool's name.
 const shellDialect = (tool, args) => shellLanguage(args) ?? (/powershell|pwsh/i.test(tool) ? "powershell" : null)
 function pickCommand(args) {

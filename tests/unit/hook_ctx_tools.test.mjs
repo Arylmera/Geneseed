@@ -102,3 +102,14 @@ test("Claude's shell-gate matcher routes Context Mode's shell tools and nothing 
     }
   }
 });
+
+// One command over 64 KB asks, because a gate the host's hook timeout outruns lets the call run
+// unjudged. A batch is read command by command, so the bound holds for its total: two commands of
+// 40 KB, each one a plain defer on its own, ask with the `unverified` text.
+test('a batch past the 64 KB bound in total asks, though each command is under it', () => {
+  const part = 'git -C x '.repeat(Math.ceil(40 * 1024 / 9)).slice(0, 40 * 1024);
+  assert.equal(verdict(run('git-gate', { tool_name: 'Bash', tool_input: { command: part } }), 'one part'), 'defer');
+  const r = run('git-gate', { tool_name: BATCH, tool_input: { commands: [part, part], queries: ['x'] } });
+  assert.equal(verdict(r, 'two parts'), 'ask');
+  assert.match(JSON.parse(r.out).hookSpecificOutput.permissionDecisionReason, /could not work out what it removes/);
+});
