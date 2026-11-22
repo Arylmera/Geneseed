@@ -47,7 +47,12 @@ Each one removes a dependency on a dropped file. Re-apply them on update.
 - `SKILL.md` §6: the icon bullet no longer links the `assets/icons.html` gallery; rule 6 no longer
   tells the agent to run the geometry verifier.
 - `SKILL.md` §9: the geometry-verifier and motion-verifier runs are cut; the `self_check.py` item
-  is now a check by hand of the same five properties.
+  is now a check by hand of the same five properties, and the §6 connector rules are checked on the
+  render-and-look view.
+- `SKILL.md` §10 step 5 (render and look): upstream renders the preview with
+  `scripts/export_png.py`; this copy takes a browser screenshot at 100% instead, measures with
+  `getBBox()` where upstream runs the geometry verifier, and reports "checked by hand; not visually
+  reviewed" when no browser is available.
 - `SKILL.md` §11: the route-by-source links to the four import references are replaced by the
   list of source formats (PlantUML included), and step 1 reads the source file as text instead of
   running an extractor.
@@ -83,6 +88,10 @@ Each one removes a dependency on a dropped file. Re-apply them on update.
 - `references/type-architecture-delta.md`: the verifier commands are named as upstream's and not
   shipped.
 - `references/type-treemap.md`: the render-linter command is named as upstream's and not shipped.
+- `references/type-schedule-network.md`: the two `verify-schedule-network.py` mentions are named as
+  upstream's and not shipped, and the float values are recomputed by hand.
+- `SKILL.md` §11 step 1 keeps upstream's Mermaid `quadrantChart` routing sentence, worded for a
+  read by hand; §12 keeps upstream's note that the render-and-look preview is not an export.
 
 Every Markdown link left in the folder resolves inside it. No Python invocation remains (the
 repository's no-Python gates scan `src/`).
