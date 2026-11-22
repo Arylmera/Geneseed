@@ -1635,9 +1635,11 @@ const NESTED_KEYS = ["tool_calls", "calls"]
 const NESTED_DEPTH = 8
 // A `commands[]` array is a list of shell commands, each judged as a `bash` call of its own. Context
 // Mode's `ctx_batch` (mksglu/context-mode v2.2.2, `src/core/tools/batch.ts`) sends `commands: string[]`
-// and runs each with `sh -c`; older releases' `ctx_batch_execute` sent `[{ label, command }]`. Neither
-// name holds a SHELL_TOOLS substring, so without this both ran past every shell gate. Read on any
-// tool, whatever its name, as the nested keys above are: a rename must not open the gap again.
+// and runs each with `sh -c` (Git Bash on Windows, `src/core/sandbox/runtimes.ts`), so each is read as
+// bash, as `ctx_execute`'s `shell` is (`shellLanguage`). Older releases' `ctx_batch_execute` sent
+// `[{ label, command }]`. Neither name holds a SHELL_TOOLS substring, so without this both ran past
+// every shell gate. Read on any tool, whatever its name, as the nested keys above are: a rename must
+// not open the gap again.
 function nestedCalls(args) {
   const out = []
   for (const key of NESTED_KEYS) {
@@ -1650,13 +1652,14 @@ function nestedCalls(args) {
   }
   for (const item of Array.isArray(args?.commands) ? args.commands : []) {
     const command = typeof item === "string" ? item : typeof item?.command === "string" ? item.command : ""
-    if (command) out.push({ tool: "bash", args: { command } })
+    if (command) out.push({ tool: "bash", args: { command, language: "shell" } })
   }
   return out
 }
 // The shell a call's `language` names, or null when it names none. Context Mode's `ctx_execute`
 // (v2.2.2, `src/core/tools/execute.ts`) sends `{ language, code }`: `shell` and the `sh` family run
-// the code with `-c`, `powershell` as a script. Any other language is a program, not read here.
+// the code with `-c` (`shell` is Git Bash on Windows, `sh` elsewhere: `src/core/sandbox/runtimes.ts`),
+// `powershell` as a script. Any other language is a program, not read here.
 const POSIX_LANGUAGES = new Set(["shell", "sh", "bash", "zsh", "dash", "ksh", "fish"])
 function shellLanguage(args) {
   if (typeof args?.language !== "string") return null

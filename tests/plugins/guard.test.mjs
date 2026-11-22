@@ -891,6 +891,13 @@ test("ctx_execute code is read in the dialect its language names", async () => {
     assert.match(await run(language, code) ?? "", /This command writes to [\s\S]*\(External Gate\)/, `${language}: ${JSON.stringify(code)}`)
   }
   assert.equal(await run("shell", "cat ci/verify.sh"), null)
+  // `ctx_batch` runs every command in that same shell (`src/core/sandbox/runtimes.ts`: Git Bash on
+  // Windows, `sh` elsewhere), so its entries are read as `shell` code is.
+  for (const commands of [["echo x > ci/ver\\\nify.sh"], [{ label: "w", command: "echo x > ci/ver\\\nify.sh" }]]) {
+    let why = null
+    try { await exec({ tool: "context-mode_ctx_batch", args: { commands, queries: ["x"] } }, {}) } catch (err) { why = String(err?.message ?? err) }
+    assert.match(why ?? "", /This command writes to [\s\S]*\(External Gate\)/, JSON.stringify(commands))
+  }
 })
 
 test("a shell write reaches what permission.edit asks about, since no ask covers the shell", async () => {
