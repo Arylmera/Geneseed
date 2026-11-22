@@ -53,7 +53,7 @@
  */
 import { readFileSync, readlinkSync, realpathSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
+import { printOut, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
 import { markerLines } from '../lib/managed-block.mjs';
@@ -460,6 +460,14 @@ function contextNote(text) {
  */
 let HOST = 'claude';
 const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
+
+/**
+ * Every stdout write this process makes, counted. A hook process answers one call, and a call
+ * can carry several shell commands (`shellCallsOf`): `gitDecide` judges them in turn and stops at
+ * the first that printed a verdict, because the host reads exactly one.
+ */
+let PRINTED = 0;
+const out = (s) => { PRINTED += 1; return printOut(s); };
 
 /**
  * Bob's PreToolUse protocol: stdout is ignored and EXIT CODE 2 is the one refusal. The
@@ -1078,7 +1086,47 @@ function consentBenign(command) {
 
 // Exported for the in-process timing rows (tests/unit/hook_gates.test.mjs): a spawn's own start-up
 // on a loaded Windows host is noise next to a 200 ms bound.
+/**
+ * The shell calls a payload carries, each as a payload of its own with `tool_input.command` set.
+ * A built-in shell (`Bash`, `PowerShell`, `Monitor`) carries one, the payload itself. Context Mode
+ * (mksglu/context-mode, shapes read from v2.2.2 `src/core/tools/{execute,batch}.ts`) moves shell
+ * work into its MCP tools: `ctx_execute` sends the command as `code` beside a `language`, and
+ * `ctx_batch` sends `commands: string[]` (older releases' `ctx_batch_execute`: `[{ label, command }]`).
+ * A `shell` language and every batch entry run in `sh`, which is Git Bash on Windows
+ * (`src/core/sandbox/runtimes.ts`), so they are judged as `Bash` calls; `powershell` code as a
+ * `PowerShell` call. Code in any other language is a program, not read here. The twin of
+ * `pickCommand` and `nestedCalls` in adapters/opencode/plugins/geneseed-guard.js.
+ */
+const POSIX_LANGUAGES = new Set(['shell', 'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
+function languageShell(language) {
+  if (typeof language !== 'string') return null;
+  const name = path.basename(language.trim().toLowerCase().replace(/\\/g, '/')).replace(/\.exe$/, '');
+  if (POSIX_LANGUAGES.has(name)) return 'Bash';
+  return name === 'powershell' || name === 'pwsh' ? 'PowerShell' : null;
+}
+export function shellCallsOf(payload) {
+  const ti = (payload && payload.tool_input) || {};
+  if (typeof ti.command === 'string') return [payload];
+  const calls = [];
+  const shell = languageShell(ti.language);
+  if (shell && typeof ti.code === 'string') calls.push([shell, ti.code]);
+  for (const item of Array.isArray(ti.commands) ? ti.commands : []) {
+    const command = typeof item === 'string' ? item : item && typeof item.command === 'string' ? item.command : '';
+    if (command) calls.push(['Bash', command]);
+  }
+  return calls.map(([tool_name, command]) => ({ ...payload, tool_name, tool_input: { ...ti, command } }));
+}
+
+/** Every shell call the payload carries, in order, until one gets a verdict (`shellCallsOf`). */
 export function gitDecide(args, payload) {
+  for (const call of shellCallsOf(payload)) {
+    const printed = PRINTED;
+    const rc = gitDecideOne(args, call);
+    if (rc !== 0 || PRINTED !== printed) return rc;
+  }
+  return 0;
+}
+function gitDecideOne(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   if (typeof ti.command !== 'string') return 0;
   // Before any switch: the catastrophic class below runs whatever the install turned off, so
@@ -1663,6 +1711,14 @@ function toolGate(args) {
   recordUse(args.root, payload, undefined, () => usageStandingDown(args.root,
     hookProjectDir(payload && payload.cwd), args.host, 'tool-gate'));
   const ti = (payload && payload.tool_input) || {};
-  return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
+  if (typeof ti.command === 'string') return gitDecide(args, payload);
+  // A Context Mode shell tool carries its commands under other names (`shellCallsOf`). The rule
+  // checks still run when those pass, so a `commands` field never takes a write past them.
+  if (shellCallsOf(payload).length) {
+    const printed = PRINTED;
+    const rc = gitDecide(args, payload);
+    if (rc !== 0 || PRINTED !== printed) return rc;
+  }
+  return ruleDecide(args, payload);
 }
 export const cmdToolGate = guardGate(toolGate, 'tool-gate');

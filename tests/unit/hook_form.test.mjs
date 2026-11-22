@@ -191,7 +191,7 @@ test('a gate that cannot start: Claude blocks, OpenClaude asks through a printf 
     assert.doesNotMatch(GATE_DOWN, /['$`]/);
     assert.equal(JSON.parse(GATE_DOWN).hookSpecificOutput.permissionDecision, 'ask');
     assert.deepEqual(pre('openclaude'), [
-      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command',
+      { matcher: 'Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*', hooks: [{ type: 'command',
         command: `${run} git-gate --root "${cfg}" --host openclaude || printf '%s' '${DOWN}'` }] },
       { matcher: 'Write|Edit|NotebookEdit', hooks: [{ type: 'command',
         command: `${run} rule-gate --root "${cfg}" || printf '%s' '${DOWN}'` }] },
@@ -199,7 +199,7 @@ test('a gate that cannot start: Claude blocks, OpenClaude asks through a printf 
         command: `${run} tool-gate --root "${cfg}" --host openclaude` }] },
     ]);
     assert.deepEqual(pre('claude'), [
-      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command',
+      { matcher: 'Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*', hooks: [{ type: 'command',
         command: `${run} git-gate --root "${cfg}"`, onFailure: 'block' }] },
       { matcher: 'Write|Edit|NotebookEdit', hooks: [{ type: 'command',
         command: `${run} rule-gate --root "${cfg}"`, onFailure: 'block' }] },
@@ -730,7 +730,7 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
     const hGate = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell', onFailure: 'block' }] });
     assert.deepEqual(ps, {
       PreToolUse: [
-        { matcher: 'Bash|PowerShell|Monitor', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
+        { matcher: 'Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
         { matcher: 'Write|Edit|NotebookEdit', ...hGate(`& ${run} rule-gate --root "${cfg}"`) },
         // The usage counter (js/hosts/usage.mjs) rides tool-gate WITHOUT onFailure: a counter
         // that cannot start must never block a skill, so it is a plain handler like context's.

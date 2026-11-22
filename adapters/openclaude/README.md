@@ -55,7 +55,7 @@ global config file.
 
 ## Hooks
 
-The Claude group set: `PreToolUse` (git gate on `Bash|PowerShell|Monitor`, rule gate on
+The Claude group set: `PreToolUse` (git gate on `Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*`, rule gate on
 writes, and a counter on `Skill|Agent|Task` that judges nothing), `SessionStart` (context on every source — one matcher-less group covers
 `startup`, `resume`, `clear`, `compact` and `fork` alike), `Stop`,
 `SubagentStop` and `PreCompact` (learn), `SubagentStart` (`context`, which hands a sub-agent
