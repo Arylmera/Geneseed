@@ -587,7 +587,10 @@ test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnProm
   // buildPrompt picks its facts with the copied memory-search block (held equal to the original by tests/twins.mjs).
   const search = src.slice(src.indexOf("// ---- memory-search twin: BEGIN"), src.indexOf("// ---- memory-search twin: END"))
   assert.ok(search.length > 100, "memory-search block not found in geneseed-learn.js")
-  const twin = new Function("LEARN_PROMPT_HEAD", `${search}\n${m[0]}; return buildPrompt`)(learnPromptHead())
+  // buildPrompt fences the notes with the copied fenceNotes declaration (a tests/twins.mjs row as well).
+  const fence = src.match(/\nfunction fenceNotes\(notes, lesson = false\) \{[\s\S]*?\n\}\n/)
+  assert.ok(fence, "fenceNotes not found in geneseed-learn.js")
+  const twin = new Function("LEARN_PROMPT_HEAD", `${search}\n${fence[0]}\n${m[0]}; return buildPrompt`)(learnPromptHead())
   const fact = (desc, topic) => ({ desc, topic })
   // 200 lines of ~70 chars run well past MAX_STORED_CHARS (8000), so the cap and the
   // "more stored facts not shown" line are both exercised.
@@ -611,7 +614,8 @@ const asV2 = (texts) => texts.map((text, i) => (i % 2 ? { type: "assistant", con
 const until = async (fn) => { for (let i = 0; i < 200 && !fn(); i += 1) await new Promise((r) => setTimeout(r, 25)); return fn() }
 /** What a prompt says before and after its NEW TURNS mark: [context part, new part]. */
 const windowOf = (prompt) => {
-  const notes = prompt.slice(prompt.indexOf("\nNOTES:\n") + 8)
+  // The notes are what the <notes> tags hold (fenceNotes, js/hosts/hooks-learn.mjs).
+  const notes = prompt.slice(prompt.indexOf("<notes>\n") + 8, prompt.lastIndexOf("\n</notes>\n"))
   const at = notes.indexOf("NEW TURNS (distil from these):\n")
   return at < 0 ? ["", notes] : [notes.slice(0, at), notes.slice(at)]
 }

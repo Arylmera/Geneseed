@@ -48,7 +48,8 @@ console.log('NOTHING');
   return { sb, say, fire, prompts, fail: (on) => (on ? fs.writeFileSync(path.join(sb.path, 'FAIL'), '') : fs.rmSync(path.join(sb.path, 'FAIL'))) };
 }
 const windowOf = (prompt) => {
-  const notes = prompt.slice(prompt.indexOf('NOTES:\n') + 7);
+  // The notes are what the <notes> tags hold (fenceNotes, js/hosts/hooks-learn.mjs).
+  const notes = prompt.slice(prompt.indexOf('<notes>\n') + 8, prompt.lastIndexOf('\n</notes>\n'));
   const at = notes.indexOf('NEW TURNS (distil from these):\n');
   return at < 0 ? ['', notes] : [notes.slice(0, at), notes.slice(at)];
 };
