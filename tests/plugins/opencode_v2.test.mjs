@@ -540,7 +540,7 @@ test("learn: an execution end distils the transcript into memory/", async () => 
   const gen = calls.find(([m]) => m === "generate.text")
   assert.ok(gen, "generate.text was called")
   assert.deepEqual(gen[1].model, { providerID: "p", id: "m" })
-  assert.match(gen[1].prompt, /NOTES:\nuser: the user prefers tabs/)
+  assert.match(gen[1].prompt, /<notes>\nuser: the user prefers tabs/)
   assert.ok(existsSync(path.join(memDir, "prefers-tabs.md")))
   // Two-level index (MEMORY.md is written last, so the topic file is already there): the
   // fact's line sits in its topic file, the map names the topic and its count.

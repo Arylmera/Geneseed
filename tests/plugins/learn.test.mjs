@@ -587,7 +587,10 @@ test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnProm
   // buildPrompt picks its facts with the copied memory-search block (held equal to the original by tests/twins.mjs).
   const search = src.slice(src.indexOf("// ---- memory-search twin: BEGIN"), src.indexOf("// ---- memory-search twin: END"))
   assert.ok(search.length > 100, "memory-search block not found in geneseed-learn.js")
-  const twin = new Function("LEARN_PROMPT_HEAD", `${search}\n${m[0]}; return buildPrompt`)(learnPromptHead())
+  // buildPrompt fences the notes with the copied fenceNotes declaration (a tests/twins.mjs row as well).
+  const fence = src.match(/\nfunction fenceNotes\(notes, lesson = false\) \{[\s\S]*?\n\}\n/)
+  assert.ok(fence, "fenceNotes not found in geneseed-learn.js")
+  const twin = new Function("LEARN_PROMPT_HEAD", `${search}\n${fence[0]}\n${m[0]}; return buildPrompt`)(learnPromptHead())
   const fact = (desc, topic) => ({ desc, topic })
   // 200 lines of ~70 chars run well past MAX_STORED_CHARS (8000), so the cap and the
   // "more stored facts not shown" line are both exercised.
@@ -611,7 +614,8 @@ const asV2 = (texts) => texts.map((text, i) => (i % 2 ? { type: "assistant", con
 const until = async (fn) => { for (let i = 0; i < 200 && !fn(); i += 1) await new Promise((r) => setTimeout(r, 25)); return fn() }
 /** What a prompt says before and after its NEW TURNS mark: [context part, new part]. */
 const windowOf = (prompt) => {
-  const notes = prompt.slice(prompt.indexOf("\nNOTES:\n") + 8)
+  // The notes are what the <notes> tags hold (fenceNotes, js/hosts/hooks-learn.mjs).
+  const notes = prompt.slice(prompt.indexOf("<notes>\n") + 8, prompt.lastIndexOf("\n</notes>\n"))
   const at = notes.indexOf("NEW TURNS (distil from these):\n")
   return at < 0 ? ["", notes] : [notes.slice(0, at), notes.slice(at)]
 }
@@ -622,18 +626,23 @@ test("cursor V1: 3 turns -> each distil holds only the new turns, the 2 messages
     const texts = []
     const prompts = []
     let fail = false
+    // Every distil ends in `session.delete` (the plugin's `finally`), a failed one included. The failing turn waits
+    // for that end alone: its `want` (3 prompts) already held, so the old wait returned at once, and on a loaded
+    // machine the run reached `prompt` only after `fail` was reset, so the "failed" distil succeeded without turn 5.
+    let ends = 0
     const client = { session: {
       get: async () => ({ data: {} }),
       messages: async () => asV1(texts),
       create: async () => ({ id: "tmp" }),
-      delete: async () => {},
+      delete: async () => { ends += 1 },
       prompt: async ({ body }) => { if (fail) throw new Error("model down"); prompts.push(body.parts[0].text); return { parts: [{ type: "text", text: "NOTHING" }] } },
     } }
     const hooks = await mod.server({ client, directory: process.cwd() })
     const turn = async (n, want) => {
+      const before = ends
       texts.push(turnText(n * 2 - 1), turnText(n * 2))
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
-      await until(() => prompts.length >= want || fail)
+      await until(() => (fail ? ends > before : prompts.length >= want))
       await new Promise((r) => setTimeout(r, 100))
     }
     await turn(1, 1)

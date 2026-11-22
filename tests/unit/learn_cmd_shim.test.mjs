@@ -123,7 +123,7 @@ test('lean flags reach a claude.cmd shim intact through cmd.exe (Windows only)',
     const argv = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0]);
     assert.deepEqual(argv.slice(0, 11), ['-p', '--model', 'haiku', '--setting-sources', '', '--strict-mcp-config', '--tools', '',
       '--disable-slash-commands', '--no-session-persistence', '--system-prompt']);
-    assert.match(argv[11], /^You distil durable memories from notes[.] Follow the instructions/);
+    assert.match(argv[11], /^You distil durable memories from notes[.] The user message holds your instructions/);
     assert.equal(argv.length, 12, 'the prompt is not an argument');
     assert.ok(fs.readFileSync(echo, 'utf8').includes('a turn worth distilling'), 'the prompt came over stdin');
   } finally { sb.cleanup(); }
