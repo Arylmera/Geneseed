@@ -1633,6 +1633,11 @@ function pickAddedContentByPath(args, cwd) {
 const NESTED_KEYS = ["tool_calls", "calls"]
 // A batch inside a batch is already unusual; past this, what cannot be read is refused.
 const NESTED_DEPTH = 8
+// A `commands[]` array is a list of shell commands, each judged as a `bash` call of its own. Context
+// Mode's `ctx_batch` (mksglu/context-mode v2.2.2, `src/core/tools/batch.ts`) sends `commands: string[]`
+// and runs each with `sh -c`; older releases' `ctx_batch_execute` sent `[{ label, command }]`. Neither
+// name holds a SHELL_TOOLS substring, so without this both ran past every shell gate. Read on any
+// tool, whatever its name, as the nested keys above are: a rename must not open the gap again.
 function nestedCalls(args) {
   const out = []
   for (const key of NESTED_KEYS) {
@@ -1643,12 +1648,29 @@ function nestedCalls(args) {
       if (tool) out.push({ tool: tool.toLowerCase(), args: inner ?? {} })
     }
   }
+  for (const item of Array.isArray(args?.commands) ? args.commands : []) {
+    const command = typeof item === "string" ? item : typeof item?.command === "string" ? item.command : ""
+    if (command) out.push({ tool: "bash", args: { command } })
+  }
   return out
 }
+// The shell a call's `language` names, or null when it names none. Context Mode's `ctx_execute`
+// (v2.2.2, `src/core/tools/execute.ts`) sends `{ language, code }`: `shell` and the `sh` family run
+// the code with `-c`, `powershell` as a script. Any other language is a program, not read here.
+const POSIX_LANGUAGES = new Set(["shell", "sh", "bash", "zsh", "dash", "ksh", "fish"])
+function shellLanguage(args) {
+  if (typeof args?.language !== "string") return null
+  const name = path.basename(args.language.trim().toLowerCase().replace(/\\/g, "/")).replace(/\.exe$/, "")
+  if (POSIX_LANGUAGES.has(name)) return "bash"
+  return name === "powershell" || name === "pwsh" ? "powershell" : null
+}
+// The dialect the shell gate reads a command in: the call's language first, then the tool's name.
+const shellDialect = (tool, args) => shellLanguage(args) ?? (/powershell|pwsh/i.test(tool) ? "powershell" : null)
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
     if (args && typeof args[k] === "string") return args[k]
   }
+  if (shellLanguage(args) && typeof args.code === "string") return args.code
   return ""
 }
 
@@ -2994,7 +3016,8 @@ export const GeneseedGuard = async (ctx) => {
             const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
             // One reading for every check below: continuations joined, escaped quotes inert (`shellReading`).
             const picked = pickCommand(args)
-            const c = typeof picked === "string" && picked ? shellReading(picked, /powershell|pwsh/i.test(tool) ? "powershell" : null) : picked
+            const dialect = shellDialect(tool, args)
+            const c = typeof picked === "string" && picked ? shellReading(picked, dialect) : picked
             const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
             if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
             const scan = c && !ROOT_SCAN_OFF && rootScan(c)
@@ -3008,7 +3031,7 @@ export const GeneseedGuard = async (ctx) => {
             }
             // External Gate over a shell write: the same paths as a write tool, no content scan. A
             // throw here is this gate's error (`runGate`), where the twin's `shellWriteReason` fails open.
-            for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
+            for (const p of c ? shellWriteTargets(c, wd, dialect === "powershell") : []) {
               const sensor = protectedCheck(p)
               if (sensor) { await deny(refused("check", { name: sensor, shell: true }), "rigor-5"); return }
               if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
