@@ -626,18 +626,23 @@ test("cursor V1: 3 turns -> each distil holds only the new turns, the 2 messages
     const texts = []
     const prompts = []
     let fail = false
+    // Every distil ends in `session.delete` (the plugin's `finally`), a failed one included. The failing turn waits
+    // for that end alone: its `want` (3 prompts) already held, so the old wait returned at once, and on a loaded
+    // machine the run reached `prompt` only after `fail` was reset, so the "failed" distil succeeded without turn 5.
+    let ends = 0
     const client = { session: {
       get: async () => ({ data: {} }),
       messages: async () => asV1(texts),
       create: async () => ({ id: "tmp" }),
-      delete: async () => {},
+      delete: async () => { ends += 1 },
       prompt: async ({ body }) => { if (fail) throw new Error("model down"); prompts.push(body.parts[0].text); return { parts: [{ type: "text", text: "NOTHING" }] } },
     } }
     const hooks = await mod.server({ client, directory: process.cwd() })
     const turn = async (n, want) => {
+      const before = ends
       texts.push(turnText(n * 2 - 1), turnText(n * 2))
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
-      await until(() => prompts.length >= want || fail)
+      await until(() => (fail ? ends > before : prompts.length >= want))
       await new Promise((r) => setTimeout(r, 100))
     }
     await turn(1, 1)
