@@ -30,12 +30,16 @@ geneseed restore geneseed-backup-<machine>-<date>-<time>.zip
 
 Use `--dry-run` first if the new machine already has rules or memory of its own.
 
+### From the web console
+
+**Settings › Backup & restore** does the same on this machine. It lists the backups in a folder (Downloads until you choose another). *Create backup* writes a new one there. *Preview* shows what a restore would do and writes nothing; *Restore* asks first. Each runs the command above, and its output opens in the job log. Nothing is uploaded.
+
 ### What travels
 
 | In the backup | On restore |
 | --- | --- |
 | The [shared tier](../concepts/shared-tier.md): `user-rules.md`, `PROFILE.md`, memory, notes, notebook, personal profiles, your bricks, loops and factories, the wiki and exclude lists | Merged into this machine's tier. Paths under your old home folder are rewritten in the wiki, exclude and profile files |
-| The skills and agents you wrote in a global install, and the shipped ones you edited | Written where the file is absent. A file that already exists is kept and named |
+| The skills and agents you wrote in a global install, and the shipped ones you edited | Written where the file is absent or is still Geneseed's own untouched text. A file you changed here stays, and the backup's lands beside it |
 | Each global install's settings (theme, footprint, packs, kits, gates) | Saved as the personal profile `restored-<host>` and rebuilt with `geneseed profile apply` |
 
 Nothing on the new machine is overwritten. A fact, a profile, a wiki manifest or any other file that differs lands beside yours as `<name>-restored`, for example `PROFILE-restored.md`. A rule your rules file lacks waits in `user-rules.draft.md` for your decision, as with the [fold](../concepts/shared-tier.md), and a rule still pending on the old machine stays pending. A shipped skill you edited replaces the untouched copy that `setup` wrote; if you edited it on the new machine too, yours stays and the backup's lands beside it. Nothing is written through a link. A second restore of the same file writes nothing.
