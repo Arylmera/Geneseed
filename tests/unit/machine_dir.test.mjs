@@ -40,6 +40,8 @@ test('sharedPaths names every key under the machine directory', () => {
     wiki: path.join(root, 'geneseed-wiki.jsonc'),
     excludes: path.join(root, 'excludes.json'),
     notes: path.join(root, 'notes'),
+    // The tier's own notebook: named here so `geneseed backup` reads it from one home.
+    notebook: path.join(root, 'notebook'),
     draft: path.join(root, 'user-rules.draft.md'),
     foldState: path.join(root, '.fold-state.json'),
     defaultInstall: path.join(root, 'default-install.json'),

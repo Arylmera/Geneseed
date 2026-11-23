@@ -1,7 +1,7 @@
 /**
  * The zip codec behind `geneseed backup` and `geneseed restore`.
  *
- * WHY HAND-WRITTEN. The CLI may not spawn (no `tar`, no `Expand-Archive`) and ships with zero
+ * WHY HAND-WRITTEN. The CLI starts no child process, so no `tar` and no `Expand-Archive`, and it ships with zero
  * runtime dependencies, and a vendored zip library would carry far more than a backup needs.
  * The subset here is small: deflate or store, UTF-8 names, no zip64, no encryption (the user
  * decided a backup is a plain copy, 2026-11-23). `zlib.crc32` needs Node 22.2; the floor is 22.7.

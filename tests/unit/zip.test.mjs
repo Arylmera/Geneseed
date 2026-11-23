@@ -5,10 +5,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { writeZip, readZip } from '../../js/lib/zip.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /** Deterministic bytes (an LCG), so the "incompressible" entry is the same on every run. */
 function seeded(n, seed = 7) {
@@ -81,7 +81,8 @@ test('readZip refuses a crc mismatch', () => {
 
 // The second observer: Windows' own expander must open what we write.
 test('Windows Expand-Archive opens it', { skip: process.platform !== 'win32' }, () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gszip'));
+  const sb = makeSandbox('gszip');
+  const dir = sb.path;
   try {
     const entries = [
       { name: 'tier/user-rules.md', data: Buffer.from('## R1 — rule\n') },
@@ -96,6 +97,6 @@ test('Windows Expand-Archive opens it', { skip: process.platform !== 'win32' }, 
     assert.equal(r.status, 0, r.stderr);
     for (const { name, data } of entries) assert.deepEqual(fs.readFileSync(path.join(out, name)), data, name);
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    sb.cleanup();
   }
 });
