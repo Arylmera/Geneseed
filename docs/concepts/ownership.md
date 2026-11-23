@@ -66,7 +66,7 @@ The decline is looked up only in the main worktree; the `## Ownership` section a
 
 ## learn-mode comes first
 
-While `.geneseed/learn.md` says `Learning mode: active`, learn-mode drives the flow. It is the developer's personal choice, and no project can forbid a developer from learning. The team's `AGENTS.md` rules still apply on top: conventions, and interfaces and sensitive zones as checkpoints.
+While `.geneseed/learn.md` says `Learning mode: active`, learn-mode drives the flow. A copy of that file that git tracks came with the repo and does not count. It is the developer's personal choice, and no project can forbid a developer from learning. The team's `AGENTS.md` rules still apply on top: conventions, and interfaces and sensitive zones as checkpoints.
 
 The two draw close — both stop at checkpoints, and learn-mode may now propose a solution, though it never applies one it has not explained. Keep them apart by what differs:
 

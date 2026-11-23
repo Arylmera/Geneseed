@@ -30,6 +30,9 @@
  *   - a skill loses its Self-improvement footer, which points at a notebook only an install has.
  *     An agent keeps the whole of its seven sections, step 0 and Self-improvement included: that
  *     shape is the contract a persona library reads;
+ *   - a file that names the machine folder (`~/.config/geneseed/`) says under its title that the
+ *     folder exists only with an install (`HOST_NOTE`). Said here, once, and not in `src/`: an
+ *     installed copy would pay for a condition that is always true there;
  *   - host keys (`disable-model-invocation`, `disallowedTools`, ...) are not written at all.
  * A citation of a law or doctrine stays the principle's name, and the entity does NOT `require`
  * the exported constitution: the laws are a side package a library may take or leave, and a
@@ -130,6 +133,15 @@ export function loadProfile(file) {
   return p;
 }
 
+/**
+ * The exported name of a source name. One that already carries the prefix keeps it once:
+ * `geneseed-code-review` under `geneseed-` is not `geneseed-geneseed-code-review`, and a name
+ * that IS the prefix stays as it is. The exporter does this so the source name, which avoids a
+ * host built-in called `code-review`, does not have to change.
+ */
+const exportName = (prefix, stem) => (
+  prefix.endsWith('-') && `${stem}-`.startsWith(prefix) ? stem : `${prefix}${stem}`);
+
 /** One YAML scalar. Double-quoted JSON is valid YAML, and the only safe spelling of `@handle`. */
 const yamlStr = (s) => JSON.stringify(String(s));
 
@@ -193,6 +205,18 @@ function forLibrary(body, s) {
     .replace(new RegExp(`^(# [^\\n:]+: )${s.stem}[ \\t]*$`, 'm'), `$1${s.name}`);
 }
 
+const HOST_NOTE = 'Paths under `~/.config/geneseed/` exist only on a machine with a Geneseed install. '
+  + 'Without one, skip silently every step that reads or writes there; every prohibition still holds.';
+
+/** The text with `HOST_NOTE` under its title (or on top, with no title) when it names the machine folder. */
+function noteMachinePaths(text) {
+  if (!text.includes('.config/geneseed')) return text;
+  const body = lstripNewlines(text);
+  const title = (/^# [^\n]*\n/.exec(body)?.[0] ?? '').trimEnd();
+  const head = title ? `${title}\n\n` : '';
+  return `${head}${HOST_NOTE}\n\n${lstripNewlines(body.slice(title.length))}`;
+}
+
 /** A skill body without its Self-improvement footer, which is always the last section. */
 function dropSelfImprovement(body) {
   const at = body.search(/^## Self-improvement[ \t]*$/m);
@@ -231,7 +255,7 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     if (!m) continue;
     known.add(m[2]);
     if (wanted(m[2])) {
-      specs.push({ kind: m[1] === 'skills' ? 'skill' : 'persona', stem: m[2], it, name: `${profile.prefix}${m[2]}` });
+      specs.push({ kind: m[1] === 'skills' ? 'skill' : 'persona', stem: m[2], it, name: exportName(profile.prefix, m[2]) });
     }
   }
   const skipped = [];
@@ -247,8 +271,12 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     if (!NAME_RE.test(s.name) || s.name.length > 64) problems.push(`${s.name}: not a kebab-case name of at most 64 characters`);
     names.set(s.stem, s.name);
   }
-  const lawsName = `${profile.prefix}${profile.lawsName}`;
+  const lawsName = exportName(profile.prefix, profile.lawsName);
   if (profile.laws && (!NAME_RE.test(lawsName) || lawsName.length > 64)) problems.push(`${lawsName}: not a kebab-case name of at most 64 characters`);
+  const all = [...names.values(), ...(profile.laws ? [lawsName] : [])];
+  for (const n of new Set(all.filter((x, i) => all.indexOf(x) !== i))) {
+    problems.push(`${n}: the name of more than one exported entity`);
+  }
   if (problems.length) throw new ExportError(`these names cannot be exported:\n  ${problems.join('\n  ')}`);
 
   const files = [];
@@ -274,14 +302,14 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
         if (side.licenceOf === s.stem) {
           files.push({ rel: `${dir}/${path.posix.basename(side.rel)}`, copy: side.src });
         } else if (side.text !== null && parts.length === 3 && parts[0] === 'skills' && parts[1] === s.stem) {
-          files.push({ rel: `${dir}/references/${parts[2]}`, text: stripSkillBodyLinks(link(side.text)) });
+          files.push({ rel: `${dir}/references/${parts[2]}`, text: noteMachinePaths(stripSkillBodyLinks(link(side.text))) });
         }
       }
     } else {
       description = agentDescription(s.it.text);
       body = link(body);
     }
-    files.push({ rel: `${dir}/${s.kind === 'skill' ? 'SKILL.md' : 'AGENT.md'}`, text: frontmatter(s.name, description) + body });
+    files.push({ rel: `${dir}/${s.kind === 'skill' ? 'SKILL.md' : 'AGENT.md'}`, text: frontmatter(s.name, description) + noteMachinePaths(body) });
     files.push({ rel: `${dir}/metadata.yaml`, text: metadataYaml({
       ...base, type: s.kind, requires: [...requires].sort(),
       // Every entity carries the harness release, as the laws do: the set ships as one, and the
