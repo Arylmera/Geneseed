@@ -1,0 +1,62 @@
+---
+group: guides
+order: 31
+title: "Move to a new machine"
+kind: "concept"
+section: "Keep it running"
+description: "Carry your rules, memory and own skills to another machine in one file."
+---
+A new install gives you every skill and agent Geneseed ships. It does not give you what you taught it on the old machine: your rules, your profile, your memory, your notes and the skills you wrote. `geneseed backup` puts all of that in one `.zip`. `geneseed restore` puts it back on the new machine and rebuilds your installs as they were.
+
+> **You already know this:** it is the export and import of a browser profile. One file holds your bookmarks and settings, and the new browser reads it back without losing what it already has.
+
+### On the old machine
+
+```bash
+geneseed backup
+```
+
+This writes `geneseed-backup-<machine>-<date>-<time>.zip` in the current folder. Use `--out <file>` to choose the name, and `--dry-run` to see the file list first. The command never writes over an existing file.
+
+### On the new machine
+
+1. Install Geneseed ([Install](install.md)).
+2. Copy the `.zip` across (a USB key, a network share, a mail to yourself).
+3. Restore it:
+
+```bash
+geneseed restore geneseed-backup-<machine>-<date>-<time>.zip
+```
+
+Use `--dry-run` first if the new machine already has rules or memory of its own.
+
+### What travels
+
+| In the backup | On restore |
+| --- | --- |
+| The [shared tier](../concepts/shared-tier.md): `user-rules.md`, `PROFILE.md`, memory, notes, notebook, personal profiles, your bricks, loops and factories, the wiki and exclude lists | Merged into this machine's tier. Paths under your old home folder are rewritten in the wiki, exclude and profile files |
+| The skills and agents you wrote in a global install, and the shipped ones you edited | Written where the file is absent. A file that already exists is kept and named |
+| Each global install's settings (theme, footprint, packs, kits, gates) | Saved as the personal profile `restored-<host>` and rebuilt with `geneseed profile apply` |
+
+Nothing on the new machine is overwritten. A fact or file that differs lands beside yours as `<name>-restored`. A rule waits in `user-rules.draft.md` for your decision, and a differing profile or wiki gets a pointer there, as the [fold](../concepts/shared-tier.md) does. A second restore of the same file writes nothing.
+
+### What does not travel
+
+- Machine state: the cache, old backups, the install registry and the default install.
+- A skill that is a link (for example to a vault): the report names it and its old target.
+- Project installs: the report names each folder; run the install there again.
+- MCP servers, host plugins and settings that Geneseed does not own: they stay the host's.
+
+The restore prints each of these, and each wiki path that does not exist on the new machine.
+
+### Exit codes
+
+`0` everything is restored. `1` the file was refused (not a backup, or damaged) and nothing was written. `2` partial: a host was not rebuilt, for example because it is not installed here. The report names the `geneseed profile apply` command to run once it is.
+
+### Keep the file private
+
+The backup is a plain copy of your own files. Geneseed does not scan it for secrets and does not encrypt it. Keep it somewhere only you can read, and delete it when the new machine is ready.
+
+### Related
+
+[The shared tier](../concepts/shared-tier.md) · [Install profiles](../reference/profiles.md) · [Uninstall](uninstall.md)
