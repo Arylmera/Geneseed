@@ -177,6 +177,7 @@ into files users have committed, so change the test that states it in the same c
 | `paths.mjs` | Case folding, ordering, containment, spelling, PATH lookup — the platform-shaped rules |
 | `text.mjs` | String primitives: `codePointLength`, `WHITESPACE`, `parseIntStrict`, `percentDecode` |
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
+| `zip.mjs` | The pure zip writer and reader behind `backup`/`restore`: store or deflate, UTF-8 names, no zip64, no encryption. The reader trusts only the central directory and refuses an entry name unsafe to join onto a directory |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
 | `managed-block.mjs` | Where the `<!-- BEGIN/END GENESEED -->` block is in a co-owned file: whole-line markers, the first END with the last BEGIN above it. One definition for the writer (`settings.mjs`) and the hook-side readers; no imports, so the hook path may load it. The OpenCode plugins carry `BLOCK_RE_SOURCE` by value |
