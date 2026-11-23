@@ -8,6 +8,31 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.3.1] — 2026-11-23
+
+6.3.0 was never published to npm. This release carries everything in its section below.
+
+### Fixed
+
+- **An exported file says when its machine paths apply.** A skill, side file or agent that
+  `geneseed export` writes and that names `~/.config/geneseed/` now states, under its title, that
+  the folder exists only with a Geneseed install, and that a reader without one skips those steps.
+  Installed copies do not change.
+- **`geneseed export` no longer doubles the prefix.** With the prefix `geneseed-`, the review skill
+  is exported as `geneseed-code-review` (it was `geneseed-geneseed-code-review`) and the harness
+  skill as `geneseed`. A library that took the old names sees two renames at its next import. Two
+  entities that would share one exported name are refused.
+
+### Security
+
+- **The herdr skill asks before it acts on another machine.** Each `herdr --machine` command that
+  sends input or changes state needs the user's explicit yes, with the machine and the full text
+  shown. Read-only commands and the local machine do not change.
+- **A committed `.geneseed/learn.md` or `.geneseed/ownership.md` sets no mode.** Both files are
+  personal. A copy that git tracks came with the repository, so learn-mode, ownership and develop
+  take no mode, granularity or preference from it, and the agent tells the user. The
+  first-write gate still honours a `Setup: declined` line in it.
+
 ## [6.3.0] — 2026-11-23
 
 ### Added
