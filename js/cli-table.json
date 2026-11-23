@@ -892,6 +892,44 @@
       "mutex": []
     },
     {
+      "name": "restore",
+      "help": "put a backup back on this machine and rebuild the installs it records",
+      "description": "put a geneseed backup back on this machine: the shared tier is merged without overwriting anything (a differing file lands beside yours as <name>-restored, a rule waits in the draft), your own skills and agents are written where they are absent, and each recorded global install is rebuilt with profile apply from a restored-<host> profile. Run it after installing Geneseed. Exit 0 all restored, 1 refused and nothing written, 2 partial (a host not rebuilt, named)",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "file",
+          "metavar": null,
+          "help": "the backup .zip that geneseed backup wrote",
+          "choices": null,
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--dry-run"
+          ],
+          "dest": "dry_run",
+          "metavar": null,
+          "help": "say what would be restored, merged and rebuilt, and write nothing",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "factory",
       "help": "run a factory: carry one work item through bricks and loops to an open PR",
       "description": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide/report)",

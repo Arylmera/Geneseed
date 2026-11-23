@@ -22,13 +22,14 @@ import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import { foldHost, foldSummary } from '../build/fold.mjs';
 import { installProfile } from '../build/profile.mjs';
 import { RETIRED_RULES_FILE } from '../build/rule-decide.mjs';
 import { knownSkillIds, ROOT, skillAliases } from '../build/source.mjs';
 import { SESSION_SEEDS } from '../build/stubs.mjs';
-import { EXCLUDES_FILE, GLOBAL_MANIFEST } from '../hosts/hosts.mjs';
+import { EXCLUDES_FILE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
 import { readFoldState } from '../hosts/memory-files.mjs';
 import { hashesOf, ownedState } from '../hosts/owned.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
@@ -37,7 +38,8 @@ import { jsonDumpsIndent } from '../lib/json.mjs';
 import { machineDir, NOTES_DIRS, sharedPaths, WIKI_NAMES } from '../lib/machine-dir.mjs';
 import { readZip, writeZip } from '../lib/zip.mjs';
 import { USER_LOOP_DIRS } from '../loop/catalog.mjs';
-import { personalProfilesDir, profileFromInstall } from './profiles.mjs';
+import { personalProfilesDir, profileFromInstall, saveProfile } from './profiles.mjs';
+import { cmdProfileApply } from './setup.mjs';
 
 export const BACKUP_FORMAT = 1;
 
@@ -446,4 +448,104 @@ export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/**
+ * The personal profile a recorded install is rebuilt from: `restored-<host>`, then
+ * `restored-<host>-2`, … — the first that is free or already holds this profile, so a second
+ * restore applies the same file and saves nothing. A dry run only names it.
+ */
+function restoredProfile(host, profile, dryRun) {
+  const dir = personalProfilesDir();
+  for (let n = 1; ; n += 1) {
+    const name = `restored-${host}${n === 1 ? '' : `-${n}`}`;
+    const held = readMaybe(path.join(dir, `${name}.json`));
+    if (held === null) {
+      if (!dryRun) {
+        const r = saveProfile(name, profile, { dir });
+        if (!r.ok) throw new Error(r.error);
+      }
+      return name;
+    }
+    try { if (isDeepStrictEqual(JSON.parse(held.toString('utf8')), profile)) return name; } catch { /* not ours: next name */ }
+  }
+}
+
+/** Every absolute path a wiki manifest names that does not exist here. Comments are skipped. */
+function missingWikiPaths(text) {
+  const out = [];
+  const strings = [];
+  for (const m of text.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '').matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
+    try { strings.push(JSON.parse(`"${m[1]}"`)); } catch { /* not a JSON string */ }
+  }
+  for (const s of strings) {
+    if (!/^([A-Za-z]:[\\/]|\/|~[\\/])/.test(s)) continue;
+    const p = s.startsWith('~') ? path.join(os.homedir(), s.slice(2)) : s;
+    if (!lstatMaybe(p)) out.push(p);
+  }
+  return out;
+}
+
+/**
+ * `geneseed restore <file> [--dry-run]`, on a machine where Geneseed is installed.
+ * 0 all restored; 1 refused, nothing written; 2 partial — a host not rebuilt or a tier step that
+ * failed, each named. `deps.apply` is the seam a test stubs `profile apply` through.
+ * @param {{ file?: string, dryRun?: boolean }} args
+ * @param {{ apply?: (name: string) => number }} [deps]
+ */
+export function cmdRestore(args = {}, deps = {}) {
+  const { apply = (name) => cmdProfileApply({ name }, {}, {}) } = deps;
+  if (!args.file) {
+    printErr('[restore] name the backup to restore: geneseed restore <file.zip>\n');
+    return 1;
+  }
+  let backup;
+  try { backup = readBackup(path.resolve(String(args.file))); } catch (e) {
+    printErr(`[restore] refused: ${e && e.message}; nothing written\n`);
+    return 1;
+  }
+  const dryRun = Boolean(args.dryRun);
+  const { manifest, entries } = backup;
+  const say = (s) => printOut(`[restore] ${dryRun ? '(dry run) ' : ''}${s}\n`);
+  let partial = false;
+
+  const t = restoreTier(backup, { dryRun });
+  say(`tier: ${t.copied.length} copied, ${t.merged.length} merged beside yours, ${t.same.length} already here`);
+  for (const m of t.merged) say(`merged: ${m}`);
+  if (t.folded) say(`folded: ${t.folded}`);
+  for (const n of t.notices) say(n);
+  for (const f of t.failed) { partial = true; say(`tier step failed: ${f}`); }
+
+  let written = 0;
+  for (const [name, data] of entries) {
+    const m = /^(skills|agents)\/([^/]+)\/(.+)$/.exec(name);
+    if (!m) continue;
+    const [, kind, host, rest] = m;
+    const spec = HOSTS.find((h) => h.host === host);
+    if (!spec) { partial = true; say(`unknown host ${host}: ${kind}/${rest} not restored`); continue; }
+    const dest = path.join(spec.configDir(), kind, ...rest.split('/'));
+    const held = readMaybe(dest);
+    if (held !== null) {
+      if (!held.equals(data)) say(`kept yours (differs from the backup): ${host} ${kind}/${rest}`);
+      continue;
+    }
+    if (!dryRun) {
+      mkdirSync(path.dirname(dest), { recursive: true });
+      writeBytes(dest, data, { exclusive: true });
+    }
+    written += 1;
+  }
+  say(`skills and agents: ${written} written`);
+
+  for (const { host, profile } of manifest.installs) {
+    const name = restoredProfile(host, { ...profile, description: `restored from a backup of ${manifest.createdAt}` }, dryRun);
+    if (dryRun) { say(`${host}: would rebuild with geneseed profile apply ${name}`); continue; }
+    const rc = apply(name);
+    if (rc !== 0) { partial = true; say(`${host}: not rebuilt (profile apply exit ${rc}) — run: geneseed profile apply ${name}`); }
+  }
+  for (const l of manifest.links) say(`link to recreate by hand: ${l.host} ${l.kind} ${l.name} -> ${l.target ?? '(dead link)'}`);
+  for (const p of manifest.projects) say(`project install to re-run there: ${p.host} ${p.root}`);
+  const wiki = readMaybe(sharedPaths().wiki);
+  if (wiki !== null && !dryRun) for (const p of missingWikiPaths(wiki.toString('utf8'))) say(`wiki path not found on this machine: ${p}`);
+  return partial ? 2 : 0;
 }
