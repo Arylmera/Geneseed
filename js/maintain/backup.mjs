@@ -19,19 +19,23 @@
  * `js/lib/fs.mjs`, and starts nothing.
  */
 import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { foldHost, foldSummary } from '../build/fold.mjs';
 import { installProfile } from '../build/profile.mjs';
 import { RETIRED_RULES_FILE } from '../build/rule-decide.mjs';
 import { knownSkillIds, ROOT, skillAliases } from '../build/source.mjs';
-import { GLOBAL_MANIFEST } from '../hosts/hosts.mjs';
+import { SESSION_SEEDS } from '../build/stubs.mjs';
+import { EXCLUDES_FILE, GLOBAL_MANIFEST } from '../hosts/hosts.mjs';
+import { readFoldState } from '../hosts/memory-files.mjs';
 import { hashesOf, ownedState } from '../hosts/owned.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
-import { printErr, printOut, writeBytes } from '../lib/fs.mjs';
-import { machineDir, sharedPaths } from '../lib/machine-dir.mjs';
-import { writeZip } from '../lib/zip.mjs';
+import { printErr, printOut, writeBytes, writeTextAtomic } from '../lib/fs.mjs';
+import { jsonDumpsIndent } from '../lib/json.mjs';
+import { machineDir, NOTES_DIRS, sharedPaths, WIKI_NAMES } from '../lib/machine-dir.mjs';
+import { readZip, writeZip } from '../lib/zip.mjs';
 import { USER_LOOP_DIRS } from '../loop/catalog.mjs';
 import { personalProfilesDir, profileFromInstall } from './profiles.mjs';
 
@@ -240,4 +244,206 @@ export function cmdBackup(args = {}) {
   for (const l of notes) printOut(`${l}\n`);
   printOut('[backup] the archive is a plain copy of your own files: keep it somewhere only you can read\n');
   return 0;
+}
+
+// --- restore -------------------------------------------------------------------------------
+
+const sha256 = (data) => createHash('sha256').update(data).digest('hex');
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * `text` with the home `fromHome` replaced by `toHome` inside JSON(C) string literals only, in the
+ * spelling each was written in: `/`, `\`, or the JSON-escaped `\\`. Comments are copied as they
+ * are. A prefix matches only at a path boundary, so `/home/old` leaves `/home/older` alone; a
+ * drive-letter home matches without regard to case, as Windows does.
+ * @param {string} text
+ * @param {string} fromHome
+ * @param {string} toHome
+ */
+export function rewriteHome(text, fromHome, toHome) {
+  if (!fromHome || !toHome || fromHome === toHome) return text;
+  const fwd = (p) => p.replaceAll('\\', '/');
+  const back = (p) => p.replaceAll('/', '\\');
+  const esc = (p) => back(p).replaceAll('\\', '\\\\');
+  const flags = /^[A-Za-z]:/.test(fromHome) ? 'gi' : 'g';
+  const pairs = [[esc(fromHome), esc(toHome)], [back(fromHome), back(toHome)], [fwd(fromHome), fwd(toHome)]]
+    .map(([a, b]) => [new RegExp(`${escapeRe(a)}(?=$|[\\\\/])`, flags), b]);
+  const swap = (lit) => pairs.reduce((s, [re, b]) => s.replace(re, () => b), lit);
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text.startsWith('//', i)) {
+      const end = text.indexOf('\n', i);
+      const stop = end === -1 ? text.length : end;
+      out += text.slice(i, stop); i = stop;
+    } else if (text.startsWith('/*', i)) {
+      const end = text.indexOf('*/', i + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      out += text.slice(i, stop); i = stop;
+    } else if (text[i] === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      out += `"${swap(text.slice(i + 1, j))}"`; i = j + 1;
+    } else {
+      out += text[i]; i += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * The archive at `file`, checked: its manifest first, a format this build reads, and every file
+ * the manifest lists present with its sha256. Throws, naming the entry, before anything is written.
+ * @param {string} file
+ */
+export function readBackup(file) {
+  const all = readZip(readFileSync(file));
+  if (!all.length || all[0].name !== 'manifest.json') throw new Error('not a Geneseed backup: manifest.json is not its first entry');
+  const manifest = JSON.parse(all[0].data.toString('utf8'));
+  if (manifest.format !== BACKUP_FORMAT) throw new Error(`backup format ${manifest.format} is not one this Geneseed reads (${BACKUP_FORMAT})`);
+  const entries = new Map(all.slice(1).map((e) => [e.name, e.data]));
+  for (const f of manifest.files) {
+    const data = entries.get(f.name);
+    if (!data) throw new Error(`file listed but missing: ${f.name}`);
+    if (sha256(data) !== f.sha256) throw new Error(`sha256 mismatch: ${f.name}`);
+  }
+  if (entries.size !== manifest.files.length) throw new Error('the archive holds a file its manifest does not list');
+  return { manifest, entries };
+}
+
+const RESTORED = 'restored';
+
+function readMaybe(p) {
+  try { return readFileSync(p); } catch { return null; }
+}
+
+/**
+ * The first of `name`, `<stem>-restored`, `<stem>-restored-2`, … in `dir` that is free or already
+ * holds `data` — the chain the fold walks for a host called `restored`, so a repeat finds its
+ * own earlier copy and a second restore writes nothing.
+ */
+function restoredLanding(dir, name, data) {
+  const { name: stem, ext } = path.parse(name);
+  for (let n = 1; ; n += 1) {
+    const dest = path.join(dir, n === 1 ? name : `${stem}-${RESTORED}${n === 2 ? '' : `-${n - 1}`}${ext}`);
+    const held = readMaybe(dest);
+    if (held === null) return { dest, write: true };
+    if (held.equals(data)) return { dest, write: false };
+  }
+}
+
+const lf = (b) => b.toString('utf8').replaceAll('\r\n', '\n');
+const isRulesSeed = (b) => lf(b) === SESSION_SEEDS['user-rules.md'].replaceAll('\r\n', '\n');
+const sectionsOf = (text) => text.replaceAll('\r\n', '\n').split(/^(?=## )/m).filter((s) => s.trim());
+
+/** Where a tier file goes in the staging folder the fold reads as host `restored`, or null. */
+function stagedRel(rel) {
+  const parts = rel.split('/');
+  if (parts[0] === 'memory') {
+    if (parts.length === 2 && rel.endsWith('.md') && parts[1] !== 'MEMORY.md') return rel;
+    if (parts.length === 3 && parts[1] === 'agents' && rel.endsWith('.md')) return rel;
+    return null;
+  }
+  if (parts[0] === 'notes' && parts.length === 3 && NOTES_DIRS.includes(parts[1])) return `notebook/${parts[1]}/${parts[2]}`;
+  if (rel === 'PROFILE.md' || WIKI_NAMES.includes(rel)) return rel;
+  return null;
+}
+
+/**
+ * Put the archive's `tier/` files into this machine's tier, never overwriting.
+ *
+ * WHAT THE FOLD ALREADY KNOWS, THE FOLD DOES. Facts, agent lessons, notes, the profile, the wiki
+ * and an in-use rules file are staged in a temp folder laid out as a host store and folded in as
+ * host `restored` (`foldHost`): a differing fact lands as `<name>-restored.md`, a rule waits in
+ * the draft, a differing profile gets a pointer. An in-use `excludes.json` is staged too: the fold
+ * appends the paths the shared list lacks. Wiring them into repos is the next emit's, against the
+ * real installs.
+ *
+ * The rest is decided here: an absent file or a seed is copied, `.fold-state.json` merges by
+ * key with this machine's decision kept, the retired-rules record gains its missing sections, and
+ * any other differing file lands beside the original under the same `-restored` chain.
+ * `memory/MEMORY.md` and `topics/` are not copied: the fold rebuilds the index from the facts.
+ * @param {{ manifest: any, entries: Map<string, Buffer> }} backup
+ * @param {{ dryRun?: boolean }} [opts]
+ */
+export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
+  const shared = sharedPaths();
+  const tier = shared.root;
+  const home = os.homedir();
+  const profilesRel = path.relative(tier, personalProfilesDir()).split(path.sep).join('/');
+  const rewrites = (rel) => WIKI_NAMES.includes(rel) || rel === EXCLUDES_FILE
+    || (rel.startsWith(`${profilesRel}/`) && rel.endsWith('.json'));
+  const copied = []; const merged = []; const same = []; const failed = [];
+  const staging = mkdtempSync(path.join(os.tmpdir(), 'gs-restore-'));
+  const stage = (rel, data) => {
+    const p = path.join(staging, ...rel.split('/'));
+    mkdirSync(path.dirname(p), { recursive: true });
+    writeBytes(p, data);
+  };
+  const write = (dest, data, exclusive) => {
+    if (dryRun) return;
+    mkdirSync(path.dirname(dest), { recursive: true });
+    writeBytes(dest, data, { exclusive });
+  };
+  let excludesHeld = false;
+  let excludesBackup = null;
+  try {
+    for (const [name, raw] of entries) {
+      if (!name.startsWith('tier/')) continue;
+      const rel = name.slice('tier/'.length);
+      const data = rewrites(rel) ? Buffer.from(rewriteHome(raw.toString('utf8'), manifest.home, home), 'utf8') : raw;
+      const dest = path.join(tier, ...rel.split('/'));
+      const held = readMaybe(dest);
+      if (held !== null && held.equals(data)) { same.push(rel); continue; }
+      if (rel === 'memory/MEMORY.md' || rel.startsWith('memory/topics/')) continue;
+      if (stagedRel(rel)) {
+        if (held !== null && !restoredLanding(path.dirname(dest), path.basename(dest), data).write) { same.push(rel); continue; }
+        stage(stagedRel(rel), data);
+        continue;
+      }
+      if (rel === 'user-rules.md') {
+        if (held === null || isRulesSeed(held)) { write(dest, data, held === null); copied.push(rel); } else stage(rel, data);
+        continue;
+      }
+      if (rel === EXCLUDES_FILE) {
+        excludesBackup = data;
+        if (held === null) { write(dest, data, true); copied.push(rel); } else excludesHeld = true;
+        continue;
+      }
+      if (held === null) { write(dest, data, true); copied.push(rel); continue; }
+      if (rel === '.fold-state.json') {
+        const mine = readFoldState(shared);
+        const theirs = JSON.parse(data.toString('utf8'));
+        const add = Object.keys(theirs.items ?? {}).filter((k) => !Object.hasOwn(mine.items, k));
+        if (!add.length) { same.push(rel); continue; }
+        for (const k of add) mine.items[k] = theirs.items[k];
+        if (!dryRun) writeTextAtomic(shared.foldState, `${jsonDumpsIndent(mine)}\n`);
+        merged.push(rel);
+        continue;
+      }
+      if (rel === RETIRED_RULES_FILE) {
+        const have = new Set(sectionsOf(held.toString('utf8')).map((s) => s.trim()));
+        const missing = sectionsOf(data.toString('utf8')).filter((s) => !have.has(s.trim()));
+        if (!missing.length) { same.push(rel); continue; }
+        const text = held.toString('utf8');
+        write(dest, Buffer.from(`${text}${text.endsWith('\n') || !text ? '' : '\n'}${missing.join('')}`, 'utf8'), false);
+        merged.push(rel);
+        continue;
+      }
+      const landing = restoredLanding(path.dirname(dest), path.basename(dest), data);
+      if (!landing.write) { same.push(rel); continue; }
+      write(landing.dest, data, true);
+      merged.push(path.relative(tier, landing.dest).split(path.sep).join('/'));
+    }
+    // The fold shares the paths the tier lacks. Its wiring half writes into a repo only for a real
+    // host (claude, openclaude, bob); for `restored` it touches the staging folder alone.
+    if (excludesHeld) stage(EXCLUDES_FILE, excludesBackup);
+    const report = foldHost({ host: RESTORED, cfgDir: staging, shared, dryRun });
+    failed.push(...report.failed);
+    if (excludesHeld && report.excludes) merged.push(EXCLUDES_FILE);
+    const folded = foldSummary({ ...report, excludes: 0, wired: 0, wiredPaths: [], archived: null, stayed: [] });
+    return { copied, merged, same, failed, folded, notices: report.notices };
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
 }
