@@ -143,6 +143,30 @@ test('a skill keeps its side files under references/ and drops its footer; an ag
   assert.match(text('skills/acme-commit/SKILL.md', kept), /## Self-improvement/);
 });
 
+// A library's reader may have no Geneseed install, so a file that names the machine folder says,
+// once and under its title, that the folder exists only with one. The sentence is stated here.
+const HOST_NOTE = 'Paths under `~/.config/geneseed/` exist only on a machine with a Geneseed install. '
+  + 'Without one, skip silently every step that reads or writes there; every prohibition still holds.';
+test('a file that names the machine folder states that it needs an install, and no other file does', () => {
+  const full = planExport({ profile: withProfile({ keepSkillSelfImprovement: true }) });
+  for (const p of [plan, full]) {
+    const naming = p.files.filter((f) => f.text?.replace(HOST_NOTE, '').includes('.config/geneseed'));
+    // The set is not empty, and holds each kind: an agent, a skill and a side file.
+    for (const rel of ['agents/personas/acme-reviewer/AGENT.md', 'skills/acme-factory/SKILL.md',
+      'skills/acme-rule/references/approve.md']) {
+      assert.ok(naming.some((f) => f.rel === rel), `${rel} no longer names the machine folder`);
+    }
+    for (const f of p.files.filter((x) => x.text)) {
+      const at = f.text.indexOf(HOST_NOTE);
+      assert.equal(at >= 0, naming.includes(f), f.rel);
+      assert.equal(f.text.indexOf(HOST_NOTE, at + 1), -1, `${f.rel} states it twice`);
+      if (at >= 0) assert.equal(f.text.indexOf('.config/geneseed'), at + HOST_NOTE.indexOf('.config'), `${f.rel}: a path comes before the note`);
+    }
+  }
+  // Frontmatter stays the first thing in the file, and the note follows the title.
+  assert.match(text('agents/personas/acme-reviewer/AGENT.md'), /^---\nname: [^\n]+\n[^\n]+\n---\n\n# [^\n]+\n\nPaths under/);
+});
+
 test('only, exclude and laws narrow the export, and a dropped reference is reported', () => {
   const p = planExport({ profile: withProfile({ only: ['reviewer', 'commit'], laws: false }) });
   assert.deepEqual(p.entities.map((e) => e.name), ['acme-commit', 'acme-reviewer']);
