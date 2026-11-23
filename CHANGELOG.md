@@ -8,6 +8,63 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.3.0] — 2026-11-23
+
+### Added
+
+- **`geneseed backup` and `geneseed restore` carry your personal state to a new machine.** A new
+  install gave back every shipped skill and agent, but not your rules, profile, memory, notes,
+  notebook, personal profiles, bricks or the skills you wrote. `backup` writes them to one plain
+  `.zip`, with each global install recorded as a profile. `--projects <folder>` adds what your projects
+  keep that git does not track, their notebook above all. `restore` merges them into the new
+  machine's tier without overwriting anything (a differing file lands as `<name>-restored`, a rule
+  waits in the draft), and rebuilds each install with `profile apply`. **Settings › Backup & restore** in the
+  console runs both. See *Move to a new machine*.
+- **Switch a skill off or on for each install from the Library.** A skill's page now shows a
+  **Ships to** row with one chip per install: a filled dot ships there, a hollow one is excluded.
+  Click a chip to stage the change, then Apply in the bar under the Library. Changes on several
+  skills stack, so each install rebuilds once. A protected skill reads "always on" behind a
+  padlock. A skill that is not Geneseed's, or whose kit is off, cannot be switched either, and each
+  chip says why. A skill excluded on every install stays listed, so it can come back.
+- **Agents show where they ship, in place of the Install select.** An agent's page has the same
+  chips, read-only: a core agent is "always on" behind a padlock, and a kit agent ships with its kit
+  or says the kit is off. Both pages lose the Install select, since every copy is one source. A
+  chip that cannot switch has no pill, so it never looks like a button.
+- **Show one install's Library.** The Library rail has a **Showing** list: all installs, or one.
+  With one picked, Skills, Agents, Wiki and Setup files list only what that install holds, and the
+  rail counts are that install's. The choice is kept in this browser.
+
+### Changed
+
+- **diagram-design follows upstream to `d7b0176d`.** It adds the Schedule network type (critical
+  paths and total float), a render-and-look step before the taste gate, and a shorter technical
+  checklist. This copy still ships no Python: the preview is a browser screenshot.
+
+### Fixed
+
+- **The Claude Code and Bob git gate reads shell commands sent through Context Mode.** Context Mode
+  ([mksglu/context-mode](https://github.com/mksglu/context-mode)) sends shell work through its MCP
+  tools: `ctx_execute` carries the command as `code` beside `language: "shell"`, and `ctx_batch`
+  carries a `commands` list. Claude's PreToolUse matcher named only `Bash`, `PowerShell` and
+  `Monitor`, and the gate read only `tool_input.command`, so `rm -rf /` or a force push through
+  either tool reached no gate. The matcher now also routes `mcp__.*__ctx_(execute|batch).*`. The
+  gate reads `code` when `language` names a shell, in that shell's dialect, and judges every
+  `commands` entry as a command of its own, with the 64 KB bound on the batch as a whole. Bob's `tool-gate` sends such a payload to the shell
+  gate first. Rebuild the install to get the new matcher. Code in `javascript`, `typescript` or
+  `python` is still not read.
+- **Learning no longer answers the session it distils.** A session that ended on a request, such
+  as "Reply with the single word OK.", made the learn model answer that request instead of
+  distilling a memory, so the run recorded `unparseable reply: OK`. The notes are now quoted between
+  `<notes>` tags, and the task is restated after them. The lean model's system prompt now says the
+  transcript is data. This covers the agent-lesson prompt, and the OpenCode plugin too.
+- **The OpenCode guard reads shell commands sent through Context Mode.** Context Mode
+  ([mksglu/context-mode](https://github.com/mksglu/context-mode)) sends shell work through its MCP
+  tools: `ctx_execute` carries the command as `code` beside `language: "shell"`, and `ctx_batch`
+  carries a `commands` list. The guard read only `command`, `cmd` and `script`, so `rm -rf /` through
+  `ctx_execute`, or any command in a `ctx_batch`, passed every shell gate. It now reads `code` when
+  `language` names a shell (in that shell's dialect), and judges every entry of a `commands` array as
+  a shell call of its own. Code in `javascript`, `typescript` or `python` is still not read.
+
 ## [6.2.0] — 2026-11-21
 
 ### Added
