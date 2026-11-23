@@ -3995,7 +3995,7 @@ button.ship-chip:hover:not(:disabled) { border-color: var(--line-3); background:
     column-gap: var(--sp-6); align-items: start; }
 }
 /* SY: Server settings sheet and Hosts sync column. */
-.sheet { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; } /* off-scale: 28px, 4px from a step */
+.sheet { container: sheet / inline-size; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; } /* off-scale: 28px, 4px from a step */
 .sheet-index { flex: 0 0 180px; position: sticky; top: calc(var(--topbar-h) + 16px); display: flex; flex-direction: column; gap: 2px; } /* off-scale: 2px, under the 4px floor */
 .sheet-index button { text-align: left; padding: var(--sp-2) var(--sp-3); border: 0; border-left: 2px solid var(--line); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; }
 .sheet-index button:hover { color: var(--text); border-left-color: var(--accent); }
@@ -4010,7 +4010,12 @@ button.ship-chip:hover:not(:disabled) { border-color: var(--line-3); background:
 .sheet-c { justify-self: end; }
 .danger-zone { border-color: var(--bad); }
 .danger-zone .card-head h3, .danger-zone .card-head h2 { color: var(--bad-text); }
-@media (max-width: 720px) { .sheet-row { grid-template-columns: 1fr; } .sheet-c { justify-self: start; } .sheet-index { position: static; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; } }
+@media (max-width: 720px) { .sheet-row { grid-template-columns: 1fr; } .sheet-c { justify-self: start; } }
+/* Below index + gap + body basis the sheet wraps: the index lies above the body, so it must not
+   stick, or it slides over the sections. Measured on the sheet: the rail takes width too. */
+@container sheet (max-width: 727.98px) {
+  .sheet-index { position: static; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; }
+}
 .sync-cell { min-width: 200px; }
 .sync-cell .stackbar-box { width: 180px; margin-bottom: 5px; }
 .sync-cell .stackbar-legend { display: none; }

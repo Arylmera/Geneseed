@@ -252,3 +252,19 @@ describe('side panels wrap under the content', () => {
     expect(css).not.toMatch(/\.docs-map \{ grid-template-columns: 1fr; \}/)
   })
 })
+
+// The settings sheet wraps when its body no longer fits beside the index. A wrapped index that is
+// still sticky slides over the sections, so it stops being sticky at that very width: the index,
+// the gap and the body's basis, summed from their own rules, less the pixel that still fits.
+describe('Settings sheet: the index above the body', () => {
+  it('is static at every width where the sheet wraps', () => {
+    const num = (re, sel) => Number(re.exec(rule(sel))[1])
+    const fits =
+      num(/flex:\s*0 0 (\d+)px/, '.sheet-index') +
+      num(/gap:\s*(\d+)px/, '.sheet') +
+      num(/flex:\s*999 1 (\d+)px/, '.sheet-body')
+    expect(rule('.sheet')).toMatch(/container:\s*sheet \/ inline-size/)
+    const tier = tierAt(`@container sheet (max-width: ${fits - 1 + 0.98}px) {`)
+    expect(rule('.sheet-index', tier)).toMatch(/position:\s*static/)
+  })
+})

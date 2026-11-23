@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import { api } from '../../api/index.js'
@@ -21,9 +21,11 @@ const readBackups = (want) =>
 // A backup is one .zip in a folder on this machine: nothing is uploaded. Create, Preview and
 // Restore start the CLI's own `backup` and `restore` as jobs, and their output opens in the job
 // console. Preview is the restore's dry run, so it asks nothing; Restore names the file and asks.
-export default function BackupRestore({ onAction }) {
+// `dataRev` moves when a job ends: a backup just made is listed without a Refresh.
+export default function BackupRestore({ onAction, dataRev }) {
   const confirm = useConfirm()
   const [folder, setFolder] = useState('')
+  const shown = useRef('') // the folder the card shows, for the re-read a finished job starts
   const [files, setFiles] = useState([])
   const [chosen, setChosen] = useState(null)
   const projects = chosen ?? []
@@ -34,6 +36,7 @@ export default function BackupRestore({ onAction }) {
     if (!r) return
     setError(r.error ?? null)
     if (r.error) return
+    shown.current = r.folder
     setFolder(r.folder)
     setFiles(r.files)
     // Kept from the first read that worked: from then on the card holds the choice, and a backup
@@ -43,11 +46,11 @@ export default function BackupRestore({ onAction }) {
   const load = (want) => readBackups(want).then(show)
   useEffect(() => {
     let live = true
-    readBackups('').then((r) => live && show(r))
+    readBackups(shown.current).then((r) => live && show(r))
     return () => {
       live = false
     }
-  }, [show])
+  }, [show, dataRev])
 
   const pick = async (then) => {
     setBusy(true)

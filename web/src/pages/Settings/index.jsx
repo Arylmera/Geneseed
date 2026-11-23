@@ -233,7 +233,7 @@ function StartAtLogin({ initial }) {
 // about the tool, never one install: Machine acts on this copy, Server describes the process
 // answering the page, Danger zone holds what takes something away. Skin and accent have their one
 // home in the topbar's Appearance popover; each install's detail and building live on Hosts.
-export default function Settings({ overview, onAction }) {
+export default function Settings({ overview, onAction, dataRev }) {
   const confirm = useConfirm()
   const { canSee } = useViewLevel()
   // The sheet's sections on offer at this level: the index and the body both read it.
@@ -330,7 +330,7 @@ export default function Settings({ overview, onAction }) {
             />
           </Section>
 
-          <BackupRestore onAction={onAction} />
+          <BackupRestore onAction={onAction} dataRev={dataRev} />
 
           <Section
             id="server"

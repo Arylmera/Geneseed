@@ -361,9 +361,9 @@ describe('Backup & restore', () => {
     size: 2048,
     mtime: 1,
   }
-  const ui = (confirm, onAction) => (
+  const ui = (confirm, onAction, dataRev) => (
     <ConfirmContext.Provider value={confirm}>
-      <Settings onAction={onAction} />
+      <Settings onAction={onAction} dataRev={dataRev} />
     </ConfirmContext.Provider>
   )
   const setup = async (confirm = vi.fn(async () => true)) => {
@@ -422,6 +422,29 @@ describe('Backup & restore', () => {
     await act(async () => fireEvent.click(sec.getByLabelText('Remove /git')))
     await act(async () => fireEvent.click(sec.getByText('Create backup')))
     expect(onAction).toHaveBeenCalledWith('backup', { folder: '/d', projects: ['/work'] })
+  })
+
+  // A finished job is what adds a backup: the list is read again, in the folder the card shows.
+  it('reads the folder again when a job finishes, and keeps the project choice', async () => {
+    api.pickFolder = vi.fn(async () => ({ path: '/usb' }))
+    api.backupsList = vi.fn(async (folder) => ({
+      ok: true,
+      folder: folder || '/d',
+      projects: ['/git'],
+      files: api.backupsList.mock.calls.length > 2 ? [FILE] : [],
+    }))
+    const onAction = vi.fn(async () => 'j1')
+    const { rerender } = render(ui(vi.fn(), onAction, 0))
+    const sec = within(section('Backup & restore'))
+    const remove = await sec.findByLabelText('Remove /git')
+    await act(async () => fireEvent.click(remove))
+    await act(async () => fireEvent.click(sec.getByText('Choose…')))
+    expect(sec.queryByText(FILE.name)).toBeNull()
+    rerender(ui(vi.fn(), onAction, 1))
+    expect(await sec.findByText(FILE.name)).toBeTruthy()
+    expect(api.backupsList.mock.calls.map((c) => c[0])).toEqual(['', '/usb', '/usb'])
+    await act(async () => fireEvent.click(sec.getByText('Create backup')))
+    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/usb', projects: [] })
   })
 
   it('a refused folder shows the server text', async () => {
