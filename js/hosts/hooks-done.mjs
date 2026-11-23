@@ -91,7 +91,7 @@ import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { recordGate } from './hooks.mjs';
-import { ADVISORY_VERB } from './hosts.mjs';
+import { ADVISORY_VERB, DONE_GATE_DIR } from './hosts.mjs';
 import { DONE_LIST, editPairs, isTestPath, splitLines, tailReader, weakenedBy } from './hooks-prims.mjs';
 import { doneChecksOf } from './done-checks.mjs';
 
@@ -492,7 +492,7 @@ const CAP_BLOCKS = 3;
 // it fails (a notification: new count, block), the relaunch turns the verdict back to pending
 // (block), and again — a full suite run per cycle. Reset only by a new human prompt.
 const TURN_BLOCKS = 10;
-const CAP_DIR = path.join('notebook', 'done-gate');
+const CAP_DIR = DONE_GATE_DIR;
 const CAP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**

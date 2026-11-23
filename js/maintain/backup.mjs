@@ -29,10 +29,12 @@ import { installProfile } from '../build/profile.mjs';
 import { RETIRED_RULES_FILE } from '../build/rule-decide.mjs';
 import { knownSkillIds, ROOT, skillAliases } from '../build/source.mjs';
 import { SESSION_SEEDS } from '../build/stubs.mjs';
-import { EXCLUDES_FILE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
+import { DONE_GATE_DIR, EXCLUDES_FILE, GATE_LEDGER, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
 import { consolidateMemory, indexNotes, readFoldState } from '../hosts/memory-files.mjs';
 import { hashesOf, ownedState } from '../hosts/owned.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
+import { STATE_DIR } from '../hosts/store-watch.mjs';
+import { RUNS_LEDGER, USAGE_LEDGER } from '../hosts/usage.mjs';
 import { printErr, printOut, writeBytes, writeTextAtomic } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
 import { machineDir, sharedPaths, WIKI_NAMES } from '../lib/machine-dir.mjs';
@@ -59,6 +61,36 @@ export const TIER_IN = (() => {
     { name: RETIRED_RULES_FILE, from: 'rule-decide' },
   ];
 })();
+
+/** What an install's hooks append for themselves: this machine's records, never the user's notes. */
+const MACHINE_RECORDS = [GATE_LEDGER, USAGE_LEDGER, RUNS_LEDGER, DONE_GATE_DIR, STATE_DIR]
+  .map((p) => p.split(path.sep).join('/'));
+
+/** A host's own whole files that travel. Its `excludes.json` does not: it records this machine's wiring. */
+const HOST_FILES = ['user-rules.md', 'PROFILE.md', ...WIKI_NAMES, 'context.json', 'agent-overrides.json'];
+
+const lf = (b) => b.toString('utf8').replaceAll('\r\n', '\n');
+const isRulesSeed = (b) => lf(b) === SESSION_SEEDS['user-rules.md'].replaceAll('\r\n', '\n');
+
+/**
+ * Is this host file still what an emit seeds? Then it says nothing of the user's: it does not
+ * travel, and a restore may replace it. The two JSON files are judged by what they hold, because
+ * their comment text changes between versions. One that does not parse is the user's.
+ */
+function isHostSeed(rel, bytes) {
+  const name = rel.split('/').pop();
+  if (rel === 'user-rules.md') return isRulesSeed(bytes);
+  if (rel === 'PROFILE.md' || WIKI_NAMES.includes(rel)) return isWholeFileSeed(bytes);
+  if (rel === 'memory/MEMORY.md' || rel === 'notebook/NOTEBOOK.md') return lf(bytes).trim() === SESSION_SEEDS[name].replaceAll('\r\n', '\n').trim();
+  if (rel === 'context.json' || rel === 'agent-overrides.json') {
+    try {
+      const doc = JSON.parse(lf(bytes));
+      const empty = (v) => v === undefined || v === null || Object.keys(v).length === 0;
+      return rel === 'context.json' ? empty(doc.context) : empty(doc.agents) && empty(doc.tiers);
+    } catch { return false; }
+  }
+  return false;
+}
 
 const toPosix = (p) => p.split(path.sep).join('/');
 
@@ -101,13 +133,20 @@ function collectTier(tier) {
   return { files, skipped };
 }
 
-/** One global install's own skills and agents, the links it holds, and the folders to flag. */
+/**
+ * What is the user's own in one global install, the same for every host: skills, agents, the host's
+ * own rules, profile, wiki, context and agent overrides once filled in, its memory and its
+ * notebook. What stays behind is named in `left`.
+ *
+ * A SKILL IS A FOLDER WITH A `SKILL.md` AT ITS ROOT AND NO LEADING DOT. A host keeps other things in
+ * `skills/`: Claude Code's `synced/` cache and a `.trash/` were 90 % of one real backup.
+ */
 function collectHost(host, root) {
   const { owned, hashes } = readOwned(root);
   // A file Geneseed wrote that the user then edited: a fresh install would write over it.
   const edited = (rel) => ownedState(root, rel, hashes) === 'modified';
   const shipped = new Set([...knownSkillIds(), ...skillAliases().keys()]);
-  const files = []; const links = []; const ambiguous = [];
+  const files = []; const links = []; const ambiguous = []; const left = [];
   const skillsDir = path.join(root, 'skills');
   for (const name of (lstatMaybe(skillsDir) ? readdirSync(skillsDir) : []).sort()) {
     const full = path.join(skillsDir, name);
@@ -119,8 +158,12 @@ function collectHost(host, root) {
       links.push({ host, kind: 'skill', name, target });
       continue;
     }
-    if (!st.isDirectory()) continue;
+    if (!st.isDirectory()) {
+      if (!owned.includes(`skills/${name}`)) left.push(`${host} skills/${name}`);
+      continue;
+    }
     const inside = filesUnder(full);
+    if (name.startsWith('.') || !inside.includes('SKILL.md')) { left.push(`${host} skills/${name}`); continue; }
     if (owned.some((r) => r.startsWith(`skills/${name}/`))) {
       // An owned folder travels only when the user edited a file in it or added one.
       const rels = inside.map((rel) => `skills/${name}/${rel}`);
@@ -136,19 +179,39 @@ function collectHost(host, root) {
     if (!f.endsWith('.md')) continue;
     const full = path.join(agentsDir, f);
     const st = lstatMaybe(full);
-    if (!st) continue;
-    if (st.isSymbolicLink()) {
+    if (st?.isSymbolicLink()) {
       let target = null;
       try { target = realpathSync.native(full); } catch { /* dead link */ }
       links.push({ host, kind: 'agent', name: f.slice(0, -3), target });
-    } else if (st.isFile()) {
-      const rel = `agents/${f}`;
-      if (owned.includes(rel) && !edited(rel)) continue;
-      if (owned.includes(rel)) ambiguous.push(`agents/${host}/${f}`);
-      files.push({ name: `agents/${host}/${f}`, file: full });
     }
   }
-  return { files, links, ambiguous };
+  // Nested too: a host reads `agents/<team>/<name>.md`.
+  for (const f of lstatMaybe(agentsDir) ? filesUnder(agentsDir) : []) {
+    const rel = `agents/${f}`;
+    if (!f.endsWith('.md')) { if (!owned.includes(rel)) left.push(`${host} ${rel}`); continue; }
+    if (owned.includes(rel) && !edited(rel)) continue;
+    if (owned.includes(rel)) ambiguous.push(`agents/${host}/${f}`);
+    files.push({ name: `agents/${host}/${f}`, file: path.join(agentsDir, f) });
+  }
+  const own = (rel) => {
+    const full = path.join(root, ...rel.split('/'));
+    if (owned.includes(rel) && !edited(rel)) return;
+    if (!isHostSeed(rel, readFileSync(full))) files.push({ name: `host/${host}/${rel}`, file: full });
+  };
+  for (const rel of HOST_FILES) if (lstatMaybe(path.join(root, rel))?.isFile()) own(rel);
+  for (const dir of ['memory', 'notebook']) {
+    const base = path.join(root, dir);
+    if (!lstatMaybe(base)?.isDirectory()) continue;
+    for (const f of filesUnder(base)) {
+      const rel = `${dir}/${f}`;
+      const record = MACHINE_RECORDS.find((r) => rel === r || rel.startsWith(`${r}/`));
+      if (record) { if (!left.includes(`${host} ${record}`)) left.push(`${host} ${record}`); continue; }
+      // Written by every emit: the ignore file, the store's README and the watch's own record.
+      if (f === '.gitignore' || rel === 'memory/README.md' || rel === 'memory/.own-writes.json') continue;
+      own(rel);
+    }
+  }
+  return { files, links, ambiguous, left };
 }
 
 function geneseedVersion() {
@@ -178,14 +241,14 @@ export function collectBackup({
   const tier = machineDir();
   const { files: tierFiles, skipped } = collectTier(tier);
   const files = [...tierFiles]; const links = []; const ambiguous = [];
-  const installs = []; const projects = []; const unread = [];
+  const installs = []; const projects = []; const unread = []; const hostSkipped = [];
   const seen = new Set();
   for (const [host, scope, root] of targets ?? activeTargets()) {
     if (scope !== 'global') { projects.push({ host, root }); continue; }
     if (seen.has(host)) { unread.push(`${host} ${root}: a second global install of this host`); continue; }
     seen.add(host);
     const h = collectHost(host, root);
-    files.push(...h.files); links.push(...h.links); ambiguous.push(...h.ambiguous);
+    files.push(...h.files); links.push(...h.links); ambiguous.push(...h.ambiguous); hostSkipped.push(...h.left);
     try { installs.push({ host, profile: profileOf(host, root) }); } catch (e) {
       unread.push(`${host} ${root}: ${e && e.message}`);
     }
@@ -199,7 +262,7 @@ export function collectBackup({
     home: os.homedir(),
     tier,
     files: entries.map((e) => ({ name: e.name, sha256: createHash('sha256').update(e.data).digest('hex'), size: e.data.length })),
-    installs, projects, links, skipped, ambiguous, unread,
+    installs, projects, links, skipped, hostSkipped, ambiguous, unread,
   };
   return { entries, manifest };
 }
@@ -216,6 +279,7 @@ export function defaultBackupName(now) {
 function backupNotes(manifest) {
   const out = [];
   if (manifest.skipped.length) out.push(`[backup] not carried (machine state or another tool's): ${manifest.skipped.join(', ')}`);
+  if (manifest.hostSkipped.length) out.push(`[backup] not carried (a cache, a machine record or not a skill): ${manifest.hostSkipped.join(', ')}`);
   for (const l of manifest.links) out.push(`[backup] link not copied: ${l.host} ${l.kind} ${l.name} -> ${l.target ?? '(dead link)'}`);
   for (const p of manifest.projects) out.push(`[backup] project install not replayed: ${p.host} ${p.root}`);
   for (const a of manifest.ambiguous) out.push(`[backup] carried, edited or named like a shipped one: ${a}`);
@@ -371,8 +435,6 @@ function restoredLanding(dir, name, data) {
   }
 }
 
-const lf = (b) => b.toString('utf8').replaceAll('\r\n', '\n');
-const isRulesSeed = (b) => lf(b) === SESSION_SEEDS['user-rules.md'].replaceAll('\r\n', '\n');
 const sectionsOf = (text) => text.replaceAll('\r\n', '\n').split(/^(?=## )/m).filter((s) => s.trim());
 const lineSet = (b) => new Set(lf(b).split('\n').filter((l) => l.trim()));
 /** The `sha256: <key>` a draft block carries — the key its ledger row is filed under. */
@@ -586,9 +648,9 @@ function throughLink(root, dest) {
  * after half a restore would leave the user nothing to act on. `deps.apply` is the seam a test
  * stubs `profile apply` through.
  *
- * A SKILL OR AGENT FILE goes in where it is absent. Where it is present and is Geneseed's own text,
+ * A SKILL, AGENT OR HOST FILE goes in where it is absent. Where it is present and is Geneseed's own text,
  * untouched (`ownedState` 'unmodified' — a `setup` just wrote it), the backup's edit replaces it.
- * Where the user's own text is there, it is kept and the backup's lands beside it as
+ * A host file still at its seed is replaced the same way. Where the user's own text is there, it is kept and the backup's lands beside it as
  * `-restored`. Nothing is written through a link.
  * @param {{ file?: string, dryRun?: boolean }} args
  * @param {{ apply?: (name: string) => number }} [deps]
@@ -623,25 +685,28 @@ export function cmdRestore(args = {}, deps = {}) {
 
   let written = 0;
   const owned = new Map();
-  for (const [name, data] of entries) {
-    const m = /^(skills|agents)\/([^/]+)\/(.+)$/.exec(name);
+  for (const [name, raw] of entries) {
+    const m = /^(skills|agents|host)\/([^/]+)\/(.+)$/.exec(name);
     if (!m) continue;
-    const [, kind, host, rest] = m;
-    const what = `${host} ${kind}/${rest}`;
+    const [, kind, host, tail] = m;
+    const rest = kind === 'host' ? tail : `${kind}/${tail}`;   // relative to the host's own dir
+    const what = `${host} ${rest}`;
     try {
       const spec = HOSTS.find((h) => h.host === host);
-      if (!spec) { partial = true; say(`unknown host ${host}: ${kind}/${rest} not restored`); continue; }
+      if (!spec) { partial = true; say(`unknown host ${host}: ${rest} not restored`); continue; }
       const root = spec.configDir();
-      const dest = path.join(root, kind, ...rest.split('/'));
+      const dest = path.join(root, ...rest.split('/'));
+      const data = kind === 'host' && (rest === 'context.json' || WIKI_NAMES.includes(rest))
+        ? Buffer.from(rewriteHome(raw.toString('utf8'), manifest.home, os.homedir()), 'utf8') : raw;
       if (throughLink(root, dest)) { say(`linked here, not written: ${what}`); continue; }
       const held = readMaybe(dest);
       if (held !== null && held.equals(data)) continue;
       if (held !== null) {
         if (!owned.has(root)) owned.set(root, readOwned(root));
         const { hashes } = owned.get(root);
-        if (ownedState(root, `${kind}/${rest}`, hashes) === 'unmodified') {
+        if (ownedState(root, rest, hashes) === 'unmodified' || (kind === 'host' && isHostSeed(rest, held))) {
           if (!dryRun) writeBytes(dest, data);
-          say(`your edit replaces the shipped text: ${what}`);
+          say(`yours replaces the untouched shipped file: ${what}`);
           written += 1;
           continue;
         }
@@ -660,7 +725,7 @@ export function cmdRestore(args = {}, deps = {}) {
       say(`not restored: ${what} (${e && e.message})`);
     }
   }
-  say(`skills and agents: ${written} written`);
+  say(`skills, agents and host files: ${written} written`);
 
   for (const { host, profile } of manifest.installs) {
     try {
