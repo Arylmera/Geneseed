@@ -60,7 +60,7 @@ Nothing on the new machine is overwritten. A fact, a profile, a wiki manifest or
 - A folder under `skills/` that is not a skill: no `SKILL.md` at its root, or a name that starts with a dot. The backup names it.
 - A skill that is a link (for example to a vault): the report names it and its old target.
 - Project installs: the report names each folder; run the install there again.
-- In a project: what git tracks, a notebook's `archive/`, and a `notebook/` or `memory/` that is not Geneseed's.
+- In a project: what git tracks (an edit you have not committed included: commit and push it), a notebook's `archive/`, and a `notebook/` or `memory/` that is not Geneseed's.
 - MCP servers, host plugins, your own commands and hooks, and settings that Geneseed does not own: they stay the host's.
 
 The restore prints each of these, and each wiki path that does not exist on the new machine.

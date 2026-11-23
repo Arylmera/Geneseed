@@ -79,7 +79,9 @@ const HOST_FILES = ['user-rules.md', 'user-rules.draft.md', 'PROFILE.md', ...WIK
  * workflows the user added, and the back-port reports `diff` and `upgrade` save.
  */
 const HOST_DIRS = ['memory', 'notebook', 'agent-memory', 'rules', 'workflows', 'improvements'];
-/** Of those, the ones a host runs or obeys file by file: a second copy there would be in force. */
+/** The only paths a `host/` entry may have on restore: a forged archive must not reach `settings.json`. */
+const HOST_REL = new RegExp(`^(?:${HOST_FILES.map((f) => f.replaceAll('.', '\\.')).join('|')}|(?:${HOST_DIRS.join('|')})/.+)$`);
+/** Of those folders, the ones a host runs or obeys file by file: a second copy there would be in force. */
 const LIVE_DIRS = ['rules', 'workflows'];
 
 const lf = (b) => b.toString('utf8').replaceAll('\r\n', '\n');
@@ -338,8 +340,9 @@ function collectProjects(roots) {
     const key = resolvePath(dir);
     if (seen.has(key)) return;
     seen.add(key);
+    let entries = [];
     try {
-      const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
+      entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
       const names = new Set(entries.map((e) => e.name));
       const here = projectInstalls(dir, names);
       installs.push(...here);
@@ -354,13 +357,13 @@ function collectProjects(roots) {
         stores.push({ id, root: dir });
         for (const rel of own.rels) files.push({ name: `projects/${id}/${rel}`, file: path.join(dir, ...rel.split('/')) });
       }
-      if (depth >= PROJECT_DEPTH) return;
-      for (const e of entries) {
-        if (!e.isDirectory() || e.isSymbolicLink() || e.name.startsWith('.')) continue;
-        if (['node_modules', 'notebook', 'memory'].includes(e.name)) continue;
-        visit(path.join(dir, e.name), depth + 1);
-      }
     } catch (e) { unread.push(`${dir}: ${e && e.message}`); }
+    if (depth >= PROJECT_DEPTH) return;
+    for (const e of entries) {
+      if (!e.isDirectory() || e.isSymbolicLink() || e.name.startsWith('.')) continue;
+      if (['node_modules', 'notebook', 'memory'].includes(e.name)) continue;
+      visit(path.join(dir, e.name), depth + 1);
+    }
   };
   for (const r of roots) visit(r, 0);
   return { files, stores, installs, left, unread };
@@ -407,11 +410,12 @@ function activeTargets() {
  * a later one, and an install whose settings cannot be read, are named under `unread` while the
  * rest of the backup goes on.
  * @param {{ now?: Date, targets?: [string, string, string][] | null, projects?: string[],
- *   profileOf?: (host: string, root: string) => object }} [opts]
+ *   profileOf?: (host: string, root: string) => object, read?: (file: string) => Buffer }} [opts]
  */
 export function collectBackup({
   now = new Date(), targets = null, projects: roots = projectRoots(),
   profileOf = (host, root) => profileFromInstall(installProfile(host, 'global', root)),
+  read = (file) => readFileSync(file),
 } = {}) {
   const tier = machineDir();
   const { files: tierFiles, skipped } = collectTier(tier);
@@ -433,7 +437,13 @@ export function collectBackup({
   for (const p of scan.installs) {
     if (!projects.some((q) => q.host === p.host && resolvePath(q.root) === resolvePath(p.root))) projects.push(p);
   }
-  const entries = files.map(({ name, file }) => ({ name: toPosix(name), data: readFileSync(file) }));
+  // Locked, or gone since it was listed: named, and the rest of the backup goes on.
+  const entries = files.flatMap(({ name, file }) => {
+    try { return [{ name: toPosix(name), data: read(file) }]; } catch (e) {
+      unread.push(`${file}: ${e && e.message}`);
+      return [];
+    }
+  });
   const manifest = {
     format: BACKUP_FORMAT,
     geneseed: geneseedVersion(),
@@ -686,6 +696,7 @@ export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
     for (const [name, raw] of entries) {
       if (!name.startsWith('tier/')) continue;
       const rel = name.slice('tier/'.length);
+      if (isStream(rel)) { failed.push(`refused, not a file name here: ${name}`); continue; }
       if (rel.startsWith('memory/topics/')) continue;
       if (rel === 'memory/MEMORY.md') {
         // The index is rebuilt from the facts; only the lines a person wrote into it travel.
@@ -833,6 +844,14 @@ function projectTarget({ id, root: was }, fromHome) {
   return { root, aside: path.join(os.homedir(), 'geneseed-restored-projects', id) };
 }
 
+/** On Windows a `:` in a name opens an alternate data stream of another file. */
+const isStream = (name) => process.platform === 'win32' && name.includes(':');
+
+/** Would `rel` under this project root land in a host's global folder? No backup writes that. */
+function inGlobalDir(root, rel) {
+  return isHostGlobalDir(null, root) || isHostGlobalDir(null, path.join(root, rel.split('/')[0]));
+}
+
 /** Is `dest`, or any folder between `root` and it, a link? Then writing would leave `root`. */
 function throughLink(root, dest) {
   const parts = path.relative(root, dest).split(path.sep);
@@ -901,7 +920,7 @@ export function cmdRestore(args = {}, deps = {}) {
     if (p) {
       const [, id, rel] = p;
       const store = stores.get(id);
-      if (!store || !PROJECT_REL.test(rel)) { partial = true; say(`refused, not a project file a backup writes: ${name}`); continue; }
+      if (!store || !PROJECT_REL.test(rel) || isStream(name) || inGlobalDir(store.root, rel)) { partial = true; say(`refused, not a project file a backup writes: ${name}`); continue; }
       const root = store.aside ?? store.root;
       const dest = path.join(root, ...rel.split('/'));
       try {
@@ -926,6 +945,7 @@ export function cmdRestore(args = {}, deps = {}) {
     const [, kind, host, tail] = m;
     const rest = kind === 'host' ? tail : `${kind}/${tail}`;   // relative to the host's own dir
     const what = `${host} ${rest}`;
+    if (isStream(name) || (kind === 'host' && !HOST_REL.test(rest))) { partial = true; say(`refused, not a file a backup writes: ${name}`); continue; }
     try {
       const spec = HOSTS.find((h) => h.host === host);
       if (!spec) { partial = true; say(`unknown host ${host}: ${rest} not restored`); continue; }

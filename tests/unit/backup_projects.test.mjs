@@ -204,6 +204,39 @@ test('a project entry outside the stores is refused by name', () => {
   assert.deepEqual(fs.readdirSync(path.join(home, 'p')), []);
 });
 
+// Every door of a forged archive: a host file a backup never writes, a Windows stream name, and a
+// project root that is really a host's own global folder or the home around it.
+test('a forged archive writes no host setting, no stream, and no global folder as a project', () => {
+  const home = path.join(sb.path, 'd');
+  fs.mkdirSync(path.join(home, 'p', 'notebook'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+  const data = Buffer.from('x');
+  const sha256 = '2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881';
+  const names = ['host/claude/settings.json', 'host/claude/hooks/x.sh', 'projects/h/.claude/agent-memory/x', 'projects/g/user-rules.md',
+    ...(process.platform === 'win32' ? ['projects/p/notebook/a:b', 'skills/claude/s/a:b', 'tier/notes/a:b'] : [])];
+  const base = collect([]).manifest;
+  const file = path.join(sb.path, 'forged2.zip');
+  fs.writeFileSync(file, writeZip([{ name: 'manifest.json', data: Buffer.from(JSON.stringify({ ...base, home,
+    files: names.map((name) => ({ name, size: 1, sha256 })),
+    stores: [{ id: 'h', root: home }, { id: 'g', root: path.join(home, '.claude') }, { id: 'p', root: path.join(home, 'p') }] })) },
+  ...names.map((name) => ({ name, data }))]));
+  const r = inHome(home, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
+  assert.equal(r.rc, 2, r.out);
+  assert.deepEqual(fs.readdirSync(path.join(home, '.claude')), []);
+  assert.deepEqual(fs.readdirSync(path.join(home, 'p', 'notebook')), []);
+  assert.ok(!fs.existsSync(path.join(home, '.config', 'geneseed', 'notes', 'a')));
+});
+
+// One file that cannot be read is named; the rest of the backup goes on.
+test('a file that cannot be read does not abort the backup', () => {
+  const locked = path.join(git, 'team', 'api', 'notebook', 'mine.md');
+  const b = inHome(a, () => collectBackup({ targets: [], projects: [git],
+    read: (f) => { if (f === locked) throw new Error('EBUSY'); return fs.readFileSync(f); } }));
+  assert.ok(!b.entries.some((e) => e.name.endsWith('notebook/mine.md')));
+  assert.ok(b.entries.some((e) => e.name.endsWith('notebook/skill-notes/ship.md')));
+  assert.deepEqual(b.manifest.unread, [`${locked}: EBUSY`]);
+});
+
 // `--projects` is remembered, so the console and the next backup scan the same folders.
 test('--projects is checked, remembered and cleared', () => {
   const cli = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'backup', ...args],
