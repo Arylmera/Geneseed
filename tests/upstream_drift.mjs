@@ -79,15 +79,25 @@ function api(token) {
   };
 }
 
+/** Every file of a tree, path -> `mode sha`. A partial tree throws: it could hide a cited change. */
+async function treeOf(call, repo, ref) {
+  const data = await call('GET', `/repos/${repo}/git/trees/${ref}?recursive=1`);
+  if (!data) throw new Error(`${repo}: tree ${ref} not found`);
+  if (data.truncated) throw new Error(`${repo}: tree ${ref} truncated by the API`);
+  return new Map(data.tree.filter((e) => e.type !== 'tree').map((e) => [e.path, `${e.mode} ${e.sha}`]));
+}
+
 /** Real `compare`: files changed between the pinned commit and HEAD. */
 export function githubCompare(call) {
   return async (repo, commit) => {
     const data = await call('GET', `/repos/${repo}/compare/${commit}...HEAD`);
     if (!data) throw new Error(`${repo}: commit ${commit} not found`);
-    // The API caps the list at 300 files; a truncated list could hide a cited change, and
-    // "no drift" would then close the issue. Fail loud instead.
-    if ((data.files?.length ?? 0) >= 300) throw new Error(`${repo}: compare truncated at 300 files, pin too old`);
-    return (data.files ?? []).map((f) => f.filename);
+    const files = (data.files ?? []).map((f) => f.filename);
+    if (files.length < 300) return files;
+    // The API caps the list at 300 files; a truncated list could hide a cited change, and "no
+    // drift" would then close the issue. At the cap, diff the two whole trees instead.
+    const [pinned, head] = [await treeOf(call, repo, commit), await treeOf(call, repo, 'HEAD')];
+    return [...new Set([...pinned.keys(), ...head.keys()])].filter((p) => pinned.get(p) !== head.get(p));
   };
 }
 
