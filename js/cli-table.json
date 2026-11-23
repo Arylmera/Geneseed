@@ -855,7 +855,7 @@
     {
       "name": "backup",
       "help": "write your personal Geneseed state to one .zip, to carry to another machine",
-      "description": "write your personal Geneseed state to one plain .zip: the shared tier (rules, profile, memory, notes, notebook, personal profiles, bricks), the skills and agents you wrote or edited in each global install, and each global install as a profile that restore rebuilds. Machine state, linked skills and project installs are named, not carried. No secret scan and no encryption: keep the file somewhere only you can read",
+      "description": "write your personal Geneseed state to one plain .zip: the shared tier (rules, profile, memory, notes, notebook, personal profiles, bricks), the skills, agents, rules and other files of your own in each global install, what Geneseed keeps in your projects that git does not track (see --projects), and each global install as a profile that restore rebuilds. Machine state, linked skills and project installs are named, not carried. No secret scan and no encryption: keep the file somewhere only you can read",
       "positionals": [],
       "options": [
         {
@@ -865,6 +865,21 @@
           "dest": "out",
           "metavar": null,
           "help": "the file to write (default: geneseed-backup-<machine>-<YYYYMMDD-HHMM>.zip in the current folder); an existing file is never written over",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--projects"
+          ],
+          "dest": "projects",
+          "metavar": null,
+          "help": "the folder to scan for projects, whose untracked memory, notebook, rules and profile travel (several: separate them as in PATH; none: scan nothing). Remembered for the next backup",
           "choices": null,
           "default": null,
           "required": false,

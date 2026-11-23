@@ -11,7 +11,7 @@ const kb = (bytes) =>
     ? `${Math.max(1, Math.round(bytes / 1024))} KB`
     : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-// One read of a folder's backups, as `{ folder, files }` or `{ error }`; null when the api has no
+// One read of a folder's backups, as `{ folder, projects, files }` or `{ error }`; null when the api has no
 // such call (suites stub it down to the calls they make). A 409 carries the server's own text.
 const readBackups = (want) =>
   Promise.resolve(api.backupsList?.(want))
@@ -25,6 +25,8 @@ export default function BackupRestore({ onAction }) {
   const confirm = useConfirm()
   const [folder, setFolder] = useState('')
   const [files, setFiles] = useState([])
+  const [chosen, setChosen] = useState(null)
+  const projects = chosen ?? []
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -34,6 +36,9 @@ export default function BackupRestore({ onAction }) {
     if (r.error) return
     setFolder(r.folder)
     setFiles(r.files)
+    // Kept from the first read that worked: from then on the card holds the choice, and a backup
+    // saves it. Never from a failed one, or the next backup would forget the remembered folders.
+    setChosen((now) => now ?? r.projects ?? [])
   }, [])
   const load = (want) => readBackups(want).then(show)
   useEffect(() => {
@@ -44,11 +49,11 @@ export default function BackupRestore({ onAction }) {
     }
   }, [show])
 
-  const choose = async () => {
+  const pick = async (then) => {
     setBusy(true)
     try {
       const r = await api.pickFolder()
-      if (r.path) await load(r.path)
+      if (r.path) await then(r.path)
       else if (r.error) setError(r.error)
     } catch (e) {
       setError(e.message)
@@ -56,8 +61,9 @@ export default function BackupRestore({ onAction }) {
       setBusy(false)
     }
   }
+  const addProject = (p) => setChosen(projects.includes(p) ? projects : [...projects, p])
   const create = async () => {
-    await onAction('backup', { folder })
+    await onAction('backup', { folder, projects })
   }
   const restore = async (f) => {
     const ok = await confirm(
@@ -75,7 +81,7 @@ export default function BackupRestore({ onAction }) {
         help="Where backups are written and listed"
         control={
           <div className="row wrap gap-10">
-            <button className="btn ghost" disabled={busy} onClick={choose}>
+            <button className="btn ghost" disabled={busy} onClick={() => pick(load)}>
               Choose…
             </button>
             <button className="btn ghost" onClick={() => load(folder)}>
@@ -86,6 +92,32 @@ export default function BackupRestore({ onAction }) {
       >
         <span className="mono">{folder || '…'}</span>
         <ErrorState error={error} />
+      </Row>
+      <Row
+        k="Projects"
+        help="Scanned for the memory, notebook, rules and profile git does not track"
+        control={
+          <button className="btn ghost" disabled={busy} onClick={() => pick(addProject)}>
+            Add folder…
+          </button>
+        }
+      >
+        {projects.length === 0 ? (
+          <span className="sub">No folder scanned: what your projects hold stays behind.</span>
+        ) : (
+          projects.map((p) => (
+            <div key={p} className="row wrap gap-10">
+              <span className="mono">{p}</span>
+              <button
+                className="btn ghost"
+                aria-label={`Remove ${p}`}
+                onClick={() => setChosen(projects.filter((x) => x !== p))}
+              >
+                Remove
+              </button>
+            </div>
+          ))
+        )}
       </Row>
       <Row
         k="Back up"

@@ -192,3 +192,51 @@ export function loopLaunched(root) {
     if (fd !== undefined) { try { closeSync(fd); } catch { /* already gone */ } }
   }
 }
+
+/**
+ * The `/`-separated paths git tracks in `root`'s worktree, read off its index without spawning git:
+ * what a clone would bring back, so `geneseed backup` leaves it to git. An empty set when nothing
+ * was added yet; null when there is no repository, or its index cannot be read whole (a split
+ * index keeps most of its entries in another file). Versions 2, 3 and 4, SHA-1 and SHA-256.
+ * @param {string} root
+ * @returns {Set<string> | null}
+ */
+export function trackedFiles(root) {
+  try {
+    const file = path.join(gitDirOf(root), 'index');
+    if (!existsSync(file)) return new Set();
+    const buf = readFileSync(file);
+    const version = buf.readUInt32BE(4);
+    if (buf.toString('latin1', 0, 4) !== 'DIRC' || version < 2 || version > 4) return null;
+    const config = readFileSync(path.join(gitCommonDirOf(root), 'config'), 'utf8');
+    const hash = /^\s*objectformat\s*=\s*sha256\s*$/im.test(config) ? 32 : 20;
+    const out = new Set();
+    let p = 12;
+    let prev = Buffer.alloc(0);
+    for (let n = buf.readUInt32BE(8); n > 0; n -= 1) {
+      const start = p;
+      p += 40 + hash;
+      p += version >= 3 && (buf.readUInt16BE(p) & 0x4000) ? 4 : 2;
+      let kept = Buffer.alloc(0);
+      if (version === 4) {
+        // How many bytes to drop from the previous name: git's offset varint.
+        let byte = buf[p]; p += 1;
+        let strip = byte & 0x7f;
+        while (byte & 0x80) { byte = buf[p]; p += 1; strip = ((strip + 1) << 7) | (byte & 0x7f); }
+        kept = prev.subarray(0, prev.length - strip);
+      }
+      const end = buf.indexOf(0, p);
+      if (end < 0) return null;
+      const name = Buffer.concat([kept, buf.subarray(p, end)]);
+      out.add(name.toString('utf8'));
+      prev = name;
+      p = version === 4 ? end + 1 : start + ((end - start + 8) & ~7);
+    }
+    for (; p + 8 <= buf.length - hash; p += 8 + buf.readUInt32BE(p + 4)) {
+      if (buf.toString('latin1', p, p + 4) === 'link') return null;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}

@@ -367,7 +367,12 @@ describe('Backup & restore', () => {
     </ConfirmContext.Provider>
   )
   const setup = async (confirm = vi.fn(async () => true)) => {
-    api.backupsList = vi.fn(async (folder) => ({ ok: true, folder: folder || '/d', files: [FILE] }))
+    api.backupsList = vi.fn(async (folder) => ({
+      ok: true,
+      folder: folder || '/d',
+      projects: ['/git'],
+      files: [FILE],
+    }))
     const onAction = vi.fn(async () => 'j1')
     render(ui(confirm, onAction))
     await screen.findByText(FILE.name)
@@ -383,7 +388,7 @@ describe('Backup & restore', () => {
     expect(api.backupsList).toHaveBeenCalledWith('')
     expect(sec.getByText('/d')).toBeTruthy()
     await act(async () => fireEvent.click(sec.getByText('Create backup')))
-    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/d' })
+    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/d', projects: ['/git'] })
   })
 
   it('previews without asking, restores only after a confirm that names the file', async () => {
@@ -408,6 +413,15 @@ describe('Backup & restore', () => {
     await act(async () => fireEvent.click(sec.getByText('Choose…')))
     expect(api.backupsList).toHaveBeenLastCalledWith('/usb')
     expect(await sec.findByText('/usb')).toBeTruthy()
+  })
+
+  it('project folders are added, removed and sent with the backup', async () => {
+    api.pickFolder = vi.fn(async () => ({ path: '/work' }))
+    const { onAction, sec } = await setup()
+    await act(async () => fireEvent.click(sec.getByText('Add folder…')))
+    await act(async () => fireEvent.click(sec.getByLabelText('Remove /git')))
+    await act(async () => fireEvent.click(sec.getByText('Create backup')))
+    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/d', projects: ['/work'] })
   })
 
   it('a refused folder shows the server text', async () => {

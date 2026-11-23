@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
-import { defaultBackupName } from '../maintain/backup.mjs';
+import { defaultBackupName, parseProjects, projectRoots } from '../maintain/backup.mjs';
 
 const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 const BACKUP_RE = /^geneseed-backup-.+\.zip$/i;
@@ -38,7 +38,8 @@ function folderOf(body) {
 
 /**
  * `POST /api/backups/list {folder?}`: the backups in a folder, newest first.
- * `{ ok: true, folder, files: [{ name, path, size, mtime }] }` or `{ ok: false, error }`.
+ * `projects` are the folders the last backup scanned (the CLI remembers them, `projectRoots`).
+ * `{ ok: true, folder, projects, files: [{ name, path, size, mtime }] }` or `{ ok: false, error }`.
  */
 export function apiBackupsList(_state, body) {
   const { folder, error } = folderOf(body);
@@ -48,14 +49,29 @@ export function apiBackupsList(_state, body) {
     const st = statMaybe(p);
     return st?.isFile() ? [{ name, path: p, size: st.size, mtime: st.mtimeMs / 1000 }] : [];
   }).sort((a, b) => b.mtime - a.mtime);
-  return { ok: true, folder, files };
+  return { ok: true, folder, projects: projectRoots(), files };
 }
 
-/** The `backup` action: a new archive in the body's folder. `{ cmd }` or `{ error }`. */
+/**
+ * The `backup` action: a new archive in the body's folder. `projects`, when given, is the list of
+ * folders to scan and the CLI keeps it; [] scans none. `{ cmd }` or `{ error }`.
+ */
 export function backupCmd(body, { now = new Date() } = {}) {
   const { folder, error } = folderOf(body);
   if (error) return { error };
-  return { cmd: [process.execPath, CLI(), 'backup', '--out', path.join(folder, defaultBackupName(now))] };
+  const cmd = [process.execPath, CLI(), 'backup', '--out', path.join(folder, defaultBackupName(now))];
+  if (body?.projects === undefined) return { cmd };
+  const list = body.projects;
+  if (!Array.isArray(list) || !list.every((p) => typeof p === 'string' && path.isAbsolute(p))) {
+    return { error: 'projects must be a list of absolute folder paths' };
+  }
+  // A folder whose name holds the list separator cannot be passed on, so it is refused, not split.
+  const odd = list.find((p) => p.includes(path.delimiter));
+  if (odd) return { error: `${odd} cannot be scanned: its name holds a '${path.delimiter}'` };
+  const value = list.length ? list.join(path.delimiter) : 'none';
+  const read = parseProjects(value);
+  if ('error' in read) return { error: read.error };
+  return { cmd: [...cmd, '--projects', value] };
 }
 
 /** The `backup-restore` action: one archive, `dryRun` for the preview. `{ cmd }` or `{ error }`. */

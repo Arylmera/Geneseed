@@ -99,3 +99,28 @@ test('backup-restore starts the CLI verb; a bad file is a 400 and starts nothing
   }
   assert.equal(started.length, 2);
 });
+
+// The project folders go to the CLI, which checks and keeps them; a name holding the list separator
+// would be read as two folders, so it is refused.
+test('backup passes the project folders on, and refuses what is not a list of folders', async () => {
+  const run = async (projects) => {
+    started.length = 0;
+    const r = await req('POST', '/api/actions/backup', { folder: downloads, projects });
+    return [r.status, started[0]?.[1][0].slice(5)];
+  };
+  assert.deepEqual(await run([downloads, home]), [202, ['--projects', `${downloads}${path.delimiter}${home}`]]);
+  assert.deepEqual(await run([]), [202, ['--projects', 'none']]);
+  const odd = path.join(home, `a${path.delimiter}b`);
+  fs.mkdirSync(odd);
+  for (const bad of ['x', ['relative'], [path.join(home, 'missing')], [odd], [1]]) {
+    assert.deepEqual(await run(bad), [400, undefined], JSON.stringify(bad));
+  }
+});
+
+test('the list names the folders the last backup scanned', async () => {
+  assert.deepEqual((await req('POST', '/api/backups/list', {})).json.projects, []);
+  const tier = path.join(home, '.config', 'geneseed');
+  fs.mkdirSync(tier, { recursive: true });
+  fs.writeFileSync(path.join(tier, 'backup.json'), JSON.stringify({ projects: [downloads] }));
+  assert.deepEqual((await req('POST', '/api/backups/list', {})).json.projects, [downloads]);
+});

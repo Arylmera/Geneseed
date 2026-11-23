@@ -77,6 +77,11 @@ before(() => {
     put(path.join(d, 'memory', 'fact.md'), `---\nname: fact\n---\n${h}\n`);
     put(path.join(d, 'user-rules.md'), `## R1 — ${h} rule\nBody.\n`);
     put(path.join(d, 'PROFILE.md'), `# ${h} profile\n`);
+    put(path.join(d, 'user-rules.draft.md'), '# Draft\n');
+    put(path.join(d, 'agent-memory', 'x', 'm.md'), 'agent memory\n');
+    put(path.join(d, 'rules', 'own.md'), 'a rule\n');
+    put(path.join(d, 'improvements', 'i.md'), 'a diff\n');
+    put(path.join(d, 'workflows', 'own.js'), '// mine\n');
     put(path.join(d, 'context.json'), JSON.stringify({ context: [{ path: path.join(a, 'docs'), load: 'lazy' }] }));
     put(path.join(d, 'agent-overrides.json'), JSON.stringify({ agents: { reviewer: { model: 'm' } } }));
   }
@@ -100,6 +105,8 @@ for (const h of NAMES) {
       .filter((n) => n.split('/')[1] === h && n !== `host/${h}/notebook/README.md`).sort();
     assert.deepEqual(got, [
       `agents/${h}/mine.md`, `agents/${h}/team/deep.md`,
+      `host/${h}/agent-memory/x/m.md`, `host/${h}/improvements/i.md`, `host/${h}/rules/own.md`,
+      `host/${h}/user-rules.draft.md`, `host/${h}/workflows/own.js`,
       `host/${h}/PROFILE.md`, `host/${h}/agent-overrides.json`, `host/${h}/context.json`,
       `host/${h}/memory/fact.md`, `host/${h}/notebook/deep/n.txt`, `host/${h}/notebook/ledger.md`,
       `host/${h}/user-rules.md`, `skills/${h}/mine/SKILL.md`,
@@ -118,7 +125,10 @@ test('every host gets its files back, and nothing of the user is overwritten', (
   const back = collect(a);
   const file = path.join(sb.path, 'b.zip');
   fs.writeFileSync(file, writeZip([{ name: 'manifest.json', data: Buffer.from(JSON.stringify({ ...back.manifest, installs: [] })) }, ...back.entries]));
-  for (const h of NAMES) put(path.join(dirOf(b, h), 'notebook', 'ledger.md'), 'B own ledger\n');
+  for (const h of NAMES) {
+    put(path.join(dirOf(b, h), 'notebook', 'ledger.md'), 'B own ledger\n');
+    put(path.join(dirOf(b, h), 'rules', 'own.md'), 'B own rule\n');
+  }
   const r = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
   assert.equal(r.rc, 0, r.out);
   for (const h of NAMES) {
@@ -132,6 +142,11 @@ test('every host gets its files back, and nothing of the user is overwritten', (
     assert.equal(read(path.join(d, 'memory', 'fact.md')), `---\nname: fact\n---\n${h}\n`);
     assert.equal(read(path.join(d, 'notebook', 'ledger.md')), 'B own ledger\n');
     assert.equal(read(path.join(d, 'notebook', 'ledger-restored.md')), `${h} ledger\n`);
+    assert.equal(read(path.join(d, 'workflows', 'own.js')), '// mine\n');
+    // A host loads every file in `rules/`: a differing one lands outside it, in force nowhere.
+    assert.deepEqual(fs.readdirSync(path.join(d, 'rules')).filter((f) => f.startsWith('own')), ['own.md']);
+    assert.equal(read(path.join(d, 'rules', 'own.md')), 'B own rule\n');
+    assert.equal(read(path.join(d, 'rules-restored', 'own.md')), 'a rule\n');
   }
   const again = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
   assert.equal(again.rc, 0, again.out);
