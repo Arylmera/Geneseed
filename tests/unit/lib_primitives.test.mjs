@@ -18,7 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseJson, jsonDumpsIndent, jsonDumpsCompact, isDict } from '../../js/lib/json.mjs';
-import { isDir, isFile, writeTextAtomic } from '../../js/lib/fs.mjs';
+import { isDir, isFile, writeBytes, writeTextAtomic } from '../../js/lib/fs.mjs';
 import { which, within } from '../../js/lib/paths.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -252,3 +252,17 @@ test('writeTextAtomic waits out a reader holding the target open, instead of thr
       assert.deepEqual(fs.readdirSync(sb.path).filter((n) => n.endsWith('.tmp')), [], 'no temp file is left beside it');
     } finally { sb.cleanup(); }
   });
+
+// `writeBytes` is the raw half of the newline rule: a restored file must come back byte for
+// byte, so an LF file stays LF on Windows. `exclusive` is create-if-absent: an existing file is
+// refused with EEXIST and left as it was, the restore's "never overwrite".
+test('writeBytes writes bytes untranslated, and exclusive refuses an existing file', () => {
+  const sb = makeSandbox('wb-');
+  try {
+    const f = path.join(sb.path, 'a.md');
+    writeBytes(f, Buffer.from('one\ntwo\n'));
+    assert.deepEqual(fs.readFileSync(f), Buffer.from('one\ntwo\n'));
+    assert.throws(() => writeBytes(f, Buffer.from('other'), { exclusive: true }), { code: 'EEXIST' });
+    assert.deepEqual(fs.readFileSync(f), Buffer.from('one\ntwo\n'));
+  } finally { sb.cleanup(); }
+});

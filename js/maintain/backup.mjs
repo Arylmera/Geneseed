@@ -29,7 +29,9 @@ import { knownSkillIds, ROOT, skillAliases } from '../build/source.mjs';
 import { GLOBAL_MANIFEST } from '../hosts/hosts.mjs';
 import { hashesOf, ownedState } from '../hosts/owned.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
+import { printErr, printOut, writeBytes } from '../lib/fs.mjs';
 import { machineDir, sharedPaths } from '../lib/machine-dir.mjs';
+import { writeZip } from '../lib/zip.mjs';
 import { USER_LOOP_DIRS } from '../loop/catalog.mjs';
 import { personalProfilesDir, profileFromInstall } from './profiles.mjs';
 
@@ -180,4 +182,62 @@ export function collectBackup({ now = new Date(), targets = null } = {}) {
     installs, projects, links, skipped, ambiguous,
   };
   return { entries, manifest };
+}
+
+/** `geneseed-backup-<machine>-<YYYYMMDD-HHMM>.zip`: two machines' backups never share a name. */
+function defaultBackupName(now) {
+  const host = os.hostname().replace(/[^A-Za-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'machine';
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `geneseed-backup-${host}-${stamp}.zip`;
+}
+
+/** The lines every backup prints after its total: what stayed behind, and why. */
+function backupNotes(manifest) {
+  const out = [];
+  if (manifest.skipped.length) out.push(`[backup] not carried (machine state or another tool's): ${manifest.skipped.join(', ')}`);
+  for (const l of manifest.links) out.push(`[backup] link not copied: ${l.host} ${l.kind} ${l.name} -> ${l.target ?? '(dead link)'}`);
+  for (const p of manifest.projects) out.push(`[backup] project install not replayed: ${p.host} ${p.root}`);
+  for (const a of manifest.ambiguous) out.push(`[backup] carried, edited or named like a shipped one: ${a}`);
+  return out;
+}
+
+/**
+ * `geneseed backup [--out <file>] [--dry-run]`. 0 written (or previewed), 1 refused.
+ * @param {{ out?: string, dryRun?: boolean }} args
+ */
+export function cmdBackup(args = {}) {
+  const now = new Date();
+  let backup;
+  try { backup = collectBackup({ now }); } catch (e) {
+    printErr(`[backup] could not read what to back up: ${e && e.message}\n`);
+    return 1;
+  }
+  const { entries, manifest } = backup;
+  const total = entries.reduce((n, e) => n + e.data.length, 0);
+  const notes = backupNotes(manifest);
+  if (args.dryRun) {
+    for (const e of entries) printOut(`${String(e.data.length).padStart(10)}  ${e.name}\n`);
+    printOut(`[backup] dry run: ${entries.length} files, ${total} bytes — nothing written\n`);
+    for (const l of notes) printOut(`${l}\n`);
+    return 0;
+  }
+  const out = path.resolve(args.out ? String(args.out) : defaultBackupName(now));
+  let zip;
+  try {
+    zip = writeZip([{ name: 'manifest.json', data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8') }, ...entries]);
+  } catch (e) {
+    printErr(`[backup] refused: ${e && e.message}\n`);
+    return 1;
+  }
+  try { writeBytes(out, zip, { exclusive: true }); } catch (e) {
+    printErr(e && e.code === 'EEXIST'
+      ? `[backup] ${out} exists — choose another --out; nothing written\n`
+      : `[backup] could not write ${out}: ${e && e.message}\n`);
+    return 1;
+  }
+  printOut(`[backup] wrote ${out}: ${entries.length} files, ${total} bytes\n`);
+  for (const l of notes) printOut(`${l}\n`);
+  printOut('[backup] the archive is a plain copy of your own files: keep it somewhere only you can read\n');
+  return 0;
 }

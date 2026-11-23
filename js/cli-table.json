@@ -853,6 +853,45 @@
       "mutex": []
     },
     {
+      "name": "backup",
+      "help": "write your personal Geneseed state to one .zip, to carry to another machine",
+      "description": "write your personal Geneseed state to one plain .zip: the shared tier (rules, profile, memory, notes, notebook, personal profiles, bricks), the skills and agents you wrote or edited in each global install, and each global install as a profile that restore rebuilds. Machine state, linked skills and project installs are named, not carried. No secret scan and no encryption: keep the file somewhere only you can read",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": null,
+          "help": "the file to write (default: geneseed-backup-<machine>-<YYYYMMDD-HHMM>.zip in the current folder); an existing file is never written over",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--dry-run"
+          ],
+          "dest": "dry_run",
+          "metavar": null,
+          "help": "list each file and its size, and write nothing",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "factory",
       "help": "run a factory: carry one work item through bricks and loops to an open PR",
       "description": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide/report)",
