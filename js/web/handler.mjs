@@ -23,6 +23,7 @@ import { nonceBook, openFolder, requestRestart, restartRefusal, rootId, secretPr
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
 import { profileApplyCmd, profileSaveCmd } from './profiles-api.mjs';
+import { backupCmd, backupRestoreCmd } from './backup-api.mjs';
 import {
   MACHINE_GETS, POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, VIEW_POSTS, readJsonBody,
 } from './routes.mjs';
@@ -401,6 +402,13 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // The body names a profile, hosts, a folder or an install, so a refusal is the body's: 400.
     if (action === 'profile-apply' || action === 'profile-save') {
       const plan = action === 'profile-apply' ? profileApplyCmd(body) : profileSaveCmd(body);
+      if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
+      return startJob(res, action, [plan.cmd], ae);
+    }
+    // Settings › Backup & restore runs the CLI's own `backup` and `restore` (js/web/backup-api.mjs).
+    // The body names a folder or a file, so a refusal is the body's: 400, as above.
+    if (action === 'backup' || action === 'backup-restore') {
+      const plan = action === 'backup' ? backupCmd(body) : backupRestoreCmd(body);
       if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
       return startJob(res, action, [plan.cmd], ae);
     }

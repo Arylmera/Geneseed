@@ -205,7 +205,7 @@ export function collectBackup({
 }
 
 /** `geneseed-backup-<machine>-<YYYYMMDD-HHMM>.zip`: two machines' backups never share a name. */
-function defaultBackupName(now) {
+export function defaultBackupName(now) {
   const host = os.hostname().replace(/[^A-Za-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'machine';
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;

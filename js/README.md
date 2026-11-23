@@ -291,6 +291,7 @@ the deployed harness as JSON.
 | `model-catalog.mjs` | The models one install can run, per host: Claude aliases, OpenCode custom providers then the models.dev cache then loopback Ollama/LM Studio probes, OpenClaude's profile, same-endpoint OpenCode providers and routes. Files and loopback only; never a key value (a test pins it) |
 | `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, a fleet-wide `names` list (per-name 30-day counts, installs, daily series, last day seen), and skips lines older than 90 days in each `notebook/usage.jsonl` |
 | `profiles-api.mjs` | The Profiles tab: `GET /api/profiles` (both sources, the installs that follow each, an apply preview) and the `profile-apply` / `profile-save` jobs, which run the CLI's own verb |
+| `backup-api.mjs` | Settings › Backup & restore: `POST /api/backups/list` (the backups in a folder on this machine) and the `backup` / `backup-restore` jobs, which run the CLI's own verb. Nothing is uploaded |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
 | `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv, and `installView`, the per-request install behind the one (host, path) allowlist |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |

@@ -415,11 +415,13 @@ const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
 /**
  * The actions the dispatcher answers INLINE, without consulting the table above: `restore` is
  * synchronous and returns a result rather than a job id, and `install`/`deploy`/`rebuild` and the
- * two profile jobs (`profile-apply`, `profile-save`, js/web/profiles-api.mjs) resolve their argv
- * from the request body first. Declared so the surface check
+ * two profile jobs (`profile-apply`, `profile-save`, js/web/profiles-api.mjs) and the two backup
+ * jobs (`backup`, `backup-restore`, js/web/backup-api.mjs) resolve their argv from the request
+ * body first. Declared so the surface check
  * covers every action the dispatcher answers, not only the table's keys.
  */
-export const INLINE_ACTIONS = ['restore', 'install', 'deploy', 'rebuild', 'profile-apply', 'profile-save'];
+export const INLINE_ACTIONS = ['restore', 'install', 'deploy', 'rebuild', 'profile-apply', 'profile-save', 'backup',
+  'backup-restore'];
 
 /**
  * ⚠ `doctrines` DEFAULTS TO THE FULL SET, and it is the one axis here whose default is not the
