@@ -130,6 +130,15 @@ export function loadProfile(file) {
   return p;
 }
 
+/**
+ * The exported name of a source name. One that already carries the prefix keeps it once:
+ * `geneseed-code-review` under `geneseed-` is not `geneseed-geneseed-code-review`, and a name
+ * that IS the prefix stays as it is. The exporter does this so the source name, which avoids a
+ * host built-in called `code-review`, does not have to change.
+ */
+const exportName = (prefix, stem) => (
+  prefix.endsWith('-') && `${stem}-`.startsWith(prefix) ? stem : `${prefix}${stem}`);
+
 /** One YAML scalar. Double-quoted JSON is valid YAML, and the only safe spelling of `@handle`. */
 const yamlStr = (s) => JSON.stringify(String(s));
 
@@ -231,7 +240,7 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     if (!m) continue;
     known.add(m[2]);
     if (wanted(m[2])) {
-      specs.push({ kind: m[1] === 'skills' ? 'skill' : 'persona', stem: m[2], it, name: `${profile.prefix}${m[2]}` });
+      specs.push({ kind: m[1] === 'skills' ? 'skill' : 'persona', stem: m[2], it, name: exportName(profile.prefix, m[2]) });
     }
   }
   const skipped = [];
@@ -247,8 +256,12 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     if (!NAME_RE.test(s.name) || s.name.length > 64) problems.push(`${s.name}: not a kebab-case name of at most 64 characters`);
     names.set(s.stem, s.name);
   }
-  const lawsName = `${profile.prefix}${profile.lawsName}`;
+  const lawsName = exportName(profile.prefix, profile.lawsName);
   if (profile.laws && (!NAME_RE.test(lawsName) || lawsName.length > 64)) problems.push(`${lawsName}: not a kebab-case name of at most 64 characters`);
+  const all = [...names.values(), ...(profile.laws ? [lawsName] : [])];
+  for (const n of new Set(all.filter((x, i) => all.indexOf(x) !== i))) {
+    problems.push(`${n}: the name of more than one exported entity`);
+  }
   if (problems.length) throw new ExportError(`these names cannot be exported:\n  ${problems.join('\n  ')}`);
 
   const files = [];

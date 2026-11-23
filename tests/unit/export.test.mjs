@@ -143,6 +143,33 @@ test('a skill keeps its side files under references/ and drops its footer; an ag
   assert.match(text('skills/acme-commit/SKILL.md', kept), /## Self-improvement/);
 });
 
+// A source name that already carries the prefix keeps it once: `geneseed-code-review` is named so
+// on purpose (a bare `code-review` loses to a host built-in), and `geneseed` IS the prefix. Only a
+// prefix ending in `-` can be doubled this way; the two spellings of one name are refused.
+test('a name that already carries the prefix is not prefixed twice', () => {
+  const p = planExport({ profile: withProfile({ prefix: 'geneseed-' }) });
+  const names = p.entities.map((e) => e.name);
+  for (const n of ['geneseed-code-review', 'geneseed', 'geneseed-commit', 'geneseed-laws']) {
+    assert.ok(names.includes(n), `${n} is not exported`);
+  }
+  assert.deepEqual(names.filter((n) => n.startsWith('geneseed-geneseed')), []);
+  const ship = text('skills/geneseed-ship/SKILL.md', p);
+  assert.match(ship, /`geneseed-code-review`/);
+  assert.match(text('skills/geneseed-ship/metadata.yaml', p), /^ {2}- geneseed-code-review$/m);
+  // Another library's prefix is still put in front of the whole source name.
+  assert.ok(plan.entities.some((e) => e.name === 'acme-geneseed-code-review'));
+  assert.ok(plan.entities.some((e) => e.name === 'acme-geneseed'));
+});
+
+test('two sources that would share an exported name are refused, and one name only starting alike is not', () => {
+  // With prefix `geneseed-`, a laws entity called `code-review` takes the review skill's name.
+  assert.throws(() => planExport({ profile: withProfile({ prefix: 'geneseed-', lawsName: 'code-review' }) }),
+    /geneseed-code-review: .*more than one/);
+  // `com-` is not the start of a word in `commit`.
+  assert.ok(planExport({ profile: withProfile({ prefix: 'com-', only: ['commit'], laws: false }) })
+    .entities.some((e) => e.name === 'com-commit'));
+});
+
 test('only, exclude and laws narrow the export, and a dropped reference is reported', () => {
   const p = planExport({ profile: withProfile({ only: ['reviewer', 'commit'], laws: false }) });
   assert.deepEqual(p.entities.map((e) => e.name), ['acme-commit', 'acme-reviewer']);
