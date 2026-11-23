@@ -127,6 +127,13 @@ test("guard: a denied call is renamed to the reason and emptied; an allowed one 
   await before(excl)
   assert.match(excl.tool, new RegExp(`${REFUSED}[\\s\\S]*controls the gates that watch the agent[\\s\\S]*\\(External Gate\\)`))
   assert.deepEqual(excl.input, {})
+  // Context Mode's MCP tools carry the command as `code` (ctx_execute) or a `commands` list (ctx_batch).
+  for (const call of [{ tool: "context-mode_ctx_execute", input: { language: "shell", code: "rm -rf /" } },
+    { tool: "context-mode_ctx_batch", input: { commands: ["git status", "rm -rf /"], queries: ["x"] } }]) {
+    await before(call)
+    assert.match(call.tool, new RegExp(`${REFUSED}Tell the user this, word for word: This command, "rm -rf /", would destroy`))
+    assert.deepEqual(call.input, {})
+  }
   for (const why of [secret.tool, rm.tool, memo.tool, excl.tool]) assert.doesNotMatch(why, /GENESEED_/, why)
   const ok = { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } }
   await before(ok)

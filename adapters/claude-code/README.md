@@ -23,8 +23,12 @@ runs the shim with this install's `--root` counts as Geneseed's.
 
 The wiring:
 
-- on **PreToolUse** (matcher `Bash|PowerShell|Monitor`, the three tools that run a shell
-  command), runs `geneseed-hook git-gate` — the tool-boundary
+- on **PreToolUse** (matcher `Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*`: the
+  three built-in tools that run a shell command, and the shell tools of
+  [Context Mode](https://github.com/mksglu/context-mode), whose `ctx_execute` carries a command as
+  `code` beside a shell `language` and whose `ctx_batch` carries a `commands` list, each judged as
+  a command of its own; code in another language is a program and is not read), runs
+  `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking (excluding process 1 or ops 2,
@@ -42,10 +46,9 @@ The wiring:
   next time regardless. Every other Bash command (and any unreadable payload) is
   deferred to the normal permission flow — the hook never blocks unrelated work.
 
-  **Caveat — the GitHub MCP vector.** The hook matches the `Bash`, `PowerShell` and `Monitor`
-  tools only. If your session has the GitHub MCP server, an agent can commit/push via
+  **Caveat — the GitHub MCP vector.** The hook matches the shell tools above only. If your session has the GitHub MCP server, an agent can commit/push via
   `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass all three. To
-  gate those too, widen the matcher to `"Bash|PowerShell|Monitor|mcp__github__.*"` —
+  gate those too, widen the matcher to `"Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*|mcp__github__.*"` —
   `git-gate` ignores any payload it doesn't recognise as a commit/push, so
   over-matching the tool surface is harmless. A re-emit puts the matcher back as it
   wrote it, so widen it again after a rebuild.

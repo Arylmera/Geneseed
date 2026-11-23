@@ -858,6 +858,18 @@ test("the shell-write twin block is byte-identical to js/hosts/hooks.mjs", async
   assert.equal(cut(guardSrc), cut(hookSrc), "the guard's shell-write block drifted from js/hosts/hooks.mjs")
 })
 
+// Which Context Mode `language` is a shell, and which one: one block, carried by both gates.
+test("the shell-language twin block is byte-identical to js/hosts/hooks.mjs", async () => {
+  const cut = (s, file) => {
+    const b = s.indexOf("// ---- shell-language twin: BEGIN"), e = s.indexOf("// ---- shell-language twin: END")
+    assert.ok(b >= 0 && e > b, `twin markers missing in ${file}`)
+    return s.slice(b, e)
+  }
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  assert.equal(cut(guardSrc, "the guard"), cut(hookSrc, "hooks.mjs"), "the guard's shell-language block drifted from js/hosts/hooks.mjs")
+})
+
 test("a shell write to a protected check is refused; a read of it passes", async () => {
   const repo = path.join(tmp, "shellw")
   await fs.mkdir(path.join(repo, ".git"), { recursive: true })
@@ -870,6 +882,33 @@ test("a shell write to a protected check is refused; a read of it passes", async
   }
   for (const c of ["cat ci/verify.sh > /tmp/y", "cat ci/verify.sh", "npm test 2>&1", "echo 'x > ci/verify.sh'", "node x > /dev/null"]) {
     assert.equal(await run(c), null, c)
+  }
+})
+
+// Context Mode's `ctx_execute` is read in the dialect its `language` names, not its tool name's: a
+// `\`-newline joins a `shell` line, a backtick-newline a `powershell` one. Each row is missed when the
+// dialect comes from the tool name alone, the first on Windows and the second elsewhere, because a
+// call with no dialect is read as PowerShell on Windows and as POSIX on other hosts (`shellReading`).
+test("ctx_execute code is read in the dialect its language names", async () => {
+  const repo = path.join(tmp, "ctxdialect")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "ci/verify.sh\n")
+  const exec = (await GeneseedGuard({ directory: repo }))["tool.execute.before"]
+  const run = async (language, code) => {
+    try { await exec({ tool: "context-mode_ctx_execute", args: { language, code } }, {}); return null }
+    catch (err) { return String(err?.message ?? err) }
+  }
+  for (const [language, code] of [["shell", "echo x > ci/ver\\\nify.sh"], ["powershell", "echo x > ci/ver`\nify.sh"]]) {
+    assert.match(await run(language, code) ?? "", /This command writes to [\s\S]*\(External Gate\)/, `${language}: ${JSON.stringify(code)}`)
+  }
+  assert.equal(await run("shell", "cat ci/verify.sh"), null)
+  // `ctx_batch` runs every command in that same shell (`src/core/sandbox/runtimes.ts`: Git Bash on
+  // Windows, `sh` elsewhere), so its entries are read as `shell` code is.
+  for (const commands of [["echo x > ci/ver\\\nify.sh"], [{ label: "w", command: "echo x > ci/ver\\\nify.sh" }]]) {
+    let why = null
+    try { await exec({ tool: "context-mode_ctx_batch", args: { commands, queries: ["x"] } }, {}) } catch (err) { why = String(err?.message ?? err) }
+    assert.match(why ?? "", /This command writes to [\s\S]*\(External Gate\)/, JSON.stringify(commands))
   }
 })
 
@@ -1009,6 +1048,23 @@ const NESTED_ROWS = [
     { tool_calls: [{ tool: "write", parameters: { filePath: "src/a.js", content: "x" } }, { tool: "bash", parameters: { command: "echo hi" } }] }, null],
   ["batch: a refused call eight batches down is still read", "batch", nest(7, { tool: "bash", parameters: { command: "rm -rf /" } }), "law-4"],
   ["batch: a call nine batches down cannot be read", "batch", nest(8, { tool: "read", parameters: { filePath: "src/a.js" } }), "process-1"],
+  // Context Mode (mksglu/context-mode, shapes read from v2.2.2 `src/core/tools/{execute,batch}.ts`),
+  // under the names OpenCode gives an MCP tool (`<server>_<tool>`). `ctx_execute` carries a shell
+  // command as `code` beside a shell-family `language`; `ctx_batch` carries `commands: string[]`,
+  // and older releases' `ctx_batch_execute` carries `commands: [{ label, command }]`.
+  ["ctx_execute: rm -rf / as shell code", "context-mode_ctx_execute", { language: "shell", code: "rm -rf /" }, "law-4"],
+  ["ctx_execute: a shell-family runtime name", "context-mode_ctx_execute", { language: "Bash", code: "rm -rf ~" }, "law-4"],
+  ["ctx_execute: PowerShell code", "context-mode_ctx_execute", { language: "powershell", code: "Remove-Item -Recurse -Force C:\\" }, "law-4"],
+  ["ctx_execute: a continued shell line is read as one", "context-mode_ctx_execute", { language: "shell", code: "rm -rf \\\n /" }, "law-4"],
+  ["ctx_execute: an ordinary shell command", "context-mode_ctx_execute", { language: "shell", code: "git status" }, null],
+  // A KNOWN GAP, pinned so that closing it is a visible change: script code that spawns a shell
+  // itself (`os.system`, `child_process`) is not read. This row only shows that non-shell code is
+  // not read as a command.
+  ["ctx_execute: python code is not read as a shell command (known gap)", "context-mode_ctx_execute", { language: "python", code: "rm -rf /" }, null],
+  ["ctx_batch: one destructive command among several", "context-mode_ctx_batch", { commands: ["git log -5", "rm -rf /"], queries: ["x"] }, "law-4"],
+  ["ctx_batch_execute: a destructive { label, command } item", "context-mode_ctx_batch_execute",
+    { commands: [{ label: "log", command: "git log -5" }, { label: "wipe", command: "rm -rf /" }], queries: ["x"] }, "law-4"],
+  ["ctx_batch: ordinary commands", "context-mode_ctx_batch", { commands: ["git status", { label: "l", command: "ls" }], queries: ["x"] }, null],
 ]
 test("edits[] and nested calls run the gates a direct call runs", async () => {
   const harness = path.join(tmp, "nested")

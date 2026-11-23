@@ -862,6 +862,9 @@ export const GATE_DOWN = askDecision('Geneseed gate error: the gate did not star
   + 'It asks because a gate that did not run cannot say this call is safe.\n'
   + 'If you allow it, this call runs with no check at all.').trimEnd();
 
+/** The tools Claude's PreToolUse `git-gate` group matches: every tool that runs a shell command. */
+export const CLAUDE_SHELL_MATCHER = 'Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*';
+
 /**
  * `_build_settings._claude_hook_groups` — Geneseed's Claude hooks, keyed by event.
  *
@@ -1033,8 +1036,10 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // registered. `|Monitor` because Claude Code's Monitor tool runs a shell `command` in the
       // background, and unmatched it was a shell no gate saw. `tool_input.command` is the same
       // field on all three, so `GIT_GATE_RE` needs no change; a host without the tool never
-      // sends the name.
-      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
+      // sends the name. `mcp__.*__ctx_(execute|batch).*` is Context Mode's shell tools, under any
+      // server key, the plugin-scoped `mcp__plugin_<plugin>_<server>__` one included: they carry
+      // their commands as `code` or a `commands` list, which `shellCallsOf` (hooks.mjs) reads.
+      { matcher: CLAUDE_SHELL_MATCHER, hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
       {
         // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
         // matcher entry (Claude verdict R2).

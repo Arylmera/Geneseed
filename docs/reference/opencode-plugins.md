@@ -26,7 +26,7 @@ If a plugin seems silent on OpenCode 2, check that `~/.config/opencode/plugins/`
 ## The plugins
 
 - [geneseed-context](plugin-context.md): Puts your project docs, rules, profile, memory index and wiki in front of the agent.
-- [geneseed-guard](plugin-guard.md): Blocks credential files, catastrophic commands and protected wiki writes before they run.
+- [geneseed-guard](plugin-guard.md): Blocks credential files, catastrophic commands and protected wiki writes before they run, including shell commands sent through Context Mode's `ctx_execute` and `ctx_batch`.
 - [geneseed-learn](plugin-learn.md): Distils durable facts into the memory store once a session goes quiet.
 - [geneseed-workflow](plugin-workflow.md): Adds a workflow tool that runs saved orchestration scripts.
 - [geneseed-notify](plugin-notify.md): A desktop notification when a long turn finishes.

@@ -17,7 +17,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | Event | When | Command | What it does | Conditional? |
 | --- | --- | --- | --- | --- |
 | `SessionStart` | `startup`, `resume`, `clear`, `compact`, `fork` | `geneseed-hook context` | injects your harness files and the repo's docs, or re-injects them after a resume, a fork, or an auto-compaction summarised them away | no |
-| `PreToolUse` | `Bash`, `PowerShell`, `Monitor` | `geneseed-hook git-gate` | asks before a command that would really lose data, and before a recursive scan of a whole filesystem; asks before every commit and push | the commit/push question only |
+| `PreToolUse` | `Bash`, `PowerShell`, `Monitor`, and Context Mode's `ctx_execute` and `ctx_batch` (any MCP server key) | `geneseed-hook git-gate` | asks before a command that would really lose data, and before a recursive scan of a whole filesystem; asks before every commit and push | the commit/push question only |
 | `PreToolUse` | `Write`, `Edit`, `NotebookEdit` | `geneseed-hook rule-gate` | asks before a secret lands in a file, or a write to your standing rules; stops the session's first write once in an application repo with no `## Ownership` section | no |
 | `PreToolUse` | `Skill`, `Agent`, `Task` | `geneseed-hook tool-gate` | records the skill or subagent call in the usage count; judges nothing and never blocks | no |
 | `Stop` | the agent finishes a reply | `geneseed-hook learn` | copies the reply's `spec-feedback: [skill:<name>]` lines into `skill-notes/<name>.md` (no model), and runs the done check and the change report; calls no model | nothing: the distil no longer runs here (see `PreCompact` and `SessionEnd`) |

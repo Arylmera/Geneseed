@@ -875,7 +875,7 @@ test('the git gate matches every tool that runs a shell command: Bash, PowerShel
     const cfg = path.join(d, 'dotclaude');
     for (const host of ['claude', 'openclaude']) {
       const group = claudeHookGroups(cfg, hookRunnerEntry(), null, [], host).PreToolUse[0];
-      assert.equal(group.matcher, 'Bash|PowerShell|Monitor', host);
+      assert.equal(group.matcher, 'Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*', host);
     }
   });
 });
@@ -1005,7 +1005,7 @@ test('an install from before I1/I4 upgrades its matchers instead of double-wirin
     const data = readJson(settings);
     const gateGroups = data.hooks.PreToolUse.filter((g) => g.hooks[0].command.includes('git-gate'));
     assert.equal(gateGroups.length, 1, `expected 1 git-gate group, got ${gateGroups.length}`);
-    assert.equal(gateGroups[0].matcher, 'Bash|PowerShell|Monitor',
+    assert.equal(gateGroups[0].matcher, 'Bash|PowerShell|Monitor|mcp__.*__ctx_(execute|batch).*',
       `the stale Bash-only matcher survived the upgrade: ${JSON.stringify(gateGroups)}`);
 
     const startGroups = data.hooks.SessionStart;

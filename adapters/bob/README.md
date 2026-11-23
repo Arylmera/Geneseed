@@ -142,7 +142,9 @@ changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there),
 allow-list built from it would fail open on the next tool Bob adds, and a deny-list needs a
 regex dialect (lookahead) the docs never confirm — and the matcher's own upside is low,
 performance only, not worth either risk. `tool-gate` reads the payload's shape
-instead — a `command` field gets the git checks, a path gets the rule checks — and defers on
+instead — a `command` field gets the git checks, a path gets the rule checks, and a Context Mode
+shell call (`code` beside a shell `language`, or a `commands` list) gets the git checks, then the
+rule checks — and defers on
 anything it does not recognise. Bob has **no "ask the user" tier**, so the rules
 that admit no judgement call are refused outright, and the commit/push consent becomes a
 warning. Which rules those are is written in one place, the Bob column of the
