@@ -75,10 +75,42 @@ test('syncIssues creates, updates and closes by bracketed key, orphans and PRs i
   assert.ok(has('POST', '/repos/o/r/labels'));
 });
 
-test('real compare fails loud when the file list is truncated', async () => {
-  const files = Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}` }));
-  await assert.rejects(githubCompare(async () => ({ files }))('o/r', 'abc'), /truncated at 300 files/);
-  assert.equal((await githubCompare(async () => ({ files: files.slice(1) }))('o/r', 'abc')).length, 299);
+// The compare API caps its list at 300 files. At the cap the list may hide a cited change, so the
+// two trees are read whole and diffed by blob sha. Below it, the compare list is used as is and no
+// tree is read. The stub answers a URL it does not know with null, which is the API's 404.
+const FULL = Array.from({ length: 300 }, (_, i) => ({ filename: `noise/${i}` }));
+const blob = (p, sha) => ({ path: p, type: 'blob', mode: '100644', sha });
+const stub = (over = {}) => {
+  const asked = [];
+  const answers = {
+    '/repos/o/r/compare/abc...HEAD': { files: FULL },
+    '/repos/o/r/git/trees/abc?recursive=1': { truncated: false, tree: [{ path: 'dd', type: 'tree', sha: 't1' },
+      blob('dd/same.md', 's'), blob('dd/edited.md', 'e1'), blob('dd/removed.md', 'r'), { ...blob('dd/run.sh', 'm'), mode: '100644' }] },
+    '/repos/o/r/git/trees/HEAD?recursive=1': { truncated: false, tree: [{ path: 'dd', type: 'tree', sha: 't2' },
+      blob('dd/same.md', 's'), blob('dd/edited.md', 'e2'), blob('dd/added.md', 'a'), { ...blob('dd/run.sh', 'm'), mode: '100755' }] },
+    ...over,
+  };
+  return { asked, call: async (_m, url) => { asked.push(url); return answers[url] ?? null; } };
+};
+
+test('a compare list at the 300-file cap is replaced by a full tree diff', async () => {
+  const s = stub();
+  // Edited, removed, added and a mode change; never the unchanged file, nor the folder itself.
+  assert.deepEqual((await githubCompare(s.call)('o/r', 'abc')).sort(),
+    ['dd/added.md', 'dd/edited.md', 'dd/removed.md', 'dd/run.sh']);
+  // One below the cap: the list as the API gave it, and no tree call.
+  const below = stub({ '/repos/o/r/compare/abc...HEAD': { files: FULL.slice(1) } });
+  assert.equal((await githubCompare(below.call)('o/r', 'abc')).length, 299);
+  assert.deepEqual(below.asked, ['/repos/o/r/compare/abc...HEAD']);
+});
+
+test('a tree that is truncated or missing, or an unknown commit, still fails loud', async () => {
+  for (const ref of ['abc', 'HEAD']) {
+    const url = `/repos/o/r/git/trees/${ref}?recursive=1`;
+    await assert.rejects(githubCompare(stub({ [url]: { truncated: true, tree: [] } }).call)('o/r', 'abc'), /truncated/);
+    await assert.rejects(githubCompare(stub({ [url]: null }).call)('o/r', 'abc'), /not found/);
+  }
+  await assert.rejects(githubCompare(stub({ '/repos/o/r/compare/abc...HEAD': null }).call)('o/r', 'abc'), /commit abc not found/);
 });
 
 test('a vendored key is compared only inside its vendored folder and a root licence', async () => {
