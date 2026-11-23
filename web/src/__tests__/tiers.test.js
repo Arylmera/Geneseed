@@ -42,6 +42,7 @@ describe('view-level table', () => {
       'section:library/skills': E,
       'section:library/agents': E,
       'section:settings/machine': E,
+      'section:settings/backup': E,
       'section:settings/server': E,
       'section:settings/about': E,
       'field:install/footprint': E,

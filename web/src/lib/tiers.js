@@ -37,6 +37,7 @@ export const TIER = Object.fromEntries([
     'section:library/skills',
     'section:library/agents',
     'section:settings/machine',
+    'section:settings/backup',
     'section:settings/server',
     'section:settings/about',
     'field:install/footprint',

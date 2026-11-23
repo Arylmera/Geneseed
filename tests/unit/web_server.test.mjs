@@ -65,10 +65,11 @@ const GET_SURFACE = ['/api/activity', '/api/agent-models', '/api/activity/', '/a
   '/api/ping', '/api/profile', '/api/profiles', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 18 (`/api/agent-models` writes one install's model tiers and pins). `/api/mcp` left it when MCP became read-only, and
+/** Every POST path the daemon answers — 19 (`/api/agent-models` writes one install's model tiers and pins). `/api/mcp` left it when MCP became read-only, and
  * `/api/view` when the console's install selector was retired (each page names its install).
- * `/api/autostart` joined it when Settings began to write the login launcher (2026-11-08). */
-const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/agent-models', '/api/autostart', '/api/default-install', '/api/excludes',
+ * `/api/autostart` joined it when Settings began to write the login launcher (2026-11-08), and
+ * `/api/backups/list` with the Backup & restore card (2026-11-23). */
+const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/agent-models', '/api/autostart', '/api/backups/list', '/api/default-install', '/api/excludes',
   '/api/install',
   '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/decide', '/api/rules/promote',
@@ -82,7 +83,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/agent-models', '/a
  * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
  * raise — so the column has to be checked as a column, below.
  */
-const EXPECT_409 = ['/api/agent-models', '/api/autostart', '/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
+const EXPECT_409 = ['/api/agent-models', '/api/autostart', '/api/backups/list', '/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
   '/api/rules/decide', '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */

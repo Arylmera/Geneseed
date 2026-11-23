@@ -106,16 +106,16 @@ describe('Settings', () => {
 
   // The sheet's index lists the five sections in page order, and each entry is a button that
   // scrolls: a bare href="#server" would be read by the hash router as a page.
-  it('indexes its four sections with buttons, not hash links', () => {
+  it('indexes its five sections with buttons, not hash links', () => {
     render(<Settings onAction={() => {}} />)
     const nav = screen.getByRole('navigation', { name: 'On this page' })
     expect(
       within(nav)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Machine', 'Server', 'About', 'Danger zone'])
+    ).toEqual(['Machine', 'Backup & restore', 'Server', 'About', 'Danger zone'])
     expect(within(nav).queryAllByRole('link')).toEqual([])
-    for (const name of ['Machine', 'Server', 'About', 'Danger zone'])
+    for (const name of ['Machine', 'Backup & restore', 'Server', 'About', 'Danger zone'])
       expect(section(name)).toBeTruthy()
     const scrolled = vi.fn()
     section('Server').scrollIntoView = scrolled
@@ -348,5 +348,111 @@ describe('Settings', () => {
     rerender(<Settings onAction={() => {}} overview={{ daemon_stale: true }} />)
     expect(dot().className).toBe('sheet-dot warn')
     expect(section('Server').classList.contains('sheet-live')).toBe(true)
+  })
+})
+
+// Backup & restore: a backup is a file in a folder on this machine (nothing is uploaded), so the
+// card names the folder, lists the backups in it, and starts the CLI's own jobs. Preview is the
+// restore's dry run and needs no confirm; Restore names the file and asks first.
+describe('Backup & restore', () => {
+  const FILE = {
+    name: 'geneseed-backup-pc-20261120-1800.zip',
+    path: '/d/geneseed-backup-pc-20261120-1800.zip',
+    size: 2048,
+    mtime: 1,
+  }
+  const ui = (confirm, onAction, dataRev) => (
+    <ConfirmContext.Provider value={confirm}>
+      <Settings onAction={onAction} dataRev={dataRev} />
+    </ConfirmContext.Provider>
+  )
+  const setup = async (confirm = vi.fn(async () => true)) => {
+    api.backupsList = vi.fn(async (folder) => ({
+      ok: true,
+      folder: folder || '/d',
+      projects: ['/git'],
+      files: [FILE],
+    }))
+    const onAction = vi.fn(async () => 'j1')
+    render(ui(confirm, onAction))
+    await screen.findByText(FILE.name)
+    return { confirm, onAction, sec: within(section('Backup & restore')) }
+  }
+  afterEach(() => {
+    delete api.backupsList
+    delete api.pickFolder
+  })
+
+  it('lists the folder and starts a backup into it', async () => {
+    const { onAction, sec } = await setup()
+    expect(api.backupsList).toHaveBeenCalledWith('')
+    expect(sec.getByText('/d')).toBeTruthy()
+    await act(async () => fireEvent.click(sec.getByText('Create backup')))
+    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/d', projects: ['/git'] })
+  })
+
+  it('previews without asking, restores only after a confirm that names the file', async () => {
+    const { confirm, onAction, sec } = await setup()
+    await act(async () => fireEvent.click(sec.getByText('Preview')))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(onAction).toHaveBeenCalledWith('backup-restore', { file: FILE.path, dryRun: true })
+    await act(async () => fireEvent.click(sec.getByText('Restore')))
+    expect(confirm.mock.calls[0][0]).toContain(FILE.name)
+    expect(onAction).toHaveBeenLastCalledWith('backup-restore', { file: FILE.path })
+  })
+
+  it('a declined restore sends nothing', async () => {
+    const { onAction, sec } = await setup(vi.fn(async () => false))
+    await act(async () => fireEvent.click(sec.getByText('Restore')))
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  it('a chosen folder is listed instead', async () => {
+    api.pickFolder = vi.fn(async () => ({ path: '/usb' }))
+    const { sec } = await setup()
+    await act(async () => fireEvent.click(sec.getByText('Choose…')))
+    expect(api.backupsList).toHaveBeenLastCalledWith('/usb')
+    expect(await sec.findByText('/usb')).toBeTruthy()
+  })
+
+  it('project folders are added, removed and sent with the backup', async () => {
+    api.pickFolder = vi.fn(async () => ({ path: '/work' }))
+    const { onAction, sec } = await setup()
+    await act(async () => fireEvent.click(sec.getByText('Add folder…')))
+    await act(async () => fireEvent.click(sec.getByLabelText('Remove /git')))
+    await act(async () => fireEvent.click(sec.getByText('Create backup')))
+    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/d', projects: ['/work'] })
+  })
+
+  // A finished job is what adds a backup: the list is read again, in the folder the card shows.
+  it('reads the folder again when a job finishes, and keeps the project choice', async () => {
+    api.pickFolder = vi.fn(async () => ({ path: '/usb' }))
+    api.backupsList = vi.fn(async (folder) => ({
+      ok: true,
+      folder: folder || '/d',
+      projects: ['/git'],
+      files: api.backupsList.mock.calls.length > 2 ? [FILE] : [],
+    }))
+    const onAction = vi.fn(async () => 'j1')
+    const { rerender } = render(ui(vi.fn(), onAction, 0))
+    const sec = within(section('Backup & restore'))
+    const remove = await sec.findByLabelText('Remove /git')
+    await act(async () => fireEvent.click(remove))
+    await act(async () => fireEvent.click(sec.getByText('Choose…')))
+    expect(sec.queryByText(FILE.name)).toBeNull()
+    rerender(ui(vi.fn(), onAction, 1))
+    expect(await sec.findByText(FILE.name)).toBeTruthy()
+    expect(api.backupsList.mock.calls.map((c) => c[0])).toEqual(['', '/usb', '/usb'])
+    await act(async () => fireEvent.click(sec.getByText('Create backup')))
+    expect(onAction).toHaveBeenCalledWith('backup', { folder: '/usb', projects: [] })
+  })
+
+  it('a refused folder shows the server text', async () => {
+    api.backupsList = vi.fn(async () => ({
+      ok: false,
+      error: '/x is not a folder on this machine',
+    }))
+    render(ui(vi.fn(), vi.fn()))
+    expect(await screen.findByText('/x is not a folder on this machine')).toBeTruthy()
   })
 })

@@ -192,6 +192,8 @@ const setDefaultInstall = (host, path) => post('/api/default-install', { host, p
 // path: { path } | { cancelled: true } | { error }. The browser can't reveal a disk path
 // itself, so the local daemon pops a real Finder/dialog on the user's own screen.
 const pickFolder = () => post('/api/pick-folder', {})
+// The backups (`geneseed-backup-*.zip`) in a folder on this machine; '' is Downloads.
+const backupsList = (folder) => post('/api/backups/list', folder ? { folder } : {})
 
 // ── Server ──────────────────────────────────────────────────────────────────
 // Local server lifecycle: a liveness ping and a graceful self-stop, so the
@@ -286,6 +288,7 @@ export const api = {
   installRemove,
   setDefaultInstall,
   pickFolder,
+  backupsList,
   ping,
   shutdown,
   restart,

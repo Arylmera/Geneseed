@@ -284,7 +284,7 @@ export default function App() {
         dataRev={dataRev}
       />
     ),
-    settings: () => <Settings overview={overview} onAction={runAction} />,
+    settings: () => <Settings overview={overview} onAction={runAction} dataRev={dataRev} />,
     activity: () =>
       route.item ? <ActivityDetail key={route.item} sid={route.item} /> : <Activity />,
     docs: () => <Docs page={route.item} onAction={runAction} overview={overview} />,

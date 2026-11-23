@@ -177,6 +177,7 @@ into files users have committed, so change the test that states it in the same c
 | `paths.mjs` | Case folding, ordering, containment, spelling, PATH lookup — the platform-shaped rules |
 | `text.mjs` | String primitives: `codePointLength`, `WHITESPACE`, `parseIntStrict`, `percentDecode` |
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
+| `zip.mjs` | The pure zip writer and reader behind `backup`/`restore`: store or deflate, UTF-8 names, no zip64, no encryption. The reader trusts only the central directory and refuses an entry name unsafe to join onto a directory |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
 | `managed-block.mjs` | Where the `<!-- BEGIN/END GENESEED -->` block is in a co-owned file: whole-line markers, the first END with the last BEGIN above it. One definition for the writer (`settings.mjs`) and the hook-side readers; no imports, so the hook path may load it. The OpenCode plugins carry `BLOCK_RE_SOURCE` by value |
@@ -249,6 +250,7 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |
+| `backup.mjs` | `geneseed backup`/`restore` — one plain `.zip` of the personal tier, the user's own (or edited) skills, agents and filled-in host files of every host, and each global install as a profile; restore merges by the fold's rules and replays the installs. What travels is read from its owners (`TIER_IN`), never typed |
 
 **Before editing:** `update.mjs` is the one module that MUST spawn rather than import — the code on
 disk is replaced mid-run, so an in-process call would validate the *old* source and then render it.
@@ -289,6 +291,7 @@ the deployed harness as JSON.
 | `model-catalog.mjs` | The models one install can run, per host: Claude aliases, OpenCode custom providers then the models.dev cache then loopback Ollama/LM Studio probes, OpenClaude's profile, same-endpoint OpenCode providers and routes. Files and loopback only; never a key value (a test pins it) |
 | `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, a fleet-wide `names` list (per-name 30-day counts, installs, daily series, last day seen), and skips lines older than 90 days in each `notebook/usage.jsonl` |
 | `profiles-api.mjs` | The Profiles tab: `GET /api/profiles` (both sources, the installs that follow each, an apply preview) and the `profile-apply` / `profile-save` jobs, which run the CLI's own verb |
+| `backup-api.mjs` | Settings › Backup & restore: `POST /api/backups/list` (the backups in a folder on this machine) and the `backup` / `backup-restore` jobs, which run the CLI's own verb. Nothing is uploaded |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
 | `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv, and `installView`, the per-request install behind the one (host, path) allowlist |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |

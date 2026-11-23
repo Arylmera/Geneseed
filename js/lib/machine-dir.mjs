@@ -62,6 +62,9 @@ export function sharedPaths() {
     wiki: path.join(root, 'geneseed-wiki.jsonc'),
     excludes: path.join(root, 'excludes.json'),
     notes: path.join(root, 'notes'),
+    // The tier's own notebook (ledgers, reports a machine-wide Rite keeps). Named here so the
+    // backup's allowlist has one home for it.
+    notebook: path.join(root, 'notebook'),
     draft: path.join(root, 'user-rules.draft.md'),
     foldState: path.join(root, '.fold-state.json'),
     defaultInstall: path.join(root, 'default-install.json'),

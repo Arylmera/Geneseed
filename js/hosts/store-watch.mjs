@@ -44,7 +44,7 @@ import { gitRootOf } from './gitref.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { sovereignBypass } from './hosts.mjs';
 
-const STATE_DIR = path.join('notebook', 'store-baseline');
+export const STATE_DIR = path.join('notebook', 'store-baseline');
 const OWN_LOG = '.own-writes.json';
 const OWN_LOG_CAP = 2000;
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;

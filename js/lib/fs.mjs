@@ -74,6 +74,21 @@ export function writeText(path, text) {
 }
 
 /**
+ * Raw bytes, untranslated — the other side of `writeText`'s newline rule. `geneseed backup`
+ * writes its archive with it, and `restore` puts back the user's files exactly as they were
+ * read: a text write would turn an LF file into CRLF on Windows, and a CRLF file into CR CR LF.
+ * `exclusive` opens with `wx`, so an existing file throws EEXIST and is left untouched: the
+ * restore's "never overwrite" is the filesystem's own check, not a stat before the write.
+ * @param {string} path
+ * @param {Buffer} data
+ * @param {{ exclusive?: boolean }} [opts]
+ */
+export function writeBytes(path, data, { exclusive = false } = {}) {
+  writeFileSync(path, data, { flag: exclusive ? 'wx' : 'w' });
+  if (textWrites.map) textWrites.map.delete(resolve(path));
+}
+
+/**
  * `writeText` through a temp file and a rename, for a file two processes may rewrite at once (the
  * memory index, which two hosts can rebuild together). A reader sees the old file or the new one,
  * never half of one. A crash leaves a `.tmp` beside it, which no `*.md` glob lists and the next

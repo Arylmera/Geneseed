@@ -200,7 +200,7 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // tests/unit/profile_apply.test.mjs (apply), the second with real builds in a sandboxed child.
 // `learn-worker` is native too: the detached distil `learn` starts on PreCompact/SessionEnd (ADR 0002's second
 // spawn), born with the learn model setting; its absolute gates are tests/unit/learn_worker.test.mjs.
-const NATIVE = ['activity', 'catalog', 'export', 'factory', 'learn-worker', 'loop', 'mcp', 'memory', 'profile', 'scorecard', 'tool-gate'];
+const NATIVE = ['activity', 'backup', 'catalog', 'export', 'factory', 'learn-worker', 'loop', 'mcp', 'memory', 'profile', 'restore', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

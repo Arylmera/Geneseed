@@ -35,6 +35,9 @@ export const EXCLUDES_FILE = 'excludes.json';
 
 /** The gate ledger inside an install: the hooks append to it, `status` counts it. */
 export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
+
+/** The done gate's per-session state, under an install. Here, spawn-free, so the backup can name it. */
+export const DONE_GATE_DIR = path.join('notebook', 'done-gate');
 /**
  * The ledger verb of the done gate's ADVISORY (inferred checks, `hooks-done.mjs`): recorded so
  * it can be found, but it asked nothing of anyone, so the ask counts (`status`, `/api/gates`)

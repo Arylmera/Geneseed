@@ -26,6 +26,7 @@ import {
 import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem, apiLoadout } from './catalog.mjs';
 import { apiUsage } from './usage-api.mjs';
 import { apiProfiles } from './profiles-api.mjs';
+import { apiBackupsList } from './backup-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
 import { apiAgentModels, apiAgentModelsFull, apiAgentModelsSave } from './agent-models-api.mjs';
@@ -67,6 +68,9 @@ export const POST_ROUTES = new Map([
   ['/api/autostart', [apiAutostart, true]],
   // The `tiers` map and the per-agent model pins of one install's agent-overrides.json (any host but Bob).
   ['/api/agent-models', [apiAgentModelsSave, true]],
+  // Settings › Backup & restore: the backups in a folder. A POST, because the folder is a body
+  // value a GET table entry `(state)` cannot receive; it writes nothing.
+  ['/api/backups/list', [apiBackupsList, true]],
 ]);
 
 /**

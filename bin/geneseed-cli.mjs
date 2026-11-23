@@ -146,6 +146,12 @@ const VERBS = {
   // Native too: a render for a library that is not an install. Its absolute gate is
   // tests/unit/export.test.mjs.
   export: () => import('../js/build/export.mjs').then((m) => m.cmdExport),
+  // Native: the personal state in one .zip for another machine. Its absolute gate is
+  // tests/unit/backup_cli.test.mjs.
+  backup: () => import('../js/maintain/backup.mjs').then((m) => m.cmdBackup),
+  // Its other half: the archive put back on another machine. Absolute gates:
+  // tests/unit/restore_tier.test.mjs and tests/unit/restore_cli.test.mjs.
+  restore: () => import('../js/maintain/backup.mjs').then((m) => m.cmdRestore),
   // A fifth native verb, and a port rather than an invention: the AI Harness Scorecard
   // (upstream Python, pinned in the module's docblock). There is no recorded cell — its absolute gate is
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.

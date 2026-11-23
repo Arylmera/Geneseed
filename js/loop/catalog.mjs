@@ -23,6 +23,13 @@ import { SRC, stripAuthorNotes } from '../build/source.mjs';
 import { checkGraph } from './graph.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
 
+/**
+ * The directories a level holds its bricks, loop templates and factories in. Exported so the
+ * backup carries exactly the user's own (`js/maintain/backup.mjs`), never a typed copy.
+ */
+export const USER_LOOP_DIRS = ['bricks', 'loops', 'factories'];
+const [BRICKS, LOOPS, FACTORIES] = USER_LOOP_DIRS;
+
 export function userLoopsDir() {
   return machineDir();
 }
@@ -105,7 +112,7 @@ export function loadCatalog({
   // and a broken factory file must not fail a loop.
   const factories = new Map(); const factoryProblems = []; const factoryOverridden = [];
   for (const [origin, dir] of levels) {
-    const brickDir = path.join(dir, 'bricks'); const loopDir = path.join(dir, 'loops');
+    const brickDir = path.join(dir, BRICKS); const loopDir = path.join(dir, LOOPS);
     for (const f of listFiles(brickDir, '.md')) {
       const { brick, problems: p } = parseBrick(readText(path.join(brickDir, f)), origin);
       problems.push(...p.map((x) => `bricks/${f} (${origin}): ${x}`));
@@ -128,7 +135,7 @@ export function loadCatalog({
     }
     // M8: a file that does not load still claims its name at its level: the factory of that name
     // from a lower level is dropped, never run in its place, so `factory init` names the problem.
-    const factoryDir = path.join(dir, 'factories');
+    const factoryDir = path.join(dir, FACTORIES);
     for (const f of listFiles(factoryDir, '.json')) {
       const stem = f.slice(0, -'.json'.length);
       const broken = (why) => { factoryProblems.push(`factories/${f} (${origin}): ${why}`); factories.delete(stem); };

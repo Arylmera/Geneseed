@@ -70,12 +70,13 @@ test('the table is the document the entry reads, and the page is derived from it
   // third-party AI Harness Scorecard rather than of any subparser; and `activity`, the hook verb
   // the web console's Activity view runs on UserPromptSubmit and SessionEnd, born long after the
   // reference; `factory`, the loop engine one level up; and `export`, the render for a shared
-  // library that is not an install. The split is owned by `NATIVE`
+  // library that is not an install; and `backup` and `restore`, the personal state carried in one
+  // .zip to another machine. The split is owned by `NATIVE`
   // in tests/unit/hook_cli.test.mjs, which names the native population and fails a verb that
   // has neither a recorded cell nor a place there; this line is the count that says the table
   // did not quietly grow past it.
-  assert.equal(onDisk.commands.length, 36,
-    'the table is no longer the 36-row document — 25 recorded names plus eleven Node-native '
+  assert.equal(onDisk.commands.length, 38,
+    'the table is no longer the 38-row document — 25 recorded names plus thirteen Node-native '
     + 'verbs. A new row needs a place in NATIVE (tests/unit/hook_cli.test.mjs) before it needs '
     + 'a number here');
   assert.equal(cliReference().commands.length, onDisk.commands.length,

@@ -105,6 +105,8 @@ const INLINE_PROBES = {
   rebuild: 'tests/unit/web_rebuild.test.mjs',
   'profile-apply': 'tests/unit/web_profiles.test.mjs',
   'profile-save': 'tests/unit/web_profiles.test.mjs',
+  backup: 'tests/unit/web_backup.test.mjs',
+  'backup-restore': 'tests/unit/web_backup.test.mjs',
 };
 
 test('the action table is the seven rows this phase measured', () => {

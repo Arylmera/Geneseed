@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { api } from '../../api/index.js'
 import { RestartServer, StopServer } from './ServerControl.jsx'
+import BackupRestore from './BackupRestore.jsx'
+import { Row, Section } from './sheet.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { installName } from '../../lib/hosts.js'
 import LevelSeg from '../../components/LevelSeg.jsx'
@@ -20,6 +22,7 @@ const CREATOR_URL = 'https://github.com/Arylmera'
 // The sheet's sections, in page order: the index is built from this, so the two never differ.
 export const SECTIONS = [
   ['machine', 'Machine'],
+  ['backup', 'Backup & restore'],
   ['server', 'Server'],
   ['about', 'About'],
   ['danger', 'Danger zone'],
@@ -28,36 +31,6 @@ export const SECTIONS = [
 // What stops another page from driving the console, each enforced in js/web/handler.mjs
 // (requestGuard and the response headers). Stated, not probed: a GET cannot see its own guard.
 const GUARDS = ['Host check', 'token on writes', 'framing refused', 'cross-site GET refused']
-
-// One row of the sheet: what it is, with one line of help, its value, and its control.
-function Row({ k, kid, help, children, control }) {
-  return (
-    <div className="sheet-row">
-      <span className="sheet-k">
-        {kid ? <span id={kid}>{k}</span> : k}
-        {help ? <span className="sheet-h sub">{help}</span> : null}
-      </span>
-      <div className="sheet-v">{children}</div>
-      <div className="sheet-c">{control}</div>
-    </div>
-  )
-}
-
-function Section({ id, title, head, className = '', children }) {
-  return (
-    <section
-      id={`set-${id}`}
-      className={`card pad-md sheet-sec ${className}`}
-      aria-labelledby={`${id}-h`}
-    >
-      <div className="card-head">
-        <h3 id={`${id}-h`}>{title}</h3>
-        {head}
-      </div>
-      {children}
-    </section>
-  )
-}
 
 // The index scrolls instead of linking: a bare href="#server" would be read by the hash router
 // as a page and leave Settings.
@@ -260,7 +233,7 @@ function StartAtLogin({ initial }) {
 // about the tool, never one install: Machine acts on this copy, Server describes the process
 // answering the page, Danger zone holds what takes something away. Skin and accent have their one
 // home in the topbar's Appearance popover; each install's detail and building live on Hosts.
-export default function Settings({ overview, onAction }) {
+export default function Settings({ overview, onAction, dataRev }) {
   const confirm = useConfirm()
   const { canSee } = useViewLevel()
   // The sheet's sections on offer at this level: the index and the body both read it.
@@ -356,6 +329,8 @@ export default function Settings({ overview, onAction }) {
               }
             />
           </Section>
+
+          <BackupRestore onAction={onAction} dataRev={dataRev} />
 
           <Section
             id="server"

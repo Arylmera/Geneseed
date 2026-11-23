@@ -80,7 +80,7 @@ On **Installs**, *Preview next rebuild* shows what each global install would fol
 
 ### Uninstall
 
-`geneseed uninstall` never touches the tier, even for the last host and whatever `--archive-memory` says. It prints where the tier lives. Delete the folder yourself if you want it gone.
+`geneseed uninstall` never touches the tier, even for the last host and whatever `--archive-memory` says. It prints where the tier lives. Delete the folder yourself if you want it gone. To carry the tier to another machine, use `geneseed backup` and `geneseed restore` ([Move to a new machine](../guides/new-machine.md)).
 
 ### Related
 
