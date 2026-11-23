@@ -250,6 +250,7 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |
+| `backup.mjs` | `geneseed backup`/`restore` — one plain `.zip` of the personal tier, the user's own (or edited) skills and agents, and each global install as a profile; restore merges by the fold's rules and replays the installs. What travels is read from its owners (`TIER_IN`), never typed |
 
 **Before editing:** `update.mjs` is the one module that MUST spawn rather than import — the code on
 disk is replaced mid-run, so an in-process call would validate the *old* source and then render it.
