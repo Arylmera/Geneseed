@@ -74,14 +74,14 @@ export default function BackupRestore({ onAction }) {
         k="Folder"
         help="Where backups are written and listed"
         control={
-          <>
+          <div className="row wrap gap-10">
             <button className="btn ghost" disabled={busy} onClick={choose}>
               Choose…
             </button>
             <button className="btn ghost" onClick={() => load(folder)}>
               Refresh
             </button>
-          </>
+          </div>
         }
       >
         <span className="mono">{folder || '…'}</span>
@@ -112,7 +112,7 @@ export default function BackupRestore({ onAction }) {
             k="Backup file"
             help={`${kb(f.size)} · ${relTime(f.mtime)} ago`}
             control={
-              <>
+              <div className="row wrap gap-10">
                 <button
                   className="btn ghost"
                   onClick={() => onAction('backup-restore', { file: f.path, dryRun: true })}
@@ -122,7 +122,7 @@ export default function BackupRestore({ onAction }) {
                 <button className="btn ghost" onClick={() => restore(f)}>
                   Restore
                 </button>
-              </>
+              </div>
             }
           >
             <span className="mono">{f.name}</span>
