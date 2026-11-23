@@ -79,6 +79,15 @@ test('readZip refuses a crc mismatch', () => {
   assert.throws(() => readZip(bad), /crc mismatch/);
 });
 
+// An entry is inflated only up to the size its central directory declares: a crafted entry that
+// claims 16 bytes and inflates to a megabyte is refused by name, before the megabyte is held.
+test('readZip refuses an entry that inflates past its declared size', () => {
+  const zip = Buffer.from(writeZip([{ name: 'z.txt', data: Buffer.alloc(1 << 20) }]));
+  const cd = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+  zip.writeUInt32LE(16, cd + 24);
+  assert.throws(() => readZip(zip), /'z\.txt' inflates past its declared size/);
+});
+
 // The second observer: Windows' own expander must open what we write.
 test('Windows Expand-Archive opens it', { skip: process.platform !== 'win32' }, () => {
   const sb = makeSandbox('gszip');

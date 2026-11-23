@@ -139,7 +139,13 @@ export function readZip(buf) {
     const body = buf.subarray(start, start + csize);
     let data;
     if (method === 0) data = Buffer.from(body);
-    else if (method === 8) data = zlib.inflateRawSync(body);
+    else if (method === 8) {
+      // Bounded by the declared size, so a crafted entry is refused before it fills memory.
+      try { data = zlib.inflateRawSync(body, { maxOutputLength: Math.max(usize, 1) }); } catch (e) {
+        if (e && e.code === 'ERR_BUFFER_TOO_LARGE') throw new Error(`'${name}' inflates past its declared size`, { cause: e });
+        throw e;
+      }
+    }
     else throw new Error(`unsupported compression method ${method} for '${name}'`);
     if (data.length !== usize || zlib.crc32(data) !== crc) throw new Error(`crc mismatch for '${name}'`);
     out.push({ name, data });

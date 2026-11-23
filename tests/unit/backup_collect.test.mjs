@@ -141,3 +141,24 @@ test('sha256 and size', () => {
   assert.equal(b.manifest.home, home);
   assert.equal(b.manifest.tier, tier);
 });
+
+// Restore writes one config dir per host, so one global install per host travels: the first.
+// A second global root of the same host (a registered `-global` emit) is named, never merged in,
+// because two copies of `skills/<host>/<name>` would collide in the archive.
+test('a second global install of the same host is named, not carried', () => {
+  const other = path.join(home, 'other-claude');
+  put(path.join(other, 'skills', 'my-skill', 'SKILL.md'), 'another copy\n');
+  const b = mod.collectBackup({ targets: [['claude', 'global', cfg], ['claude', 'global', other]] });
+  assert.equal(new Set(names(b)).size, names(b).length, 'no entry name twice');
+  assert.equal(b.manifest.installs.length, 1);
+  assert.deepEqual(b.manifest.unread, [`claude ${other}: a second global install of this host`]);
+});
+
+// One install whose settings cannot be read is named; the tier and every other part still travel.
+test('an install whose profile cannot be read is named, the rest backed up', () => {
+  const b = mod.collectBackup({ targets: [['claude', 'global', cfg]], profileOf: () => { throw new Error('bad marker'); } });
+  assert.deepEqual(b.manifest.installs, []);
+  assert.deepEqual(b.manifest.unread, [`claude ${cfg}: bad marker`]);
+  assert.ok(names(b).includes('tier/memory/nas-ports.md'));
+  assert.ok(names(b).includes('skills/claude/my-skill/SKILL.md'));
+});

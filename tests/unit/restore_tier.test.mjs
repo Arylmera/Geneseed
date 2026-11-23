@@ -255,3 +255,45 @@ test('pending drafts on both machines join one live draft', () => {
     assert.equal(read(path.join(tier, 'user-rules.draft.md')).split('sha256: aaaa1111').length, 2, 'appended once');
   } finally { sb.cleanup(); }
 });
+
+// Each backup drafts under its own host (`restored-<id>`), so restoring a second, different backup
+// does not settle away the rules the first one left pending: both wait in the draft.
+test('two different backups both leave their rules pending', () => {
+  const sb = makeSandbox('rt-');
+  try {
+    const one = path.join(sb.path, 'one.zip');
+    const two = path.join(sb.path, 'two.zip');
+    backupFrom(sb.path, one);
+    backupFrom(path.join(sb.path, 'second'), two, (tier) => put(path.join(tier, 'user-rules.md'), '## R1 — second rule\nSecond body.\n'));
+    const { b, tier } = inUse(sb.path);
+    inHome(b, () => restoreTier(readBackup(one)));
+    inHome(b, () => restoreTier(readBackup(two)));
+    const draft = read(path.join(tier, 'user-rules.draft.md'));
+    assert.ok(draft.includes('Answer in three lines.'), 'the first backup rule still waits');
+    assert.ok(draft.includes('Second body.'), 'the second backup rule waits too');
+    const pending = Object.values(JSON.parse(read(path.join(tier, '.fold-state.json'))).items).filter((i) => i.state === 'pending');
+    assert.equal(pending.length, 2);
+  } finally { sb.cleanup(); }
+});
+
+// A line the user wrote into MEMORY.md (no index writer generated it) travels: into an empty tier
+// with the file, into an in-use tier appended once to B's index, which the rebuild then carries.
+test('hand-written MEMORY.md lines are restored', () => {
+  const sb = makeSandbox('rt-');
+  try {
+    const file = path.join(sb.path, 'b.zip');
+    backupFrom(sb.path, file, (tier) => put(path.join(tier, 'memory', 'MEMORY.md'), '# Memory\n\nNAS sits at 10.0.0.5, ask before rebooting.\n'));
+    const fresh = path.join(sb.path, 'fresh');
+    fs.mkdirSync(fresh);
+    inHome(fresh, () => restoreTier(readBackup(file)));
+    assert.ok(read(path.join(fresh, '.config', 'geneseed', 'memory', 'MEMORY.md')).includes('NAS sits at 10.0.0.5'));
+    const { b, tier } = inUse(sb.path);
+    put(path.join(tier, 'memory', 'MEMORY.md'), '# Memory\n\nB keeps its own line.\n');
+    const r = inHome(b, () => restoreTier(readBackup(file)));
+    assert.deepEqual(r.failed, []);
+    inHome(b, () => restoreTier(readBackup(file)));
+    const index = read(path.join(tier, 'memory', 'MEMORY.md'));
+    assert.ok(index.includes('B keeps its own line.'));
+    assert.equal(index.split('NAS sits at 10.0.0.5').length, 2, 'appended once');
+  } finally { sb.cleanup(); }
+});

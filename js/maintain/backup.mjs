@@ -30,7 +30,7 @@ import { RETIRED_RULES_FILE } from '../build/rule-decide.mjs';
 import { knownSkillIds, ROOT, skillAliases } from '../build/source.mjs';
 import { SESSION_SEEDS } from '../build/stubs.mjs';
 import { EXCLUDES_FILE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
-import { consolidateMemory, readFoldState } from '../hosts/memory-files.mjs';
+import { consolidateMemory, indexNotes, readFoldState } from '../hosts/memory-files.mjs';
 import { hashesOf, ownedState } from '../hosts/owned.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
 import { printErr, printOut, writeBytes, writeTextAtomic } from '../lib/fs.mjs';
@@ -38,7 +38,7 @@ import { jsonDumpsIndent } from '../lib/json.mjs';
 import { machineDir, sharedPaths, WIKI_NAMES } from '../lib/machine-dir.mjs';
 import { readZip, writeZip } from '../lib/zip.mjs';
 import { USER_LOOP_DIRS } from '../loop/catalog.mjs';
-import { personalProfilesDir, profileFromInstall, saveProfile } from './profiles.mjs';
+import { personalProfilesDir, PROFILE_KEYS, profileFromInstall, saveProfile } from './profiles.mjs';
 import { cmdProfileApply } from './setup.mjs';
 
 export const BACKUP_FORMAT = 1;
@@ -162,19 +162,33 @@ function activeTargets() {
 
 /**
  * What a backup holds: its entries (without `manifest.json`) and the manifest describing them.
- * `targets` is the seam a test hands its sandboxed installs through.
- * @param {{ now?: Date, targets?: [string, string, string][] | null }} [opts]
+ * `targets` and `profileOf` are the seams a test hands its sandboxed installs through.
+ *
+ * ONE GLOBAL INSTALL PER HOST: restore writes one config dir per host, and a second root's
+ * `skills/<host>/<name>` would collide with the first in the archive. The first root travels;
+ * a later one, and an install whose settings cannot be read, are named under `unread` while the
+ * rest of the backup goes on.
+ * @param {{ now?: Date, targets?: [string, string, string][] | null,
+ *   profileOf?: (host: string, root: string) => object }} [opts]
  */
-export function collectBackup({ now = new Date(), targets = null } = {}) {
+export function collectBackup({
+  now = new Date(), targets = null,
+  profileOf = (host, root) => profileFromInstall(installProfile(host, 'global', root)),
+} = {}) {
   const tier = machineDir();
   const { files: tierFiles, skipped } = collectTier(tier);
   const files = [...tierFiles]; const links = []; const ambiguous = [];
-  const installs = []; const projects = [];
+  const installs = []; const projects = []; const unread = [];
+  const seen = new Set();
   for (const [host, scope, root] of targets ?? activeTargets()) {
     if (scope !== 'global') { projects.push({ host, root }); continue; }
+    if (seen.has(host)) { unread.push(`${host} ${root}: a second global install of this host`); continue; }
+    seen.add(host);
     const h = collectHost(host, root);
     files.push(...h.files); links.push(...h.links); ambiguous.push(...h.ambiguous);
-    installs.push({ host, profile: profileFromInstall(installProfile(host, 'global', root)) });
+    try { installs.push({ host, profile: profileOf(host, root) }); } catch (e) {
+      unread.push(`${host} ${root}: ${e && e.message}`);
+    }
   }
   const entries = files.map(({ name, file }) => ({ name: toPosix(name), data: readFileSync(file) }));
   const manifest = {
@@ -185,7 +199,7 @@ export function collectBackup({ now = new Date(), targets = null } = {}) {
     home: os.homedir(),
     tier,
     files: entries.map((e) => ({ name: e.name, sha256: createHash('sha256').update(e.data).digest('hex'), size: e.data.length })),
-    installs, projects, links, skipped, ambiguous,
+    installs, projects, links, skipped, ambiguous, unread,
   };
   return { entries, manifest };
 }
@@ -205,6 +219,7 @@ function backupNotes(manifest) {
   for (const l of manifest.links) out.push(`[backup] link not copied: ${l.host} ${l.kind} ${l.name} -> ${l.target ?? '(dead link)'}`);
   for (const p of manifest.projects) out.push(`[backup] project install not replayed: ${p.host} ${p.root}`);
   for (const a of manifest.ambiguous) out.push(`[backup] carried, edited or named like a shipped one: ${a}`);
+  for (const u of manifest.unread) out.push(`[backup] install not carried: ${u}`);
   return out;
 }
 
@@ -415,7 +430,30 @@ export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
     for (const [name, raw] of entries) {
       if (!name.startsWith('tier/')) continue;
       const rel = name.slice('tier/'.length);
-      if (rel === 'memory/MEMORY.md' || rel.startsWith('memory/topics/')) continue;
+      if (rel.startsWith('memory/topics/')) continue;
+      if (rel === 'memory/MEMORY.md') {
+        // The index is rebuilt from the facts; only the lines a person wrote into it travel.
+        // `consolidateMemory` carries such lines, so they go into this machine's index first.
+        const scratch = path.join(staging, 'index-of-backup');
+        mkdirSync(scratch, { recursive: true });
+        writeBytes(path.join(scratch, 'MEMORY.md'), raw);
+        const notes = indexNotes(scratch, (slug) => entries.has(`tier/memory/${slug}.md`));
+        const dest = path.join(shared.memory, 'MEMORY.md');
+        const held = readMaybe(dest);
+        if (held === null) {
+          write(dest, raw, true);
+          copied.push(rel);
+          factsWritten = true;
+          continue;
+        }
+        const have = lineSet(held);
+        const missing = notes.filter((l) => !have.has(l));
+        if (!missing.length) { same.push(rel); continue; }
+        const text = held.toString('utf8');
+        write(dest, Buffer.from(`${text}${text.endsWith('\n') || !text ? '' : '\n'}${missing.join('\n')}\n`, 'utf8'), false);
+        merged.push(rel);
+        continue;
+      }
       const data = rewrites(rel) ? Buffer.from(rewriteHome(raw.toString('utf8'), manifest.home, home), 'utf8') : raw;
       const dest = path.join(tier, ...rel.split('/'));
       const held = readMaybe(dest);
@@ -476,7 +514,10 @@ export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
     let folded = '';
     let notices = [];
     if (staged) {
-      const report = foldHost({ host: RESTORED, cfgDir: staging, shared, dryRun });
+      // One fold host per backup: the fold settles away a pending rule its host no longer holds,
+      // so a shared `restored` host would drop one backup's rules on the next backup's restore.
+      const host = `${RESTORED}-${sha256(`${manifest.createdAt}\n${manifest.home}`).slice(0, 8)}`;
+      const report = foldHost({ host, cfgDir: staging, shared, dryRun });
       failed.push(...report.failed);
       failed.push(...report.stayed.map((s) => `not restored, the fold does not carry it: ${s}`));
       if (report.excludes) merged.push(EXCLUDES_FILE);
@@ -506,7 +547,9 @@ function restoredProfile(host, profile, dryRun) {
       }
       return name;
     }
-    try { if (isDeepStrictEqual(JSON.parse(held.toString('utf8')), profile)) return name; } catch { /* not ours: next name */ }
+    // Compared as `saveProfile` wrote it: keys it does not know are dropped on both sides.
+    const known = Object.fromEntries(PROFILE_KEYS.filter((k) => profile[k] !== undefined).map((k) => [k, profile[k]]));
+    try { if (isDeepStrictEqual(JSON.parse(held.toString('utf8')), known)) return name; } catch { /* not ours: next name */ }
   }
 }
 

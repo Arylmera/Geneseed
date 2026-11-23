@@ -11,7 +11,7 @@ import path from 'node:path';
 
 import { ROOT } from '../../js/build/source.mjs';
 import { collectBackup, cmdRestore } from '../../js/maintain/backup.mjs';
-import { writeZip } from '../../js/lib/zip.mjs';
+import { readZip, writeZip } from '../../js/lib/zip.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 
 const ENV_KEYS = ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR', 'CLAUDE_CONFIG_DIR',
@@ -216,4 +216,16 @@ test('a failing install step is partial, not a crash', () => world(({ b, file })
   assert.equal(r.rc, 2);
   assert.match(r.out, /^\[restore\] claude: not rebuilt \(boom\)/m);
   assert.equal(read(path.join(b, '.claude', 'skills', 'my-skill', 'SKILL.md')), 'mine\n');
+}));
+
+// A profile key a newer Geneseed wrote is dropped by `saveProfile`; the comparison drops it too,
+// so a second restore finds the profile it saved and does not save `restored-claude-2`.
+test('a profile key this build does not know saves one profile, not one per restore', () => world(({ b, file }) => {
+  const entries = readZip(fs.readFileSync(file));
+  const manifest = JSON.parse(entries[0].data.toString('utf8'));
+  manifest.installs[0].profile.future = 'from a newer build';
+  fs.writeFileSync(file, writeZip([{ name: 'manifest.json', data: Buffer.from(JSON.stringify(manifest)) }, ...entries.slice(1)]));
+  inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
+  inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
+  assert.deepEqual(fs.readdirSync(path.join(b, '.config', 'geneseed', 'profiles')), ['restored-claude.json']);
 }));
