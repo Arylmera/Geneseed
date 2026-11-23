@@ -31,7 +31,7 @@ const RULE = '## R1 — keep it short\nAnswer in three lines.\n';
 const FACT = '---\nname: nas\n---\nport 8080\n';
 
 /** Home A with a tier worth carrying, its backup written to `file`; returns A's home. */
-function backupFrom(sb, file) {
+function backupFrom(sb, file, extra = () => {}) {
   const a = path.join(sb, 'a');
   const tier = path.join(a, '.config', 'geneseed');
   put(path.join(tier, 'user-rules.md'), RULE);
@@ -45,6 +45,7 @@ function backupFrom(sb, file) {
   put(path.join(tier, 'profiles', 'mine.json'), `${JSON.stringify({ description: path.join(a, 'x') })}\n`);
   put(path.join(tier, '.fold-state.json'), `${JSON.stringify({ version: 1, items: { k1: { kind: 'rule', state: 'approved' }, k2: { kind: 'rule', state: 'approved' } } })}\n`);
   put(path.join(tier, 'user-rules-retired.md'), '## R7 — old one\nbody\n## R8 — old two\nbody\n');
+  extra(tier);
   inHome(a, () => {
     const { entries, manifest } = collectBackup({ targets: [] });
     fs.writeFileSync(file, writeZip([{ name: 'manifest.json', data: Buffer.from(JSON.stringify(manifest)) }, ...entries]));
@@ -72,6 +73,11 @@ test('rewriteHome keeps comments and handles three spellings', () => {
     '// C:\\Users\\old\n{ "a": "D:/Home/new/Terra", "b": "D:\\\\Home\\\\new\\\\Terra", "c": "D:/Home/new", "d": "D:/x" }\n');
   assert.equal(rewriteHome('{ "p": "/home/old/x", "q": "/home/older" }', '/home/old', '/Users/new'),
     '{ "p": "/Users/new/x", "q": "/home/older" }');
+  // Across operating systems the whole path takes the target's separator, JSON-escaped on Windows.
+  assert.equal(rewriteHome('{ "a": "C:/Users/old/Terra/x", "b": "C:\\\\Users\\\\old\\\\Terra\\\\x" }', 'C:\\Users\\old', '/home/new'),
+    '{ "a": "/home/new/Terra/x", "b": "/home/new/Terra/x" }');
+  assert.equal(rewriteHome('{ "p": "/home/old/x/y" }', '/home/old', 'C:\\Users\\new'),
+    '{ "p": "C:\\\\Users\\\\new\\\\x\\\\y" }');
 });
 
 // An empty tier takes each file as it was, with the home rewritten in the three JSON files only.
@@ -112,7 +118,8 @@ function inUse(sb) {
 }
 
 // Nothing of B's is overwritten: a differing fact lands beside it as `-restored`, a rule waits
-// in the draft, a differing profile gets a draft pointer, B's decision on a shared key stands.
+// in the draft, a differing profile lands beside B's as `PROFILE-restored.md` (a draft pointer
+// would name a staging file that is gone), and B's decision on a shared key stands.
 test('in-use tier merges without overwrite', () => {
   const sb = makeSandbox('rt-');
   try {
@@ -126,8 +133,9 @@ test('in-use tier merges without overwrite', () => {
     assert.equal(read(path.join(tier, 'user-rules.md')), '## R1 — B rule\nB body.\n');
     const draft = read(path.join(tier, 'user-rules.draft.md'));
     assert.ok(draft.includes('keep it short'), 'the rule waits in the draft');
-    assert.ok(draft.includes('PROFILE.md'), 'the profile gets a pointer');
     assert.equal(read(path.join(tier, 'PROFILE.md')), '# Your profile\n\nGuillaume, on B.\n');
+    assert.equal(read(path.join(tier, 'PROFILE-restored.md')), '# Your profile\n\nGuillaume, from A.\n',
+      'the backup profile stays readable beside yours');
     assert.equal(read(path.join(tier, 'notebook', 'ledger.md')), 'B ledger\n');
     assert.equal(read(path.join(tier, 'notebook', 'ledger-restored.md')), 'A ledger\n');
     const items = JSON.parse(read(path.join(tier, '.fold-state.json'))).items;
@@ -196,5 +204,54 @@ test('in-use excludes gain the backup paths and wire nothing', () => {
     const paths = JSON.parse(read(path.join(tier, 'excludes.json'))).excludes.map((e) => e.path);
     assert.deepEqual(paths, [own, path.join(b, 'secret').split(path.sep).join('/')]);
     assert.deepEqual(fs.readdirSync(path.join(b, 'private')), [], 'nothing wired into the excluded folder');
+  } finally { sb.cleanup(); }
+});
+
+// Every file the backup carries reaches the tier, including the ones the fold would not carry
+// (an all-caps fact stem, a note that is not markdown), and into a tier that has no memory/ yet.
+test('files the fold does not carry are restored too', () => {
+  const sb = makeSandbox('rt-');
+  try {
+    const file = path.join(sb.path, 'b.zip');
+    backupFrom(sb.path, file, (tier) => {
+      put(path.join(tier, 'memory', 'AWS.md'), 'aws fact\n');
+      put(path.join(tier, 'notes', 'agent-notes', 'x.txt'), 'plain note\n');
+    });
+    const b = path.join(sb.path, 'b');
+    fs.mkdirSync(b);
+    const r = inHome(b, () => restoreTier(readBackup(file)));
+    const tier = path.join(b, '.config', 'geneseed');
+    assert.deepEqual(r.failed, []);
+    assert.equal(read(path.join(tier, 'memory', 'AWS.md')), 'aws fact\n');
+    assert.equal(read(path.join(tier, 'notes', 'agent-notes', 'x.txt')), 'plain note\n');
+  } finally { sb.cleanup(); }
+});
+
+// A rule pending on A stays pending on B: its block joins B's live draft and its ledger row comes
+// with it. A pending row the backup's draft does not hold would be an item nothing can show.
+test('pending drafts on both machines join one live draft', () => {
+  const sb = makeSandbox('rt-');
+  try {
+    const file = path.join(sb.path, 'b.zip');
+    const blockA = '## Rule from A\n(source: a | old: R2 | sha256: aaaa1111)\nA body.\n';
+    backupFrom(sb.path, file, (tier) => {
+      put(path.join(tier, 'user-rules.draft.md'), `# Draft\n\n${blockA}`);
+      put(path.join(tier, '.fold-state.json'), `${JSON.stringify({ version: 1, items: {
+        aaaa1111: { kind: 'rule', host: 'claude', state: 'pending' },
+        gone0000: { kind: 'rule', host: 'claude', state: 'pending' } } })}\n`);
+    });
+    const { b, tier } = inUse(sb.path);
+    put(path.join(tier, 'user-rules.draft.md'), '# Draft\n\n## Rule from B\n(source: b | old: R3 | sha256: bbbb2222)\nB body.\n');
+    const r = inHome(b, () => restoreTier(readBackup(file)));
+    assert.deepEqual(r.failed, []);
+    const draft = read(path.join(tier, 'user-rules.draft.md'));
+    assert.ok(draft.includes('sha256: bbbb2222'), 'B keeps its own');
+    assert.ok(draft.includes('sha256: aaaa1111') && draft.includes('A body.'), "A's block joins it");
+    assert.ok(!fs.existsSync(path.join(tier, 'user-rules.draft-restored.md')));
+    const items = JSON.parse(read(path.join(tier, '.fold-state.json'))).items;
+    assert.equal(items.aaaa1111.state, 'pending');
+    assert.equal(items.gone0000, undefined);
+    inHome(b, () => restoreTier(readBackup(file)));
+    assert.equal(read(path.join(tier, 'user-rules.draft.md')).split('sha256: aaaa1111').length, 2, 'appended once');
   } finally { sb.cleanup(); }
 });

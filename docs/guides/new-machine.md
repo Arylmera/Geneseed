@@ -38,7 +38,7 @@ Use `--dry-run` first if the new machine already has rules or memory of its own.
 | The skills and agents you wrote in a global install, and the shipped ones you edited | Written where the file is absent. A file that already exists is kept and named |
 | Each global install's settings (theme, footprint, packs, kits, gates) | Saved as the personal profile `restored-<host>` and rebuilt with `geneseed profile apply` |
 
-Nothing on the new machine is overwritten. A fact or file that differs lands beside yours as `<name>-restored`. A rule waits in `user-rules.draft.md` for your decision, and a differing profile or wiki gets a pointer there, as the [fold](../concepts/shared-tier.md) does. A second restore of the same file writes nothing.
+Nothing on the new machine is overwritten. A fact, a profile, a wiki manifest or any other file that differs lands beside yours as `<name>-restored`, for example `PROFILE-restored.md`. A rule your rules file lacks waits in `user-rules.draft.md` for your decision, as with the [fold](../concepts/shared-tier.md), and a rule still pending on the old machine stays pending. A shipped skill you edited replaces the untouched copy that `setup` wrote; if you edited it on the new machine too, yours stays and the backup's lands beside it. Nothing is written through a link. A second restore of the same file writes nothing.
 
 ### What does not travel
 

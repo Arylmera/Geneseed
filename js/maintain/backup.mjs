@@ -24,18 +24,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
-import { foldHost, foldSummary } from '../build/fold.mjs';
+import { foldHost, foldSummary, isWholeFileSeed } from '../build/fold.mjs';
 import { installProfile } from '../build/profile.mjs';
 import { RETIRED_RULES_FILE } from '../build/rule-decide.mjs';
 import { knownSkillIds, ROOT, skillAliases } from '../build/source.mjs';
 import { SESSION_SEEDS } from '../build/stubs.mjs';
 import { EXCLUDES_FILE, GLOBAL_MANIFEST, HOSTS } from '../hosts/hosts.mjs';
-import { readFoldState } from '../hosts/memory-files.mjs';
+import { consolidateMemory, readFoldState } from '../hosts/memory-files.mjs';
 import { hashesOf, ownedState } from '../hosts/owned.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
 import { printErr, printOut, writeBytes, writeTextAtomic } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
-import { machineDir, NOTES_DIRS, sharedPaths, WIKI_NAMES } from '../lib/machine-dir.mjs';
+import { machineDir, sharedPaths, WIKI_NAMES } from '../lib/machine-dir.mjs';
 import { readZip, writeZip } from '../lib/zip.mjs';
 import { USER_LOOP_DIRS } from '../loop/catalog.mjs';
 import { personalProfilesDir, profileFromInstall, saveProfile } from './profiles.mjs';
@@ -254,23 +254,12 @@ const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * `text` with the home `fromHome` replaced by `toHome` inside JSON(C) string literals only, in the
- * spelling each was written in: `/`, `\`, or the JSON-escaped `\\`. Comments are copied as they
- * are. A prefix matches only at a path boundary, so `/home/old` leaves `/home/older` alone; a
- * drive-letter home matches without regard to case, as Windows does.
- * @param {string} text
- * @param {string} fromHome
- * @param {string} toHome
+ * `text` with every JSON(C) string literal passed through `onLiteral(raw)`, where `raw` is the
+ * literal's text between its quotes, escapes kept. Comments and everything else are copied as
+ * they are. One walker for the home rewrite and the wiki path report, so a `//` inside a string
+ * (an `https://` value) is never read as a comment.
  */
-export function rewriteHome(text, fromHome, toHome) {
-  if (!fromHome || !toHome || fromHome === toHome) return text;
-  const fwd = (p) => p.replaceAll('\\', '/');
-  const back = (p) => p.replaceAll('/', '\\');
-  const esc = (p) => back(p).replaceAll('\\', '\\\\');
-  const flags = /^[A-Za-z]:/.test(fromHome) ? 'gi' : 'g';
-  const pairs = [[esc(fromHome), esc(toHome)], [back(fromHome), back(toHome)], [fwd(fromHome), fwd(toHome)]]
-    .map(([a, b]) => [new RegExp(`${escapeRe(a)}(?=$|[\\\\/])`, flags), b]);
-  const swap = (lit) => pairs.reduce((s, [re, b]) => s.replace(re, () => b), lit);
+function mapJsoncStrings(text, onLiteral) {
   let out = '';
   let i = 0;
   while (i < text.length) {
@@ -285,12 +274,45 @@ export function rewriteHome(text, fromHome, toHome) {
     } else if (text[i] === '"') {
       let j = i + 1;
       while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
-      out += `"${swap(text.slice(i + 1, j))}"`; i = j + 1;
+      out += `"${onLiteral(text.slice(i + 1, j))}"`; i = j + 1;
     } else {
       out += text[i]; i += 1;
     }
   }
   return out;
+}
+
+const isDriveHome = (p) => /^[A-Za-z]:/.test(p);
+
+/**
+ * `text` with the home `fromHome` replaced by `toHome` inside JSON(C) string literals only.
+ * Comments are copied as they are. A prefix matches only at a path boundary, so `/home/old`
+ * leaves `/home/older` alone; a drive-letter home matches without regard to case, as Windows does.
+ *
+ * SAME OS: each literal keeps the spelling it was written in — `/`, `\`, or the JSON-escaped `\\`.
+ * ACROSS OSes (a drive-letter home on one side only): a literal that held the old home takes the
+ * target's separator throughout, `/` on POSIX and an escaped `\\` on Windows — a Windows path
+ * moved to a Mac as `\home\new\Terra` names no folder at all.
+ * @param {string} text
+ * @param {string} fromHome
+ * @param {string} toHome
+ */
+export function rewriteHome(text, fromHome, toHome) {
+  if (!fromHome || !toHome || fromHome === toHome) return text;
+  const fwd = (p) => p.replaceAll('\\', '/');
+  const back = (p) => p.replaceAll('/', '\\');
+  const esc = (p) => back(p).replaceAll('\\', '\\\\');
+  const flags = isDriveHome(fromHome) ? 'gi' : 'g';
+  const pairs = [[esc(fromHome), esc(toHome)], [back(fromHome), back(toHome)], [fwd(fromHome), fwd(toHome)]]
+    .map(([a, b]) => [new RegExp(`${escapeRe(a)}(?=$|[\\\\/])`, flags), b]);
+  const crossOs = isDriveHome(fromHome) !== isDriveHome(toHome);
+  return mapJsoncStrings(text, (lit) => {
+    const swapped = pairs.reduce((s, [re, b]) => s.replace(re, () => b), lit);
+    if (!crossOs || swapped === lit) return swapped;
+    return isDriveHome(toHome)
+      ? swapped.replaceAll('\\\\', '/').replaceAll('\\', '/').replaceAll('/', '\\\\')
+      : swapped.replaceAll('\\\\', '/').replaceAll('\\', '/');
+  });
 }
 
 /**
@@ -337,34 +359,31 @@ function restoredLanding(dir, name, data) {
 const lf = (b) => b.toString('utf8').replaceAll('\r\n', '\n');
 const isRulesSeed = (b) => lf(b) === SESSION_SEEDS['user-rules.md'].replaceAll('\r\n', '\n');
 const sectionsOf = (text) => text.replaceAll('\r\n', '\n').split(/^(?=## )/m).filter((s) => s.trim());
-
-/** Where a tier file goes in the staging folder the fold reads as host `restored`, or null. */
-function stagedRel(rel) {
-  const parts = rel.split('/');
-  if (parts[0] === 'memory') {
-    if (parts.length === 2 && rel.endsWith('.md') && parts[1] !== 'MEMORY.md') return rel;
-    if (parts.length === 3 && parts[1] === 'agents' && rel.endsWith('.md')) return rel;
-    return null;
-  }
-  if (parts[0] === 'notes' && parts.length === 3 && NOTES_DIRS.includes(parts[1])) return `notebook/${parts[1]}/${parts[2]}`;
-  if (rel === 'PROFILE.md' || WIKI_NAMES.includes(rel)) return rel;
-  return null;
-}
+const lineSet = (b) => new Set(lf(b).split('\n').filter((l) => l.trim()));
+/** The `sha256: <key>` a draft block carries — the key its ledger row is filed under. */
+const draftKey = (block) => /sha256: ([0-9a-f]+)/.exec(block)?.[1] ?? null;
 
 /**
  * Put the archive's `tier/` files into this machine's tier, never overwriting.
  *
- * WHAT THE FOLD ALREADY KNOWS, THE FOLD DOES. Facts, agent lessons, notes, the profile, the wiki
- * and an in-use rules file are staged in a temp folder laid out as a host store and folded in as
- * host `restored` (`foldHost`): a differing fact lands as `<name>-restored.md`, a rule waits in
- * the draft, a differing profile gets a pointer. An in-use `excludes.json` is staged too: the fold
- * appends the paths the shared list lacks. Wiring them into repos is the next emit's, against the
- * real installs.
- *
- * The rest is decided here: an absent file or a seed is copied, `.fold-state.json` merges by
- * key with this machine's decision kept, the retired-rules record gains its missing sections, and
- * any other differing file lands beside the original under the same `-restored` chain.
- * `memory/MEMORY.md` and `topics/` are not copied: the fold rebuilds the index from the facts.
+ * A FILE THE TIER LACKS IS COPIED AS IT IS, whatever it is: a fact with an all-caps stem, a note
+ * that is not markdown. Only a real collision is decided, and each decision keeps both texts
+ * readable on this machine:
+ *   - a rules file in use: staged and folded in as host `restored` (`foldHost`), so each rule it
+ *     lacks waits in the draft, in force nowhere until the user decides;
+ *   - an agent lesson file: folded the same way, so the lessons merge line by line;
+ *   - `excludes.json`: folded, so the paths the shared list lacks join it (wiring them into repos
+ *     is the next emit's, against the real installs);
+ *   - the draft: each block of the backup's whose `sha256:` key the live draft lacks is appended;
+ *   - `.fold-state.json`: this machine's decision on a key stands; from the backup come the decided
+ *     rows and the pending rows whose block the live draft now holds — any other pending row would
+ *     be an item nothing can show;
+ *   - the retired-rules record gains its missing sections;
+ *   - anything else, the profile and the wiki manifest included, lands beside the original as
+ *     `<stem>-restored<ext>`, then `-restored-2`: a draft pointer would name a staging file that is
+ *     gone once the restore ends.
+ * A seed is not the user's: the rules, profile and wiki seeds are replaced. `memory/MEMORY.md` and
+ * `topics/` are rebuilt from the facts (`consolidateMemory`), not copied.
  * @param {{ manifest: any, entries: Map<string, Buffer> }} backup
  * @param {{ dryRun?: boolean }} [opts]
  */
@@ -373,56 +392,59 @@ export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
   const tier = shared.root;
   const home = os.homedir();
   const profilesRel = path.relative(tier, personalProfilesDir()).split(path.sep).join('/');
+  const draftRel = path.relative(tier, shared.draft).split(path.sep).join('/');
   const rewrites = (rel) => WIKI_NAMES.includes(rel) || rel === EXCLUDES_FILE
     || (rel.startsWith(`${profilesRel}/`) && rel.endsWith('.json'));
+  const backupDraft = entries.get(`tier/${draftRel}`)?.toString('utf8') ?? '';
   const copied = []; const merged = []; const same = []; const failed = [];
   const staging = mkdtempSync(path.join(os.tmpdir(), 'gs-restore-'));
+  let staged = 0;
+  let factsWritten = false;
   const stage = (rel, data) => {
     const p = path.join(staging, ...rel.split('/'));
     mkdirSync(path.dirname(p), { recursive: true });
     writeBytes(p, data);
+    staged += 1;
   };
   const write = (dest, data, exclusive) => {
     if (dryRun) return;
     mkdirSync(path.dirname(dest), { recursive: true });
     writeBytes(dest, data, { exclusive });
   };
-  let excludesHeld = false;
-  let excludesBackup = null;
   try {
     for (const [name, raw] of entries) {
       if (!name.startsWith('tier/')) continue;
       const rel = name.slice('tier/'.length);
+      if (rel === 'memory/MEMORY.md' || rel.startsWith('memory/topics/')) continue;
       const data = rewrites(rel) ? Buffer.from(rewriteHome(raw.toString('utf8'), manifest.home, home), 'utf8') : raw;
       const dest = path.join(tier, ...rel.split('/'));
       const held = readMaybe(dest);
       if (held !== null && held.equals(data)) { same.push(rel); continue; }
-      if (rel === 'memory/MEMORY.md' || rel.startsWith('memory/topics/')) continue;
-      if (stagedRel(rel)) {
-        if (held !== null && !restoredLanding(path.dirname(dest), path.basename(dest), data).write) { same.push(rel); continue; }
-        stage(stagedRel(rel), data);
+      const isFact = /^memory\/[^/]+\.md$/.test(rel);
+      const isSeed = held !== null && (rel === 'user-rules.md' ? isRulesSeed(held)
+        : (rel === 'PROFILE.md' || WIKI_NAMES.includes(rel)) && isWholeFileSeed(held));
+      if (held === null || isSeed) {
+        write(dest, data, held === null);
+        copied.push(rel);
+        if (isFact) factsWritten = true;
         continue;
       }
-      if (rel === 'user-rules.md') {
-        if (held === null || isRulesSeed(held)) { write(dest, data, held === null); copied.push(rel); } else stage(rel, data);
+      if (rel === 'user-rules.md' || rel === EXCLUDES_FILE) { stage(rel, data); continue; }
+      if (/^memory\/agents\/[^/]+\.md$/.test(rel)) {
+        const have = lineSet(held);
+        if ([...lineSet(data)].every((l) => have.has(l))) { same.push(rel); continue; }
+        stage(rel, data);
         continue;
       }
-      if (rel === EXCLUDES_FILE) {
-        excludesBackup = data;
-        if (held === null) { write(dest, data, true); copied.push(rel); } else excludesHeld = true;
-        continue;
-      }
-      if (held === null) { write(dest, data, true); copied.push(rel); continue; }
-      if (rel === '.fold-state.json') {
-        const mine = readFoldState(shared);
-        const theirs = JSON.parse(data.toString('utf8'));
-        const add = Object.keys(theirs.items ?? {}).filter((k) => !Object.hasOwn(mine.items, k));
-        if (!add.length) { same.push(rel); continue; }
-        for (const k of add) mine.items[k] = theirs.items[k];
-        if (!dryRun) writeTextAtomic(shared.foldState, `${jsonDumpsIndent(mine)}\n`);
+      if (rel === draftRel) {
+        const text = held.toString('utf8');
+        const missing = sectionsOf(data.toString('utf8')).filter((s) => draftKey(s) && !text.includes(`sha256: ${draftKey(s)}`));
+        if (!missing.length) { same.push(rel); continue; }
+        write(dest, Buffer.from(`${text}${text.endsWith('\n') || !text ? '' : '\n'}\n${missing.join('')}`, 'utf8'), false);
         merged.push(rel);
         continue;
       }
+      if (rel === path.basename(shared.foldState)) continue;   // below, once the draft is merged
       if (rel === RETIRED_RULES_FILE) {
         const have = new Set(sectionsOf(held.toString('utf8')).map((s) => s.trim()));
         const missing = sectionsOf(data.toString('utf8')).filter((s) => !have.has(s.trim()));
@@ -436,15 +458,32 @@ export function restoreTier({ manifest, entries }, { dryRun = false } = {}) {
       if (!landing.write) { same.push(rel); continue; }
       write(landing.dest, data, true);
       merged.push(path.relative(tier, landing.dest).split(path.sep).join('/'));
+      if (isFact) factsWritten = true;
     }
-    // The fold shares the paths the tier lacks. Its wiring half writes into a repo only for a real
-    // host (claude, openclaude, bob); for `restored` it touches the staging folder alone.
-    if (excludesHeld) stage(EXCLUDES_FILE, excludesBackup);
-    const report = foldHost({ host: RESTORED, cfgDir: staging, shared, dryRun });
-    failed.push(...report.failed);
-    if (excludesHeld && report.excludes) merged.push(EXCLUDES_FILE);
-    const folded = foldSummary({ ...report, excludes: 0, wired: 0, wiredPaths: [], archived: null, stayed: [] });
-    return { copied, merged, same, failed, folded, notices: report.notices };
+    const theirs = entries.get(`tier/${path.basename(shared.foldState)}`);
+    if (theirs) {
+      const mine = readFoldState(shared);
+      const items = JSON.parse(theirs.toString('utf8')).items ?? {};
+      const add = Object.keys(items).filter((k) => !Object.hasOwn(mine.items, k)
+        && (items[k]?.state !== 'pending' || backupDraft.includes(`sha256: ${k}`)));
+      if (add.length) {
+        for (const k of add) mine.items[k] = items[k];
+        if (!dryRun) writeTextAtomic(shared.foldState, `${jsonDumpsIndent(mine)}\n`);
+        merged.push(path.basename(shared.foldState));
+      }
+    }
+    if (factsWritten && !dryRun) consolidateMemory(shared.memory);
+    let folded = '';
+    let notices = [];
+    if (staged) {
+      const report = foldHost({ host: RESTORED, cfgDir: staging, shared, dryRun });
+      failed.push(...report.failed);
+      failed.push(...report.stayed.map((s) => `not restored, the fold does not carry it: ${s}`));
+      if (report.excludes) merged.push(EXCLUDES_FILE);
+      folded = foldSummary({ ...report, excludes: 0, wired: 0, wiredPaths: [], archived: null, stayed: [] });
+      notices = report.notices;
+    }
+    return { copied, merged, same, failed, folded, notices };
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
@@ -473,23 +512,41 @@ function restoredProfile(host, profile, dryRun) {
 
 /** Every absolute path a wiki manifest names that does not exist here. Comments are skipped. */
 function missingWikiPaths(text) {
-  const out = [];
   const strings = [];
-  for (const m of text.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '').matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
-    try { strings.push(JSON.parse(`"${m[1]}"`)); } catch { /* not a JSON string */ }
+  mapJsoncStrings(text, (raw) => {
+    try { strings.push(JSON.parse(`"${raw}"`)); } catch { /* not a JSON string */ }
+    return raw;
+  });
+  return strings
+    .filter((s) => /^([A-Za-z]:[\\/]|[\\/]|~[\\/])/.test(s))
+    .map((s) => (s.startsWith('~') ? path.join(os.homedir(), s.slice(2)) : s))
+    .filter((p) => !lstatMaybe(p));
+}
+
+/** Is `dest`, or any folder between `root` and it, a link? Then writing would leave `root`. */
+function throughLink(root, dest) {
+  const parts = path.relative(root, dest).split(path.sep);
+  let p = root;
+  for (const part of parts) {
+    p = path.join(p, part);
+    const st = lstatMaybe(p);
+    if (!st) return false;
+    if (st.isSymbolicLink()) return true;
   }
-  for (const s of strings) {
-    if (!/^([A-Za-z]:[\\/]|\/|~[\\/])/.test(s)) continue;
-    const p = s.startsWith('~') ? path.join(os.homedir(), s.slice(2)) : s;
-    if (!lstatMaybe(p)) out.push(p);
-  }
-  return out;
+  return false;
 }
 
 /**
  * `geneseed restore <file> [--dry-run]`, on a machine where Geneseed is installed.
- * 0 all restored; 1 refused, nothing written; 2 partial — a host not rebuilt or a tier step that
- * failed, each named. `deps.apply` is the seam a test stubs `profile apply` through.
+ * 0 all restored; 1 refused, nothing written; 2 partial — a host not rebuilt or a step that
+ * failed, each named. Every step after the archive check is caught and reported: a stack trace
+ * after half a restore would leave the user nothing to act on. `deps.apply` is the seam a test
+ * stubs `profile apply` through.
+ *
+ * A SKILL OR AGENT FILE goes in where it is absent. Where it is present and is Geneseed's own text,
+ * untouched (`ownedState` 'unmodified' — a `setup` just wrote it), the backup's edit replaces it.
+ * Where the user's own text is there, it is kept and the backup's lands beside it as
+ * `-restored`. Nothing is written through a link.
  * @param {{ file?: string, dryRun?: boolean }} args
  * @param {{ apply?: (name: string) => number }} [deps]
  */
@@ -509,39 +566,69 @@ export function cmdRestore(args = {}, deps = {}) {
   const say = (s) => printOut(`[restore] ${dryRun ? '(dry run) ' : ''}${s}\n`);
   let partial = false;
 
-  const t = restoreTier(backup, { dryRun });
-  say(`tier: ${t.copied.length} copied, ${t.merged.length} merged beside yours, ${t.same.length} already here`);
-  for (const m of t.merged) say(`merged: ${m}`);
-  if (t.folded) say(`folded: ${t.folded}`);
-  for (const n of t.notices) say(n);
-  for (const f of t.failed) { partial = true; say(`tier step failed: ${f}`); }
+  try {
+    const t = restoreTier(backup, { dryRun });
+    say(`tier: ${t.copied.length} copied, ${t.merged.length} merged beside yours, ${t.same.length} already here`);
+    for (const m of t.merged) say(`merged: ${m}`);
+    if (t.folded) say(`folded: ${t.folded}`);
+    for (const n of t.notices) say(n);
+    for (const f of t.failed) { partial = true; say(`tier step failed: ${f}`); }
+  } catch (e) {
+    partial = true;
+    say(`tier step failed: ${e && e.message}`);
+  }
 
   let written = 0;
+  const owned = new Map();
   for (const [name, data] of entries) {
     const m = /^(skills|agents)\/([^/]+)\/(.+)$/.exec(name);
     if (!m) continue;
     const [, kind, host, rest] = m;
-    const spec = HOSTS.find((h) => h.host === host);
-    if (!spec) { partial = true; say(`unknown host ${host}: ${kind}/${rest} not restored`); continue; }
-    const dest = path.join(spec.configDir(), kind, ...rest.split('/'));
-    const held = readMaybe(dest);
-    if (held !== null) {
-      if (!held.equals(data)) say(`kept yours (differs from the backup): ${host} ${kind}/${rest}`);
-      continue;
+    const what = `${host} ${kind}/${rest}`;
+    try {
+      const spec = HOSTS.find((h) => h.host === host);
+      if (!spec) { partial = true; say(`unknown host ${host}: ${kind}/${rest} not restored`); continue; }
+      const root = spec.configDir();
+      const dest = path.join(root, kind, ...rest.split('/'));
+      if (throughLink(root, dest)) { say(`linked here, not written: ${what}`); continue; }
+      const held = readMaybe(dest);
+      if (held !== null && held.equals(data)) continue;
+      if (held !== null) {
+        if (!owned.has(root)) owned.set(root, readOwned(root));
+        const { hashes } = owned.get(root);
+        if (ownedState(root, `${kind}/${rest}`, hashes) === 'unmodified') {
+          if (!dryRun) writeBytes(dest, data);
+          say(`your edit replaces the shipped text: ${what}`);
+          written += 1;
+          continue;
+        }
+        const landing = restoredLanding(path.dirname(dest), path.basename(dest), data);
+        if (landing.write && !dryRun) writeBytes(landing.dest, data, { exclusive: true });
+        say(`kept yours (differs from the backup): ${what}${landing.write ? `; the backup's is ${path.basename(landing.dest)}` : ''}`);
+        continue;
+      }
+      if (!dryRun) {
+        mkdirSync(path.dirname(dest), { recursive: true });
+        writeBytes(dest, data, { exclusive: true });
+      }
+      written += 1;
+    } catch (e) {
+      partial = true;
+      say(`not restored: ${what} (${e && e.message})`);
     }
-    if (!dryRun) {
-      mkdirSync(path.dirname(dest), { recursive: true });
-      writeBytes(dest, data, { exclusive: true });
-    }
-    written += 1;
   }
   say(`skills and agents: ${written} written`);
 
   for (const { host, profile } of manifest.installs) {
-    const name = restoredProfile(host, { ...profile, description: `restored from a backup of ${manifest.createdAt}` }, dryRun);
-    if (dryRun) { say(`${host}: would rebuild with geneseed profile apply ${name}`); continue; }
-    const rc = apply(name);
-    if (rc !== 0) { partial = true; say(`${host}: not rebuilt (profile apply exit ${rc}) — run: geneseed profile apply ${name}`); }
+    try {
+      const name = restoredProfile(host, { ...profile, description: `restored from a backup of ${manifest.createdAt}` }, dryRun);
+      if (dryRun) { say(`${host}: would rebuild with geneseed profile apply ${name}`); continue; }
+      const rc = apply(name);
+      if (rc !== 0) { partial = true; say(`${host}: not rebuilt (profile apply exit ${rc}) — run: geneseed profile apply ${name}`); }
+    } catch (e) {
+      partial = true;
+      say(`${host}: not rebuilt (${e && e.message})`);
+    }
   }
   for (const l of manifest.links) say(`link to recreate by hand: ${l.host} ${l.kind} ${l.name} -> ${l.target ?? '(dead link)'}`);
   for (const p of manifest.projects) say(`project install to re-run there: ${p.host} ${p.root}`);

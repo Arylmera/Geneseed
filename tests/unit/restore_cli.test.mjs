@@ -69,14 +69,16 @@ function world(fn) {
   } finally { sb.cleanup(); }
 }
 
-// A file absent here is written; one that differs is the user's on this machine: kept, and named.
+// A file absent here is written; one that differs is the user's on this machine: kept, and named,
+// and the backup's copy lands beside it so neither text is lost.
 test('restores skills and agents claim-on-create', () => world(({ b, file }) => {
   put(path.join(b, '.claude', 'agents', 'my-agent.md'), 'B agent\n');
   const r = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
   assert.equal(r.rc, 0, r.err);
   assert.equal(read(path.join(b, '.claude', 'skills', 'my-skill', 'SKILL.md')), 'mine\n');
   assert.equal(read(path.join(b, '.claude', 'agents', 'my-agent.md')), 'B agent\n');
-  assert.match(r.out, /^\[restore\] kept yours \(differs from the backup\): claude agents\/my-agent\.md$/m);
+  assert.match(r.out, /^\[restore\] kept yours \(differs from the backup\): claude agents\/my-agent\.md; the backup's is my-agent-restored\.md$/m);
+  assert.equal(read(path.join(b, '.claude', 'agents', 'my-agent-restored.md')), 'A agent\n');
 }));
 
 // The install travels as a personal profile named for its host; a second restore finds the same
@@ -154,3 +156,64 @@ test('full round-trip', { timeout: 300_000 }, () => {
     assert.equal(read(path.join(b, '.claude', '.geneseed-theme')).trim(), 'imperial');
   } finally { sb.cleanup(); }
 });
+
+/** A B install whose manifest owns `skills/ship/SKILL.md`, recorded with the shipped text's hash. */
+async function ownedShip(b, onDisk) {
+  const { textHash } = await import('../../js/hosts/owned.mjs');
+  const cfg = path.join(b, '.claude');
+  put(path.join(cfg, '.geneseed-manifest.json'), JSON.stringify({
+    owned: ['skills/ship/SKILL.md'], hashes: { 'skills/ship/SKILL.md': textHash('shipped\n') } }));
+  put(path.join(cfg, 'skills', 'ship', 'SKILL.md'), onDisk);
+}
+
+/** World with A's edit of the shipped `ship` skill in the backup. */
+async function shipWorld(fn) {
+  const sb = makeSandbox('rc-');
+  try {
+    const a = path.join(sb.path, 'a');
+    put(path.join(a, '.claude', 'skills', 'ship', 'SKILL.md'), 'edited on A\n');
+    const file = path.join(sb.path, 'b.zip');
+    inHome(a, () => {
+      const { entries, manifest } = collectBackup({ targets: [['claude', 'global', path.join(a, '.claude')]] });
+      fs.writeFileSync(file, writeZip([{ name: 'manifest.json', data: Buffer.from(JSON.stringify(manifest)) }, ...entries]));
+    });
+    const b = path.join(sb.path, 'b');
+    fs.mkdirSync(b);
+    return await fn({ b, file });
+  } finally { sb.cleanup(); }
+}
+
+// After `setup` on the new machine, a shipped skill is Geneseed's untouched text: the backup's
+// edit replaces it. A file the user edited on B too is theirs: kept, the backup's lands beside it.
+test('an edit of a shipped skill replaces the untouched shipped text', () => shipWorld(async ({ b, file }) => {
+  await ownedShip(b, 'shipped\n');
+  const r = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
+  assert.equal(r.rc, 0, r.out + r.err);
+  assert.equal(read(path.join(b, '.claude', 'skills', 'ship', 'SKILL.md')), 'edited on A\n');
+}));
+
+test('an edit on both machines keeps B and lands the backup beside it', () => shipWorld(async ({ b, file }) => {
+  await ownedShip(b, 'edited on B\n');
+  const r = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
+  assert.equal(r.rc, 0, r.out + r.err);
+  assert.equal(read(path.join(b, '.claude', 'skills', 'ship', 'SKILL.md')), 'edited on B\n');
+  assert.equal(read(path.join(b, '.claude', 'skills', 'ship', 'SKILL-restored.md')), 'edited on A\n');
+}));
+
+// A linked folder in the config dir belongs to wherever it points: nothing is written through it.
+test('a restore never writes through a link', () => world(({ b, file }) => {
+  put(path.join(b, 'vault', 'my-skill', 'README.md'), 'vault\n');
+  fs.mkdirSync(path.join(b, '.claude', 'skills'), { recursive: true });
+  fs.symlinkSync(path.join(b, 'vault', 'my-skill'), path.join(b, '.claude', 'skills', 'my-skill'), 'junction');
+  const r = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => 0 })));
+  assert.deepEqual(fs.readdirSync(path.join(b, 'vault', 'my-skill')), ['README.md']);
+  assert.match(r.out, /^\[restore\] linked here, not written: claude skills\/my-skill\/SKILL\.md$/m);
+}));
+
+// A step that throws is a named partial restore (exit 2), never a stack trace after half a write.
+test('a failing install step is partial, not a crash', () => world(({ b, file }) => {
+  const r = inHome(b, () => captured(() => cmdRestore({ file }, { apply: () => { throw new Error('boom'); } })));
+  assert.equal(r.rc, 2);
+  assert.match(r.out, /^\[restore\] claude: not rebuilt \(boom\)/m);
+  assert.equal(read(path.join(b, '.claude', 'skills', 'my-skill', 'SKILL.md')), 'mine\n');
+}));
