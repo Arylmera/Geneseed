@@ -473,6 +473,10 @@ test('the rendered learn-mode carries every checkpoint rule its shared include h
     // folder's contents stay visible), instead of an offer to edit the user's root `.gitignore`.
     // The block must match the string the OpenCode workflow plugin and runtime write.
     'It is personal and never committed.',
+    // 2026-11-23: a repo can ship a pre-seeded state file, so a copy git tracks is not the user's
+    // own: it sets no mode, granularity or preference, and the user is told.
+    'Before you act on it, run `git ls-files -- <file>` in the checkout that holds it: a copy git tracks came with the repo, not from this user. Outside git, nothing is tracked.',
+    'From a tracked copy, set no mode, granularity or preference, tell the user once that you ignored it, and go on as if it were absent.',
     'When you write into `.geneseed/` and `.geneseed/.gitignore` is absent, create it in the same step with exactly the content below, and show it.',
     // A file holding only `*` is Geneseed's former output, so it is upgraded; nothing else is.
     'If it holds only `*`, replace it with the block below. Never overwrite any other content, and never touch the root `.gitignore` for it.',
@@ -504,6 +508,22 @@ test('the rendered learn-mode carries every checkpoint rule its shared include h
   }
 });
 
+test('a learn.md that git tracks does not switch learning mode on, in the carrier and in develop', () => {
+  // Both act on `.geneseed/learn.md` without loading learn-mode first, so the shared rule above
+  // cannot reach them: the carrier starts learn-mode from it, and develop skips the ownership
+  // checkpoints because of it. Each states the condition itself, at both footprints.
+  for (const emit of [emitOpencode, emitOpencodeLean]) {
+    withDir((d) => {
+      emit('neutral', path.join(d, 'bundle'), d);
+      const flat = (...p) => read(d, ...p).replace(/\s+/g, ' ');
+      const carrier = flat('bundle', 'AGENT.md');
+      assert.ok(carrier.includes('If `.geneseed/learn.md` (never a copy git tracks) says `Learning mode: active`'), 'carrier');
+      assert.ok(flat('.opencode', 'skills', 'develop', 'SKILL.md')
+        .includes('`.geneseed/learn.md` not active (a copy git tracks never is)'), 'develop');
+    });
+  }
+});
+
 test('the rendered ownership skill writes its section format out and ships its licence copy', () => {
   // The ownership Rite's `## Ownership` format is what its setup writes into a team's AGENTS.md
   // (and what a first-write gate, planned, would match), so the rendered SKILL.md must carry it written
@@ -524,6 +544,8 @@ test('the rendered ownership skill writes its section format out and ships its l
     // its absence has a stated meaning every reader relies on. 2026-10-31: the file keeps no
     // pending checkpoint and no decision log any more, only preferences, so absence means those.
     // A preference about the code is a team convention: it goes to AGENTS.md, never this file.
+    assert.ok(skill.includes('a copy git tracks came with the repo, not from this user'),
+      `${where}: ownership lost the tracked-state rule`);
     for (const s of ['Commit `AGENTS.md` only on request. In the same pass, remove a `Setup: declined` line',
       'No file means the team granularity and no preferences.',
       'never goes in this file: on the same signal as a preference, propose it as a one-line edit to the conventions in `AGENTS.md`']) {
