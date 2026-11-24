@@ -34,7 +34,7 @@ Then repeat `geneseed loop next` and act on what it prints:
 | `{node}` | the brick's prompt, then `git status --porcelain \| geneseed loop record --outcome <outcome>` (the iteration head adds `--card '<json>'` when it reports `more`) |
 | `{verify, run}` | exactly the printed `run` command, which pipes the staged numstat into `geneseed loop score --diff` |
 | `{awaiting}` | `geneseed loop decide --verdict ok\|no\|amend --note "…"` |
-| `{commit: true, message_file}` (from `score --diff` or `decide`, never from `next`) | `git add -A && git commit -F <message_file> && git push -u origin HEAD:loop/<slug>` |
+| `{commit: true, message_file}` (from `score --diff` or `decide`, never from `next`) | `git add -A && git commit -F <message_file>`, the auto-merge probe, then `git push -u origin HEAD:loop/<slug>` |
 | `{terminal}` | nothing more: `$close` or `$stop` |
 
 Every flag is in `geneseed loop --help`. The full cycle, including discards and notes, is in [Loops](../concepts/loops.md).

@@ -461,6 +461,36 @@ test('G4: the factory close step removes FACTORY.md tracked or not, and commits 
   assert.match(close, /Commit and push only when\s+`git status --porcelain` then shows the removal/);
 });
 
+// G8: a push to a branch whose open PR has auto-merge armed merges unreviewed once checks pass,
+// and "Never merge" only binds the agent's own commands. So no command in the loop skill joins a
+// commit to a push (the probe must fit between them), every push to a loop branch in the loop and
+// factory skills comes after the word "probe" in its own step, and the probe stops on anything but
+// a clean read: an armed PR, no CLI, another forge, unreadable output. Second-review R-1, 2026-11-24.
+test('G8: every loop-branch push comes after the auto-merge probe, which stops on anything but a clean read', () => {
+  const loop = shipped('skills/loop.md');
+  const factory = shipped('skills/factory.md');
+  assert.equal((loop.match(/`git[^`]*commit[^`]*push[^`]*`/g) ?? []).length, 0, 'a commit and a push share one command');
+  for (const [name, text] of [['loop', loop], ['factory', factory]]) {
+    const steps = text.split(/\n(?=\d+\. |- \*\*|## )/);
+    const pushes = steps.filter((st) => /`git push -u origin HEAD:loop\//.test(st));
+    assert.ok(pushes.length >= 2, `${name}: its loop pushes are gone`);
+    for (const st of pushes) {
+      const at = st.indexOf('`git push -u origin HEAD:loop/');
+      assert.ok(st.slice(0, at).includes('probe'), `${name}: a push with no probe before it: ${st.slice(0, 80)}`);
+    }
+  }
+  const probe = loop.split(/\n(?=## )/).find((st) => st.startsWith('## Before every push')).replace(/\s+/g, ' ');
+  for (const rule of ['`gh pr list --head loop/<slug> --state open --json number,url,autoMergeRequest`',
+    '`glab mr list --source-branch loop/<slug> --output json`',
+    '`autoMergeRequest` is `null` on every entry', '`merge_when_pipeline_succeeds` is `false` on every entry',
+    'a missing `gh` or `glab`, a failed or unauthenticated call, a remote on another forge, or output you cannot read',
+    'Never disarm it yourself', 'The commit stays local']) {
+    assert.ok(probe.includes(rule), `the probe lost: ${rule}`);
+  }
+  // A factory stage skips the loop's Setup and Compose, so it must name the probe itself.
+  assert.ok(factory.replace(/\s+/g, ' ').includes('every loop push is its probe (*Before every push*) on `loop/factory-<slug>`'));
+});
+
 // G5: the `spec` brick states the task format `countSpecTasks` counts, and a list written the way
 // the brick says is counted in full. The limit is never typed: bricks render no count token, so
 // the brick refers to it in words, and the engine's refusal names it. And the brick speaks of the

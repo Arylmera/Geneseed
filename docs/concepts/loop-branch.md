@@ -29,11 +29,17 @@ Loop-Gates: <every node whose gate passed this unit, deduplicated>
 A loop runs in its own worktree, on a branch named `loop/<slug>` — the `loop` skill creates both
 with `git worktree add -b loop/<slug>` before `geneseed loop init` writes `LOOP.md` there.
 While that branch is checked out and `LOOP.md` carries the engine's state marker, the git gate lets
-exactly one commit/push form through without asking:
+exactly these commit and push forms through without asking:
 
 ```
-git add -A && git commit -F <message_file> && git push [-u] <remote> HEAD:<loop branch>
+git add -A && git commit -F <message_file>
+git push [-u] <remote> HEAD:<loop branch>
 ```
+
+The skill runs them as two commands because, between them, it probes the forge for an open PR from
+the loop branch with auto-merge armed (`gh pr list --head …` or `glab mr list --source-branch …`).
+Such a PR would merge the push with no human review, so an armed PR, a missing `gh`/`glab` or a
+probe it cannot read stops the loop with the commit kept local.
 
 Nothing else is exempt — not `git commit -m`, not a quoted refspec, not a plain `git push` with no
 explicit `HEAD:<ref>` — any other shape still asks. The exemption only ever covers a `loop/*`
