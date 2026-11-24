@@ -160,8 +160,11 @@ in it makes the gate ask. On a record line that ask is a false alarm: the user c
    (*How to record*) and pass that file with `--note-file`; neither when `notes` is empty. A loop
    re-entered after a failure is a fresh loop: the reason arrives as its note.
 6. Follow the `loop` {{SKILL}} from *The cycle* through *The end*, skipping its Setup: the
-   worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
-   is `git push -u origin HEAD:loop/factory-<slug>`. Skip its final report too: the run goes on.
+   worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here. So every loop push
+   is its probe (*Before every push*) on `loop/factory-<slug>`, then
+   `git push -u origin HEAD:loop/factory-<slug>`. The probe matters most here: from `merge-gate`
+   on, the branch has an open PR.
+   Skip its final report too: the run goes on.
 7. When the loop reaches `$close` and its close commit has removed `LOOP.md`:
    `git status --porcelain --untracked-files=all | geneseed factory record --outcome pass`.
    When it reaches `$stop`, leave its `LOOP.md` in place, write the stop reason to a unique file
@@ -173,7 +176,9 @@ in it makes the gate ask. On a record line that ask is a false alarm: the user c
 8. On `$close`: the `retro` stage has written the run report. Remove `FACTORY.md`:
    `git rm -f FACTORY.md` when git tracks it (a loop's commit carries it), else delete the file
    (a run with no loop, such as the `docs` lane, never tracked it). Commit and push only when
-   `git status --porcelain` then shows the removal: `git commit -m "factory(<slug>): close"` and
+   `git status --porcelain` then shows the removal: `git commit -m "factory(<slug>): close"`, then
+   the `loop` {{SKILL}}'s auto-merge probe on `loop/factory-<slug>` (an armed PR, or a probe that
+   cannot read, stops the run before the push, as there), then
    `git push -u origin HEAD:loop/factory-<slug>`. The gate asks: that ask is the user's consent.
    That push re-runs CI on the PR, after `merge-gate` saw it green. Read the PR's checks again
    once, with the bounded wait the `merge-gate` brick names (30 minutes at most), and add the

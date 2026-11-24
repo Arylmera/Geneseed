@@ -28,6 +28,25 @@ action prints one JSON object — act on its keys, never on your own reading of 
    without asking (under strict consent, exactly the commit form below, on a launched loop).
    Merging into the main branch is never yours.
 
+## Before every push
+
+An open PR from `loop/<slug>` with auto-merge armed merges what you push as soon as its checks
+pass, with no human review. The forge merges, not you, so *Never merge* does not stop it; a
+person, a bot, a label rule or an earlier run may have armed it, and on GitHub it stays armed
+across pushes. So right before **every** `git push` in this skill, probe the forge that hosts
+`origin`, and push only when the probe reads *not armed*:
+
+- GitHub: `gh pr list --head loop/<slug> --state open --json number,url,autoMergeRequest`.
+  Not armed: `[]`, or `autoMergeRequest` is `null` on every entry.
+- GitLab: `glab mr list --source-branch loop/<slug> --output json`.
+  Not armed: `[]`, or `merge_when_pipeline_succeeds` is `false` on every entry.
+
+Anything else stops the loop before the push: an armed PR (report its number and URL), and
+equally a missing `gh` or `glab`, a failed or unauthenticated call, a remote on another forge, or
+output you cannot read. Never disarm it yourself, and never push past a probe that did not read
+*not armed*. The commit stays local, so nothing is lost: when the user says to go on, probe
+again, push, and continue where you stopped.
+
 ## Compose
 
 3. Use a template when the user names one. Otherwise run `geneseed loop check`: it lists the
@@ -72,11 +91,12 @@ Repeat `geneseed loop next` and act on its JSON:
 
 What `score --diff`, `decide` and `record` print back:
 
-- **`{commit: true, message_file}`** — close the unit with exactly this command, nothing added:
-  `git add -A && git commit -F <message_file> && git push -u origin HEAD:loop/<slug>`
-  Never `git commit -m`: only this form is exempt; anything else asks. It assumes a remote named
-  `origin` and a `message_file` path without spaces: if the path has a space, quote it and accept
-  that the gate asks; with no remote, report and stop instead of retrying.
+- **`{commit: true, message_file}`** — close the unit with exactly these three steps, in this
+  order, nothing added: `git add -A && git commit -F <message_file>`, then the probe (*Before
+  every push*), then `git push -u origin HEAD:loop/<slug>`.
+  Never `git commit -m`: only these forms are exempt; anything else asks. They assume a remote
+  named `origin` and a `message_file` path without spaces: if the path has a space, quote it and
+  accept that the gate asks; with no remote, report and stop instead of retrying.
 - **`{discard: true}`** (with `resplit` when an inner ring was exhausted) — set the attempt aside,
   keeping the engine files: `git stash -u -m loop-discarded -- . :^LOOP.md :^FACTORY.md` (never
   `git stash push` — the word `push` trips the git gate mid-run). `FACTORY.md` is the factory
@@ -94,8 +114,8 @@ What `score --diff`, `decide` and `record` print back:
 ## The end
 
 5. On `$close`: `git rm -f LOOP.md` (the engine rewrote it after the last commit), then
-   `git commit -m "loop(<slug>): close" && git push -u origin HEAD:loop/<slug>`.
-   This final commit is outside the exemption — the loop is no longer running — so the gate
+   `git commit -m "loop(<slug>): close"`, then the probe (*Before every push*), then
+   `git push -u origin HEAD:loop/<slug>`. This final commit is outside the exemption — the loop is no longer running — so the gate
    asks: that ask is the user's consent to close the loop.
 6. Report: the iteration count, the **soft** iterations from `summary.review` under
    "to review", the `notes`, and the branch to merge. **Never merge.**
@@ -109,6 +129,7 @@ in `LOOP.md`; they apply from the next score.
 ## Done when
 
 - `$close` is reported with the branch pushed and `LOOP.md` removed, or `$stop` is reported with
-  its reason — and in both cases nothing was merged.
+  its reason — and in both cases nothing was merged, and every push came right after a probe
+  that read *not armed*.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
