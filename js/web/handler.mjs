@@ -24,6 +24,7 @@ import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
 import { profileApplyCmd, profileSaveCmd } from './profiles-api.mjs';
 import { backupCmd, backupRestoreCmd } from './backup-api.mjs';
+import { memoryCleanCmd } from './memory-api.mjs';
 import {
   MACHINE_GETS, POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, VIEW_POSTS, readJsonBody,
 } from './routes.mjs';
@@ -410,6 +411,13 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     if (action === 'backup' || action === 'backup-restore') {
       const plan = action === 'backup' ? backupCmd(body) : backupRestoreCmd(body);
       if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
+      return startJob(res, action, [plan.cmd], ae);
+    }
+    // The Memory page's cleanup runs the hook binary's `learn --consolidate --merge` on the request's install
+    // (js/web/memory-api.mjs): a refusal is the install's (no learn model), so 409.
+    if (action === 'memory-clean') {
+      const plan = memoryCleanCmd(st, body);
+      if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 409, ae);
       return startJob(res, action, [plan.cmd], ae);
     }
     if (action === 'rebuild') {

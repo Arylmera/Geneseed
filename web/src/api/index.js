@@ -94,6 +94,10 @@ const catalog = (section, install) => getIn(`/api/catalog/${section}`, install)
 const item = (type, name, install) =>
   getIn(`/api/item/${type}/${encodeURIComponent(name)}`, install)
 const memoryDelete = (name, install) => postIn('/api/memory/delete', { name }, install)
+// The Memory page (js/web/memory-api.mjs): the store's state, the cleanup's waiting actions decided, a restore.
+const memory = (install) => getIn('/api/memory', install)
+const memoryDecide = (body, install) => postIn('/api/memory/decide', body, install)
+const memoryRestore = (name, install) => postIn('/api/memory/restore', { name }, install)
 // What one agent loads, and the rules it follows: the primary agent by default, else an Adept.
 const loadout = (agent, install) =>
   getIn(agent ? `/api/loadout/${encodeURIComponent(agent)}` : '/api/loadout', install)
@@ -274,6 +278,9 @@ export const api = {
   agentModels,
   agentModelsSave,
   memoryDelete,
+  memory,
+  memoryDecide,
+  memoryRestore,
   diff,
   restore,
   job,

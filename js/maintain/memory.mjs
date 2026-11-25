@@ -51,6 +51,7 @@ import path from 'node:path';
 import { archiveFact, consolidateMemory, isReservedStem, memoryDropIndex, readFacts } from '../hosts/memory-files.mjs';
 import { searchLines } from '../hosts/memory-search.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
+import { consolidatePreview, decidePending, readPlan, restoreFact } from '../hosts/memory-consolidate.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
 
@@ -117,6 +118,13 @@ export function cmdMemory(args) {
         + '--archived or --purge.\n');
       return 2;
     }
+    if (args.dryRun) {
+      const p = consolidatePreview(dir);
+      printOut(`[memory] dry run on ${dir}: +${p.added.length} would be indexed, -${p.pruned.length} pruned, `
+        + `${p.near.length} near-duplicate pair(s); nothing written\n`);
+      for (const [a, b, sim] of p.near) printOut(`  near-duplicate: ${a} <-> ${b} (${sim.toFixed(2)})\n`);
+      return 0;
+    }
     const report = recordOwnWrites(path.dirname(dir), () => consolidateMemory(dir));
     printOut(`[memory] consolidated ${dir}: +${report.added.length} indexed, `
       + `-${report.pruned.length} pruned, `
@@ -124,6 +132,7 @@ export function cmdMemory(args) {
     for (const [a, b] of report.duplicates) printOut(`  duplicate: ${a} <-> ${b}\n`);
     return 0;
   }
+  if (['plan', 'apply', 'reject', 'restore'].includes(args.action)) return cleanupVerb(dir, args);
   const where = args.archived ? path.join(dir, 'archive') : dir;
   if (args.action === 'search') {
     // The map lists only the largest topics (O10), so this is the way to every fact: the same BM25 the
@@ -175,5 +184,57 @@ export function cmdMemory(args) {
   }
   printOut(`[memory] ${where}\n`);
   printOut(done ? `[memory] archived ${args.name} -> ${done}\n` : `[memory] deleted ${args.name}.\n`);
+  return 0;
+}
+
+/**
+ * `plan`, `apply`, `reject` and `restore`: the user's half of the cleanup (js/hosts/memory-consolidate.mjs). The
+ * learn model applies the actions it is sure of and leaves the doubtful ones in the plan; these show them and
+ * decide them. All filesystem work, so legal in this binary. `apply` copies the whole store aside first.
+ */
+function cleanupVerb(dir, args) {
+  const name = String(args.name ?? '').trim();
+  if (args.action === 'plan') {
+    const { pending, at } = readPlan(dir);
+    if (!pending.length) {
+      printOut(`[memory] ${dir}: nothing waits for you${at ? ` (last cleanup ${at.slice(0, 10)})` : ''}.\n`);
+      return 0;
+    }
+    printOut(`[memory] ${dir}: ${pending.length} cleanup action(s) wait for you (apply or reject <name>, or --all)\n`);
+    for (const a of pending) printOut(`  ${a.action} ${a.slug}${a.into ? ` into ${a.into}` : ''}${a.reason ? ` (${a.reason})` : ''}\n`);
+    return 0;
+  }
+  if (args.action === 'restore') {
+    if (!name || !isFactName(name)) {
+      printErr('[memory] restore needs the name of an archived fact (geneseed memory list --archived).\n');
+      return 2;
+    }
+    const got = recordOwnWrites(path.dirname(dir), () => {
+      const r = restoreFact(dir, name);
+      if (r.slug) consolidateMemory(dir);
+      return r;
+    });
+    if (got.error) {
+      printErr(`[memory] ${got.error}.\n`);
+      return 1;
+    }
+    printOut(`[memory] restored ${got.slug} into ${dir}\n`);
+    return 0;
+  }
+  if (!name && !args.all) {
+    printErr(`[memory] ${args.action} needs the name of a waiting action, or --all (geneseed memory plan).\n`);
+    return 2;
+  }
+  const r = recordOwnWrites(path.dirname(dir), () => decidePending(dir, {
+    slugs: name ? [name] : [], all: Boolean(args.all), reject: args.action === 'reject',
+  }));
+  if (r.missing.length) {
+    printErr(`[memory] nothing waits under ${r.missing.join(', ')}.\n`);
+    return 1;
+  }
+  if (r.backup) printOut(`[memory] the store was copied to ${r.backup} first\n`);
+  if (r.stale.length) printOut(`[memory] dropped ${r.stale.length} stale action(s), their fact changed since: ${r.stale.join(', ')}\n`);
+  const done = args.action === 'reject' ? r.rejected : r.applied;
+  printOut(`[memory] ${args.action === 'reject' ? 'rejected' : 'applied'} ${done.length} action(s)${done.length ? `: ${done.join(', ')}` : ''}\n`);
   return 0;
 }

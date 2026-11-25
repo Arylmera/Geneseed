@@ -13,6 +13,7 @@ export const PAGES = {
   loops: 'Loops',
   factories: 'Factories',
   personal: 'Personal',
+  memory: 'Memory',
   installs: 'Installs',
   docs: 'Docs',
   activity: 'Activity',
@@ -24,7 +25,7 @@ export const PAGES = {
 export const TABS = {
   loops: ['templates', 'bricks', 'active'],
   factories: ['templates', 'active'],
-  personal: ['rules', 'profile', 'memory', 'notebook'],
+  personal: ['rules', 'profile', 'notebook'],
   installs: ['hosts', 'profiles', 'edits', 'doctor'],
 }
 export const TAB_LABELS = {
@@ -33,7 +34,6 @@ export const TAB_LABELS = {
   active: 'Active',
   rules: 'Rules',
   profile: 'Profile',
-  memory: 'Memory',
   notebook: 'Notebook',
   hosts: 'Hosts',
   profiles: 'Profiles',
@@ -80,7 +80,7 @@ const tabOf = (page, t) => (TABS[page].includes(t) ? t : TABS[page][0])
 //   tab     - the Loops, Factories, Personal or Installs tab.
 //   item    - the selected entry's name, URI-decoded. Docs and Activity reuse the slot for
 //             their own sub-address: the docs page id, the activity session id.
-// Routes: #/ , #/<page>, #/kits/<kit>, #/<page>/<tab>[/<item>], #/section/<name>, #/item/<type>/<name>,
+// Routes: #/ , #/<page>, #/kits/<kit>, #/memory/<fact>, #/<page>/<tab>[/<item>], #/section/<name>, #/item/<type>/<name>,
 // #/docs/<page-id...>, #/activity/<sid>. Every one folds onto ONE page key, so App gives
 // every page ONE slot in the tree (see the warning in App.jsx).
 export function resolveRoute(hash) {
@@ -98,12 +98,18 @@ export function resolveRoute(hash) {
   if (head === 'section' || head === 'item') {
     const section = head === 'item' && own(TYPE_TO_SECTION, a) ? TYPE_TO_SECTION[a] : a
     const item = head === 'item' ? dec(b) : undefined
-    // Memory and Notebook are Personal's tabs: every old Library address opens them there.
-    if (section === 'memory' || section === 'notebook')
+    // Memory is a page of its own, and Notebook a tab of Personal: every old Library address opens them there.
+    if (section === 'memory') return item ? { page: 'memory', item } : { page: 'memory' }
+    if (section === 'notebook')
       return item ? { page: 'personal', tab: section, item } : { page: 'personal', tab: section }
     return { page: section === 'laws' ? 'laws' : 'library', section, item }
   }
   if (head === 'docs') return { page: 'docs', item: dec(parts.slice(1).join('/')) }
+  // Memory was Personal's tab: `#/personal/memory[/<fact>]` opens the page, with the fact.
+  if (head === 'memory' || (head === 'personal' && a === 'memory')) {
+    const fact = head === 'memory' ? a : b
+    return fact ? { page: 'memory', item: dec(fact) } : { page: 'memory' }
+  }
   if (head === 'kits') return a ? { page: 'kits', item: dec(a) } : { page: 'kits' }
   if (head === 'activity' && a) return { page: 'activity', item: dec(a) }
   // Skills and Agents were pages of their own; each is now a kind in the Library.

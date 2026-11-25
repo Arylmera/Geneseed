@@ -71,6 +71,7 @@ export const TWINS = [
   ['block', 'spec-feedback', 'js/hosts/spec-feedback.mjs', plugin('learn')],
   ['block', 'agent-runs', 'js/hosts/agent-runs.mjs', plugin('learn')],
   ['block', 'memory-search', 'js/hosts/memory-search.mjs', plugin('learn')],
+  ['block', 'gate log', 'js/hosts/memory-files.mjs', plugin('learn')],
   ['block', 'learn cursor', 'js/hosts/hooks-learn.mjs', plugin('learn')],
   ['decl', 'fenceNotes', 'js/hosts/hooks-learn.mjs', plugin('learn')],
   ['block', 'done-check tables', 'js/hosts/done-checks.mjs', plugin('context')],

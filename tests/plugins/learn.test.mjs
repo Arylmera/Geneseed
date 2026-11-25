@@ -794,3 +794,33 @@ test("memory_search: V2 adds the tool through tool.transform, with query require
     if (typeof stop === "function") stop()
   } finally { restore() }
 })
+
+// The plugin's gate log is the hook's: the same reply into the same store logs the same decisions (the line's
+// `at` aside, and `host`, which is the plugin's own). A NOTHING still logs one line.
+test("gate log: the plugin logs the hook's decisions for the same reply, and a NOTHING", async () => {
+  const { writeMemories: harnessWrite, gateEntries, readGateLog } = await import("../../js/hosts/memory-files.mjs")
+  const root = makeSandbox("gs-learn-gate-").path
+  const fact = (name, desc) => `---\nname: ${name}\ndescription: ${desc}\ntopic: build\n---\n${desc}.`
+  const seed = fact("stored-fact", "the windows console code page is cp1252 so read output as utf8")
+  const reply = [fact("new-fact", "release notes are folded from changes fragments at release time"),
+    fact("copy-fact", "the windows console code page is cp1252 so read output as utf8 bytes")].join("\n---FILE---\n")
+  const dirs = {}
+  for (const who of ["plugin", "hook"]) {
+    const memDir = path.join(root, who, "memory")
+    await fs.mkdir(memDir, { recursive: true })
+    await fs.writeFile(path.join(memDir, "stored-fact.md"), `${seed}\n`)
+    dirs[who] = memDir
+  }
+  await GeneseedLearn.storeDistil(reply, { isChild: false, memDir: dirs.plugin, existing: new Set(["stored-fact"]) })
+  await GeneseedLearn.storeDistil("NOTHING", { isChild: false, memDir: dirs.plugin, existing: new Set(["stored-fact", "new-fact"]) })
+  const res = harnessWrite(reply, dirs.hook, new Set(["stored-fact"]))
+  const strip = (rows) => rows.map(({ at, host, ...rest }) => rest)
+  const plugin = readGateLog(dirs.plugin)
+  assert.deepEqual(strip(plugin), [
+    { source: "learn", decision: "created", slug: "new-fact" },
+    { source: "learn", decision: "duplicate", slug: "copy-fact", of: "stored-fact" },
+    { source: "learn", decision: "nothing", reason: "nothing stored" },
+  ])
+  assert.deepEqual(strip(plugin.slice(0, 2)), strip(gateEntries(res, { at: "x", source: "learn", host: "claude" })))
+  assert.ok(plugin.every((row) => row.host === "opencode"))
+})

@@ -115,6 +115,8 @@ const VERBS = {
     switches: {
       '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate', '--no-test-note': 'noTestNote',
       '--no-rule-store': 'noRuleStore',
+      // With --consolidate: the model's cleanup (js/hosts/memory-consolidate.mjs), all facts again, or a report only.
+      '--merge': 'merge', '--all': 'all', '--dry-run': 'dryRun',
     },
     positional: 'file',
   },

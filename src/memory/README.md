@@ -142,6 +142,11 @@ hook from its `description`), and the `learn` hook rebuilds them after every fac
 writes, updates or archives. Only top-level fact files are indexed; `archive/` and
 `agents/` never are.
 
+**The gate log.** Each `learn` run appends one JSON line per decision to `.gate-log.jsonl` in this
+folder: `created`, `merged`, `archived`, `duplicate` (a new fact too close to a stored one, which it
+names), `nothing` or `failed`, with the reason. It is not a fact and is never indexed; the newest
+5 000 lines are kept.
+
 **A top-level file whose name is all capitals is a store document, not a fact:** `MEMORY.md`,
 `README.md`, `ARCHIVE-INDEX.md`. It is never indexed, never filed under `misc`, never shown to
 `learn`, and `geneseed memory rm` refuses it. Name a fact in lower case.
@@ -160,6 +165,30 @@ description says *always* or *never* (*toujours*, *jamais*) are written to `user
 decision. A draft does not load until you approve it, in the console or with the rule {{SKILL}}:
 an approved draft moves into `user-rules.md`, which loads; a rejected one is dropped. Until then
 a one-line reminder at session start says how many wait. A second build drafts nothing new.
+
+## The cleanup
+
+The `learn` model also cleans the store it writes to. It reads the facts in batches of up to 40,
+one topic's facts together, and answers with three kinds of action: **merge** facts that say the
+same thing (the kept one is rewritten, the others archived), **archive** a fact that is task
+residue or no longer true, and **split** a topic of more than 30 facts into narrower ones, so a
+topic file stays small enough to open whole. It never acts on a fact with a `force:`, and never
+creates one.
+
+- **Nothing is lost.** Before the first change, the whole store is copied into
+  `archived-cleanup/<date>/` in this folder, and every merge or archive goes through `archive/`.
+  `geneseed memory restore <name>` brings an archived fact back.
+- **Only the doubtful waits for you.** An action the model is unsure of is kept in
+  `.consolidate-plan.json`. `geneseed memory plan` lists them, and `geneseed memory apply <name>`
+  or `geneseed memory reject <name>` (or `--all`) decides them. An action whose fact changed since
+  it was judged is dropped, not applied.
+- **When it runs.** By itself, at the end of a session, on a store of 60 facts or more that was
+  never cleaned by this version of Geneseed, or that has gathered many unjudged facts since: five
+  batches per session until the store is through. `GENESEED_CONSOLIDATE=off` turns that off. By
+  hand: `geneseed-hook learn --consolidate --merge --memory <this dir>`, and `--dry-run` applies
+  nothing, so every action waits for you to confirm.
+- `geneseed memory consolidate --dry-run` needs no model: it reports what the index rebuild would
+  change and the pairs of facts in one topic that look like duplicates.
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)
 

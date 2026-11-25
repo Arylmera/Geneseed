@@ -27,6 +27,7 @@ import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem, apiLoadout } from './cat
 import { apiUsage } from './usage-api.mjs';
 import { apiProfiles } from './profiles-api.mjs';
 import { apiBackupsList } from './backup-api.mjs';
+import { apiMemory, apiMemoryDecide, apiMemoryRestore } from './memory-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
 import { apiAgentModels, apiAgentModelsFull, apiAgentModelsSave } from './agent-models-api.mjs';
@@ -71,6 +72,9 @@ export const POST_ROUTES = new Map([
   // Settings › Backup & restore: the backups in a folder. A POST, because the folder is a body
   // value a GET table entry `(state)` cannot receive; it writes nothing.
   ['/api/backups/list', [apiBackupsList, true]],
+  // The Memory page (js/web/memory-api.mjs): decide what the cleanup left waiting, restore an archived fact.
+  ['/api/memory/decide', [apiMemoryDecide, true]],
+  ['/api/memory/restore', [apiMemoryRestore, true]],
 ]);
 
 /**
@@ -81,7 +85,8 @@ export const POST_ROUTES = new Map([
  * are the only actions that read the request's install.
  */
 export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/rules',
-  '/api/rules/promote', '/api/rules/decide', '/api/profile', '/api/actions/restore', '/api/actions/build', '/api/agent-models']);
+  '/api/rules/promote', '/api/rules/decide', '/api/profile', '/api/actions/restore', '/api/actions/build', '/api/agent-models',
+  '/api/memory/decide', '/api/memory/restore', '/api/actions/memory-clean']);
 
 /**
  * The GETs that answer for the whole machine, not one install: they IGNORE a `?host=&path=`
@@ -226,6 +231,8 @@ export const STATE_ROUTES = {
   '/api/profiles': (state, url) => apiProfiles(state, url),
   '/api/update': apiUpdate,
   '/api/usage': apiUsage,
+  // The Memory page's one read: counts, topic sizes, the gate log, the cleanup's plan, the archive.
+  '/api/memory': apiMemory,
   '/api/gates': apiGates,
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,

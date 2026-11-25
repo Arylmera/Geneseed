@@ -480,7 +480,9 @@ test('the entry dispatches `memory` at this module, with the actions the table d
   // `consolidate` joined in 5.1.1: the specs told readers to run `geneseed learn --consolidate`,
   // a hook verb this binary refuses, so the rebuild got a door a person may use. `search` joined
   // with the bounded map (O10): MEMORY.md lists only the largest topics, so every fact needs a way in.
-  assert.deepEqual(cmd.positionals[0].choices, ['list', 'search', 'rm', 'consolidate']);
+  // `plan`, `apply`, `reject` and `restore` joined with the cleanup (js/hosts/memory-consolidate.mjs): the learn
+  // model applies what it is sure of and leaves the rest waiting, and an archived fact needs a way back.
+  assert.deepEqual(cmd.positionals[0].choices, ['list', 'search', 'rm', 'consolidate', 'plan', 'apply', 'reject', 'restore']);
   assert.equal(cmd.positionals[0].required, true, 'the action became optional');
   assert.equal(cmd.positionals[1].nargs, '?', 'the fact name became required for `list` too');
   // Deleting for good is opt-in: both switches are flags that default off.
@@ -510,4 +512,15 @@ test('the verb searches by words, best match first, and refuses an empty query',
     assert.equal(empty.status, 2);
     assert.match(empty.stderr, /search needs the words to look for/);
   });
+});
+
+// The gate log keeps its newest GATE_LOG_KEEP lines: a file within the cap is left as it is (null), one past it
+// loses its oldest lines, and blank lines never count.
+test('trimGateLog: within the cap is no rewrite; past it, the newest lines are kept', async () => {
+  const { trimGateLog, GATE_LOG_KEEP } = await import('../../js/hosts/memory-files.mjs');
+  const lines = (n) => Array.from({ length: n }, (_, i) => `{"decision":"nothing","n":${i}}`);
+  assert.equal(trimGateLog(`${lines(GATE_LOG_KEEP).join('\n')}\n\n`), null);
+  const kept = trimGateLog(`${lines(GATE_LOG_KEEP + 3).join('\n')}\n`);
+  assert.equal(kept.split('\n').filter(Boolean).length, GATE_LOG_KEEP);
+  assert.ok(kept.startsWith('{"decision":"nothing","n":3}\n'));
 });

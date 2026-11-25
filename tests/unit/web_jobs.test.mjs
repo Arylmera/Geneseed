@@ -107,6 +107,7 @@ const INLINE_PROBES = {
   'profile-save': 'tests/unit/web_profiles.test.mjs',
   backup: 'tests/unit/web_backup.test.mjs',
   'backup-restore': 'tests/unit/web_backup.test.mjs',
+  'memory-clean': 'tests/unit/web_memory.test.mjs',
 };
 
 test('the action table is the seven rows this phase measured', () => {

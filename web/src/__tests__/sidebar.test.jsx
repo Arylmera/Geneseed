@@ -38,6 +38,7 @@ describe('Sidebar', () => {
         'Overview',
         'Constitution',
         'Personal',
+        'Memory',
         'Library',
         'Models',
         'Kits',
@@ -53,7 +54,7 @@ describe('Sidebar', () => {
 
   // Each count is a sum the overview already holds, written out:
   //   Constitution = 11 invariants (counts.laws) + 28 doctrine = 39; the 4 ethos sections are no rules
-  //   Library      = 52 skills + 18 agents + 0 wiki + 2 setup = 72; memory and notebook are Personal's
+  //   Library      = 52 skills + 18 agents + 0 wiki + 2 setup = 72; memory has its page, notebook is Personal's
   //   Loops        = templates only (counts.loops), not bricks = 3
   //   Installs     = installed, on or off, from the installs list = 2 of the 3 rows
   it('counts what each page lists', () => {
@@ -65,6 +66,8 @@ describe('Sidebar', () => {
     // No honest single number for these: no badge rather than an invented one.
     expect(row('Overview').querySelector('.sb-count')).toBeNull()
     expect(row('Personal').querySelector('.sb-count')).toBeNull()
+    // The overview counts no facts across installs, so Memory carries no badge either.
+    expect(row('Memory').querySelector('.sb-count')).toBeNull()
   })
 
   it('lights the route page, and only it', () => {
@@ -86,6 +89,7 @@ describe('Sidebar', () => {
     expect(names(within(nav).getByRole('group', { name: 'Govern' }))).toEqual([
       'Constitution',
       'Personal',
+      'Memory',
     ])
     expect(names(within(nav).getByRole('group', { name: 'Build' }))).toEqual([
       'Library',
@@ -96,7 +100,7 @@ describe('Sidebar', () => {
     ])
     expect(names(within(nav).getByRole('group', { name: 'Run' }))).toEqual(['Installs', 'Activity'])
     expect(names(within(nav).getByRole('group', { name: 'Help' }))).toEqual(['Docs', 'Settings'])
-    expect(nav.querySelectorAll('a.sb-item')).toHaveLength(12)
+    expect(nav.querySelectorAll('a.sb-item')).toHaveLength(13)
   })
 
   // The owner's order for Build: Library, Kits, Loops, and last Factories, right after Loops.

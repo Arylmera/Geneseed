@@ -1638,8 +1638,8 @@
     },
     {
       "name": "memory",
-      "help": "manage the memory store: list, search, remove, or rebuild the index",
-      "description": "manage the memory store: list the facts the agent reads, search them by words (best matches first, --limit), remove one by name (archived into memory/archive/; --purge deletes), or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
+      "help": "manage the memory store: list, search, remove, restore, rebuild, review the cleanup",
+      "description": "manage the memory store: list the facts the agent reads, search them by words (best matches first, --limit), remove one by name (archived into memory/archive/; --purge deletes), restore an archived one, or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk; --dry-run reports only). plan lists what the learn model's cleanup left waiting for you; apply and reject decide one by name, or --all. A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
       "positionals": [
         {
           "names": [],
@@ -1650,7 +1650,11 @@
             "list",
             "search",
             "rm",
-            "consolidate"
+            "consolidate",
+            "plan",
+            "apply",
+            "reject",
+            "restore"
           ],
           "default": null,
           "required": true,
@@ -1663,7 +1667,7 @@
           "names": [],
           "dest": "name",
           "metavar": null,
-          "help": "the fact to remove, spelled as its filename without the .md; for search, the words to look for (quote several words)",
+          "help": "the fact to remove, restore, apply or reject, spelled as its filename without the .md; for search, the words to look for (quote several words)",
           "choices": null,
           "default": null,
           "required": false,
@@ -1726,6 +1730,36 @@
           "dest": "purge",
           "metavar": null,
           "help": "rm deletes the fact for good instead of archiving it (cannot be undone)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--all"
+          ],
+          "dest": "all",
+          "metavar": null,
+          "help": "apply or reject: every action the cleanup left waiting, instead of the one named",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--dry-run"
+          ],
+          "dest": "dry_run",
+          "metavar": null,
+          "help": "consolidate: print what the rebuild would index and prune, and the near-duplicate pairs, and write nothing",
           "choices": null,
           "default": false,
           "required": false,

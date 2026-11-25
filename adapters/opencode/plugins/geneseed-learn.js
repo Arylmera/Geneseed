@@ -1388,13 +1388,74 @@ async function recordOwnWrites(home, fn) {
   }
 }
 
+// The gate log, a copy of the block in js/hosts/memory-files.mjs: one JSON line per decision the
+// distil's write took, into memory/.gate-log.jsonl, for the console's memory page.
+// ---- gate log twin: BEGIN
+/**
+ * THE GATE LOG: one JSON line per decision the distil's write took, beside the store it decided for
+ * (`memory/.gate-log.jsonl`). `learn-last.json` keeps only the last run's verdict, so nothing could say how many
+ * candidates a week were accepted, merged or turned away, nor why: the console's memory page charts this file.
+ * Not a `.md`, so no index, no `learn` listing and no change report ever reads it as a fact.
+ *
+ * A decision is `created`, `merged` (an `action: update`), `archived`, `duplicate` (a create the near-duplicate
+ * guard turned away, `of` naming the stored fact), `nothing` (the model said NOTHING, or nothing it said was a
+ * memory file) or `failed` (the call failed: `reason` says how). A run that wrote nothing still logs one line, so
+ * the log counts the runs that were turned away, not only the facts that got in.
+ *
+ * The OpenCode learn plugin's copy is made by `node tests/twins.mjs --write`; edit this one.
+ */
+const GATE_LOG = '.gate-log.jsonl';
+/** Past this many lines the oldest are dropped: a log a page charts, not an audit trail. */
+const GATE_LOG_KEEP = 5000;
+const DUPLICATE_LINE_RE = /^(\S+): near-duplicate of (\S+), skipped$/;
+
+/** The log lines of one write: `res` is `writeMemories`'s answer, or null when the call failed (`fail` says how). */
+function gateEntries(res, { at, source, host, fail = '' }) {
+  const head = { at, source, host };
+  if (!res) return [{ ...head, decision: 'failed', reason: String(fail || 'no reply').slice(0, 200) }];
+  const rows = [];
+  for (const slug of res.created) rows.push({ ...head, decision: 'created', slug });
+  for (const slug of res.updated) rows.push({ ...head, decision: 'merged', slug });
+  for (const slug of res.archived) rows.push({ ...head, decision: 'archived', slug });
+  for (const line of res.skipped) {
+    const m = DUPLICATE_LINE_RE.exec(line);
+    if (m) rows.push({ ...head, decision: 'duplicate', slug: m[1], of: m[2] });
+  }
+  if (!rows.length) rows.push({ ...head, decision: 'nothing', reason: fail ? String(fail).slice(0, 200) : 'nothing stored' });
+  return rows;
+}
+
+/** Keep the newest GATE_LOG_KEEP of a log's lines, or null when it is still within the cap. */
+function trimGateLog(text) {
+  const lines = text.split('\n').filter((l) => l.trim());
+  return lines.length > GATE_LOG_KEEP ? `${lines.slice(-GATE_LOG_KEEP).join('\n')}\n` : null;
+}
+// ---- gate log twin: END
+
+// Append a write's decisions to the store's gate log; trim past the cap. Never throws (twin of appendGateLog).
+async function appendGateLog(memDir, entries) {
+  if (!memDir || !entries.length) return
+  const f = path.join(memDir, GATE_LOG)
+  try {
+    await fs.appendFile(f, entries.map((e) => `${JSON.stringify(e)}\n`).join(""), "utf8")
+    if ((await fs.stat(f)).size > GATE_LOG_KEEP * 120) {
+      const kept = trimGateLog(await fs.readFile(f, "utf8"))
+      if (kept !== null) await fs.writeFile(f, kept, "utf8")
+    }
+  } catch { /* the log never fails a write */ }
+}
+
 // The distil's reply into the store: a child session's one agent lesson, else memory
 // files plus their two-level index. Shared by the V1 and V2 runs.
 async function storeDistil(output, opts) {
   return recordOwnWrites(path.dirname(opts.memDir), () => writeDistil(output, opts))
 }
 async function writeDistil(output, { isChild, memDir, agentName, existing }) {
-  if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
+  const head = { at: new Date().toISOString(), source: "learn", host: "opencode" }
+  if (!output.trim() || output.trim().toUpperCase() === "NOTHING") {
+    if (!isChild) await appendGateLog(memDir, gateEntries({ created: [], updated: [], archived: [], skipped: [] }, head))
+    return
+  }
   if (isChild) {
     const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
     if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
@@ -1403,6 +1464,7 @@ async function writeDistil(output, { isChild, memDir, agentName, existing }) {
     return
   }
   const res = await writeMemories(output, memDir, existing)
+  await appendGateLog(memDir, gateEntries(res, head))
   for (const [verb, slugs] of [["wrote", res.created], ["updated", res.updated], ["archived", res.archived]]) {
     if (slugs.length) say(`${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`, "info")
   }
@@ -1620,7 +1682,7 @@ export const GeneseedLearn = async (ctx) => {
 Object.assign(GeneseedLearn, {
   resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2,
   captureSpecFeedback, captureTurn, finalAssistantText, notesRootsOf, FEEDBACK_SECRET_RE,
-  recordAgentRun, toolCounts, isRefusal, specHashOf, agentRunLine,
+  recordAgentRun, toolCounts, isRefusal, specHashOf, agentRunLine, storeDistil,
 })
 
 // ---- OpenCode 2 ----------------------------------------------------------------

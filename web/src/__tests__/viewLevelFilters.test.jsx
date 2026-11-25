@@ -35,7 +35,16 @@ describe('view level filters the surfaces', () => {
   it('Essentials rail', () => {
     at('essentials', <Sidebar route={{ page: 'overview' }} />)
     expect(sorted(rail())).toEqual(
-      sorted(['Overview', 'Constitution', 'Library', 'Personal', 'Installs', 'Docs', 'Settings']),
+      sorted([
+        'Overview',
+        'Constitution',
+        'Library',
+        'Personal',
+        'Memory',
+        'Installs',
+        'Docs',
+        'Settings',
+      ]),
     )
   })
 
@@ -53,6 +62,7 @@ describe('view level filters the surfaces', () => {
         'Overview',
         'Library',
         'Personal',
+        'Memory',
         'Installs',
         'Docs',
         'Settings',
@@ -65,7 +75,7 @@ describe('view level filters the surfaces', () => {
 
   it('Power rail has every page', () => {
     at('power', <Sidebar route={{ page: 'overview' }} />)
-    expect(rail()).toHaveLength(12)
+    expect(rail()).toHaveLength(13)
   })
 
   it('Essentials tab bar', () => {
@@ -78,10 +88,10 @@ describe('view level filters the surfaces', () => {
   it('Tabs show visible tabs plus the current one', () => {
     const labels = () => [...document.querySelectorAll('nav.tabs a')].map((a) => a.textContent)
     const { unmount } = at('essentials', <Tabs page="personal" current="rules" />)
-    expect(labels()).toEqual(['Rules', 'Profile', 'Memory'])
+    expect(labels()).toEqual(['Rules', 'Profile'])
     unmount()
     at('essentials', <Tabs page="personal" current="notebook" />)
-    expect(labels()).toEqual(['Rules', 'Profile', 'Memory', 'Notebook'])
+    expect(labels()).toEqual(['Rules', 'Profile', 'Notebook'])
   })
 
   it('Library at Essentials lists Skills and Agents and defaults to Skills', () => {
