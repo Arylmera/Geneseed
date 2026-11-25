@@ -8,6 +8,44 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [6.4.0] — 2026-11-25
+
+### Added
+
+- **The learn model cleans the memory store.** It reads the stored facts in batches and merges the
+  copies, archives task residue and facts that are no longer true, and splits any topic of more than
+  30 facts into narrower ones so a topic file stays small. The whole store is copied into
+  `memory/archived-cleanup/<date>/` first, and every change goes through `archive/`. An action the
+  model is unsure of waits: `geneseed memory plan` lists it, `geneseed memory apply` or `reject`
+  decides it, and `geneseed memory restore <name>` brings an archived fact back. It runs by itself at
+  the end of a session on a store of 60 facts or more (five batches a session), once per version of
+  the cleanup; `GENESEED_CONSOLIDATE=off` turns that off. By hand, run `geneseed-hook learn
+  --consolidate --merge`, adding `--dry-run` to apply nothing. `geneseed memory consolidate
+  --dry-run` reports the index rebuild and the likely duplicates without writing.
+- **Every learn decision is logged.** Each distil run appends one line per decision to the store's
+  `memory/.gate-log.jsonl`: a fact created, merged into a stored one, archived, turned away as a
+  near-duplicate (naming the stored fact), or a run that stored nothing or failed, with the reason.
+  `learn-last.json` kept only the last run, so nothing could say how many candidates were accepted
+  or turned away in a week. The log keeps its newest 5 000 lines, on Claude Code, OpenClaude and
+  OpenCode alike.
+- **Memory has a page of its own in the console.** It was a tab of Personal that listed the facts.
+  The new Memory page adds the store's numbers (facts, archived, actions waiting for you, the size
+  of the index loaded at session start, the largest topic file), the learn decisions of the last
+  30 days per kind (created, merged, archived, turned away as a duplicate, nothing stored, failed),
+  the recent decisions with their reasons, the cleanup (Preview, which applies nothing, or Clean up
+  now, then Apply or Reject each waiting action), and the archive with a Restore button per fact.
+  Old `#/personal/memory` links open the page.
+
+### Fixed
+
+- **A loop no longer pushes onto a PR that has auto-merge armed.** Before every push, the `loop`
+  skill (and a factory run's loop and close push) asks the forge whether an open PR from the loop
+  branch has auto-merge armed: `gh pr list --head loop/<slug>` on GitHub, `glab mr list
+  --source-branch loop/<slug>` on GitLab. Such a PR merged each push as soon as its checks passed,
+  with no human review. An armed PR stops the loop before the push, with the commit kept local, and
+  so do a missing or signed-out `gh`/`glab`, a remote on another forge, and an answer the agent
+  cannot read. A loop now needs `gh` or `glab`. Run `geneseed rebuild-all` to install the new skill.
+
 ## [6.3.1] — 2026-11-23
 
 6.3.0 was never published to npm. This release carries everything in its section below.
