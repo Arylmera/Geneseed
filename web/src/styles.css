@@ -3228,6 +3228,13 @@ section.mem-card:not(.mem-grid > *) { margin-bottom: var(--sp-5); }
 .mem-log li { display: grid; grid-template-columns: 110px 80px 1fr auto; justify-content: stretch; }
 .mem-what { min-width: 0; overflow-wrap: anywhere; }
 .mem-xs { font-size: var(--fs-2xs); }
+/* The fact reader is a full pane; the cards after it need clear room to read as their own sections. */
+.mem-facts { margin-bottom: var(--sp-6); }
+.mem-archive { margin-top: var(--sp-6); }
+.mem-search { width: 100%; margin-bottom: var(--sp-3); }
+.mem-arch-topics { margin-bottom: var(--sp-5); }
+.mem-arch-group + .mem-arch-group { margin-top: var(--sp-4); }
+.mem-group-h { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); }
 .mem-err { color: var(--bad-text); }
 .mem-dec { font-family: var(--font-mono); font-size: var(--fs-2xs); }
 .mem-created { color: var(--good-text); }

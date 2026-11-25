@@ -98,6 +98,9 @@ const memoryDelete = (name, install) => postIn('/api/memory/delete', { name }, i
 const memory = (install) => getIn('/api/memory', install)
 const memoryDecide = (body, install) => postIn('/api/memory/decide', body, install)
 const memoryRestore = (name, install) => postIn('/api/memory/restore', { name }, install)
+// The archive, searched: `q` words (BM25) and/or a `topic`. It is never listed whole.
+const memoryArchive = ({ q = '', topic = '' } = {}, install) =>
+  getIn(`/api/memory/archive?${new URLSearchParams({ q, topic })}`, install)
 // What one agent loads, and the rules it follows: the primary agent by default, else an Adept.
 const loadout = (agent, install) =>
   getIn(agent ? `/api/loadout/${encodeURIComponent(agent)}` : '/api/loadout', install)
@@ -281,6 +284,7 @@ export const api = {
   memory,
   memoryDecide,
   memoryRestore,
+  memoryArchive,
   diff,
   restore,
   job,

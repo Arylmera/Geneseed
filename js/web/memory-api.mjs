@@ -17,63 +17,115 @@
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { consolidateMemory, frontmatter, readFacts, readGateLog } from '../hosts/memory-files.mjs';
+import { consolidateMemory, readFacts, readGateLog } from '../hosts/memory-files.mjs';
+import { rankFacts } from '../hosts/memory-search.mjs';
 import { BACKUP_DIR, decidePending, readPlan, restoreFact } from '../hosts/memory-consolidate.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
-import { claudeReadManifest, readMaybe } from '../hosts/installs.mjs';
+import { claudeCfg, claudeReadManifest, installTargets } from '../hosts/installs.mjs';
 import { isFactName } from '../maintain/memory.mjs';
 import { NotFound, memoryDir } from './catalog.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 /** The newest gate-log lines the page charts: 60 days of a busy store, and a bounded answer. */
 const LOG_LINES = 3000;
-/** The archived facts listed, newest first. */
-const ARCHIVE_ROWS = 300;
+/** At most this many archived facts answer one search: the archive grows without bound, a page must not. */
+export const ARCHIVE_HITS = 100;
 const sizeOf = (p) => { try { return statSync(p).size; } catch { return 0; } };
 
-/** The store's state for the page. A store that does not exist is a 404, as the fact list's. */
-export function apiMemory(state) {
+/** The archived facts, as `readFacts` reads a store: slug -> { desc, topic, body, mtime }. */
+const archivedFacts = (d) => readFacts(path.join(d, 'archive'));
+/** The per-topic counts of a fact map, largest first. */
+const topicCounts = (facts) => {
+  const n = new Map();
+  for (const f of facts.values()) n.set(f.topic, (n.get(f.topic) ?? 0) + 1);
+  return [...n].map(([topic, c]) => ({ topic, n: c })).sort((a, b) => b.n - a.n || (a.topic < b.topic ? -1 : 1));
+};
+
+/**
+ * The store's state for the page. A store that does not exist is a 404, as the fact list's. The archive is only
+ * counted here, in total and per topic: it grows with every merge and cleanup, so its facts are listed only for a
+ * search (`apiMemoryArchive`), never all at once.
+ */
+export function apiMemory(state, _url = '', targets = undefined) {
   const d = memoryDir(state);
   let names;
   try { names = readdirSync(d); } catch { throw new NotFound('memory store'); }
   const facts = readFacts(d);
-  const topics = new Map();
-  for (const f of facts.values()) topics.set(f.topic, (topics.get(f.topic) ?? 0) + 1);
   const tdir = path.join(d, 'topics');
-  const archived = [];
-  for (const n of (() => { try { return readdirSync(path.join(d, 'archive')); } catch { return []; } })()) {
-    if (!n.endsWith('.md')) continue;
-    const p = path.join(d, 'archive', n);
-    const [fm] = frontmatter(readMaybe(p) ?? '');
-    archived.push({ name: n.slice(0, -3), desc: fm.get('description') ?? '', mtime: (() => { try { return statSync(p).mtimeMs; } catch { return 0; } })() });
-  }
-  archived.sort((a, b) => b.mtime - a.mtime);
+  const archived = archivedFacts(d);
   const plan = readPlan(d);
   const backups = names.includes(BACKUP_DIR)
     ? (() => { try { return readdirSync(path.join(d, BACKUP_DIR)).sort().reverse(); } catch { return []; } })() : [];
+  const learn = learnOf(state, targets);
   return {
     store: d,
     facts: facts.size,
-    topics: [...topics].map(([topic, n]) => ({ topic, n, bytes: sizeOf(path.join(tdir, `${topic}.md`)) }))
-      .sort((a, b) => b.n - a.n || (a.topic < b.topic ? -1 : 1)),
+    topics: topicCounts(facts).map((t) => ({ ...t, bytes: sizeOf(path.join(tdir, `${t.topic}.md`)) })),
     mapBytes: sizeOf(path.join(d, 'MEMORY.md')),
-    archivedCount: archived.length,
-    archived: archived.slice(0, ARCHIVE_ROWS),
+    archivedCount: archived.size,
+    archivedTopics: topicCounts(archived),
     plan: { at: plan.at, reviewed: Object.keys(plan.reviewed).length, pending: plan.pending.map(({ text, ...a }) => a) },
     backups,
     log: readGateLog(d).slice(-LOG_LINES),
-    learn: learnOf(state),
+    learn: learn.model ? learn.model : null,
+    learnWhy: learn.why ?? null,
   };
 }
 
-/** The install's learn model, as the emit baked it: `{ host, model }`, or null when it bakes none (OpenCode, off). */
-function learnOf(state) {
-  const host = String(state.emit ?? '').split('-')[0];
-  if (!['claude', 'openclaude'].includes(host)) return null;
-  const cmd = claudeReadManifest(state.target).managed?.learn_command;
-  if (typeof cmd !== 'string' || !cmd.trim()) return null;
+/**
+ * `GET /api/memory/archive?q=<words>&topic=<topic>`: the archived facts that match, at most ARCHIVE_HITS. Words
+ * rank by the store's own BM25 (best first); a topic alone lists that topic's facts, newest first; both narrow
+ * the words' matches to the topic. Neither is no search, and answers no fact: the page never lists the archive
+ * whole.
+ */
+export function apiMemoryArchive(state, url = '') {
+  const params = new URL(String(url || ''), 'http://x').searchParams;
+  const q = (params.get('q') ?? '').trim().slice(0, 200);
+  const topic = (params.get('topic') ?? '').trim();
+  const all = archivedFacts(memoryDir(state));
+  const inTopic = (s) => !topic || all.get(s)?.topic === topic;
+  let slugs = [];
+  if (q) slugs = rankFacts(all, q).map((h) => h.slug).filter(inTopic);
+  else if (topic) slugs = [...all.keys()].filter(inTopic).sort((a, b) => all.get(b).mtime - all.get(a).mtime);
+  return {
+    q, topic, total: slugs.length,
+    hits: slugs.slice(0, ARCHIVE_HITS).map((s) => ({ name: s, desc: all.get(s).desc, topic: all.get(s).topic })),
+  };
+}
+
+/** The model a recorded learn command names, as `{ host, model, command }`. */
+function modelOf(host, cmd) {
   const m = /--model\s+(\S+)/.exec(cmd);
   return { host, model: m ? m[1] : 'session', command: cmd };
+}
+const CLAUDE_FAMILY = ['claude', 'openclaude'];
+const commandAt = (cfg) => {
+  const cmd = claudeReadManifest(cfg).managed?.learn_command;
+  return typeof cmd === 'string' && cmd.trim() ? cmd : null;
+};
+
+/**
+ * The learn model the cleanup job runs on: `{ model }` or `{ why }`. The viewed install's own, as its emit recorded
+ * it (`learn_command` in the manifest); else the first active Claude Code or OpenClaude install that records one,
+ * since every global install reads one shared store and any model can judge it. `why` says, in the user's words,
+ * what to do when no install records a model: an OpenCode install distils inside its plugin and records none, and
+ * a build from before the recorded command (or `--learn off`) records none either.
+ */
+function learnOf(state, targets = installTargets()) {
+  const host = String(state.emit ?? '').split('-')[0];
+  const own = CLAUDE_FAMILY.includes(host) ? commandAt(state.target) : null;
+  if (own) return { model: modelOf(host, own) };
+  for (const [h, scope, root] of targets) {
+    if (!CLAUDE_FAMILY.includes(h)) continue;
+    let cmd = null;
+    try { cmd = commandAt(claudeCfg(root, scope, h)); } catch { /* not readable: next */ }
+    if (cmd) return { model: { ...modelOf(h, cmd), from: String(root) } };
+  }
+  return {
+    why: CLAUDE_FAMILY.includes(host)
+      ? 'No install records a learn model. Run geneseed rebuild-all: a build from before the learn model was recorded, or one built with --learn off, records none.'
+      : 'This install distils inside its OpenCode plugin and records no command, and no Claude Code or OpenClaude install records one. Install one with --learn light, or start the console with $GENESEED_LLM set.',
+  };
 }
 
 /** `{ names?, all?, reject? }`: the waiting actions decided, as `geneseed memory apply|reject` decides them. */
@@ -104,12 +156,10 @@ export function apiMemoryRestore(state, body) {
  * The cleanup job's argv for the request's install: `{ cmd }`, or `{ error }` when nothing can judge the facts
  * (no model baked and no `$GENESEED_LLM` in the daemon's own environment).
  */
-export function memoryCleanCmd(state, body, env = process.env) {
+export function memoryCleanCmd(state, body, env = process.env, targets = undefined) {
   const d = memoryDir(state);
-  const learn = learnOf(state);
-  if (!learn && !env.GENESEED_LLM) {
-    return { error: 'this install has no learn model: rebuild it with --learn light, or set $GENESEED_LLM for the console' };
-  }
+  const { model: learn, why } = learnOf(state, targets);
+  if (!learn && !env.GENESEED_LLM) return { error: why };
   return {
     cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn', '--consolidate', '--merge', '--memory', d,
       ...(learn ? ['--host', learn.host, '--learn-model', learn.model] : []),
