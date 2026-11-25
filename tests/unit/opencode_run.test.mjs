@@ -87,9 +87,10 @@ test('spawnPlan finds a CLI PATH misses in the usual install folders', () => {
   const env = { HOME: '/home/u', PATH: '/usr/bin:/bin' };
   assert.deepEqual(userBinDirs(env, 'darwin'), ['/home/u/.opencode/bin', '/home/u/.local/bin', '/home/u/.bun/bin',
     '/home/u/.npm-global/bin', '/home/u/.volta/bin', '/opt/homebrew/bin', '/usr/local/bin']);
-  const at = (...files) => (f) => files.includes(f);
-  assert.equal(spawnPlan(['opencode', 'run'], 'p', { platform: 'darwin', env, exists: at('/opt/homebrew/bin/opencode') }).file,
-    '/opt/homebrew/bin/opencode');
+  // The lookup joins with this machine's separator (`resolveCommand`), so the stub compares normalised paths.
+  const at = (...files) => (f) => files.map(path.normalize).includes(path.normalize(f));
+  assert.equal(path.normalize(spawnPlan(['opencode', 'run'], 'p', { platform: 'darwin', env, exists: at('/opt/homebrew/bin/opencode') }).file),
+    path.normalize('/opt/homebrew/bin/opencode'));
   assert.equal(spawnPlan(['opencode', 'run'], 'p', { platform: 'darwin', env, exists: at('/usr/bin/opencode', '/opt/homebrew/bin/opencode') }).file,
     'opencode', 'on PATH: the bare word');
   assert.equal(spawnPlan(['opencode', 'run'], 'p', { platform: 'darwin', env, exists: at() }).file, 'opencode', 'nowhere: the OS says so');
