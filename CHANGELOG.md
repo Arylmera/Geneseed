@@ -38,9 +38,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   topic, at most 100, each with a Restore button. The cleanup runs on the viewed install's learn
   model, else on any other install's, and says why when there is none. On an OpenCode install
   that is the model your OpenCode config names (`small_model`, else `model`), called through
-  `opencode run` started bare: an empty config and working folder, so no plugin, no `AGENTS.md`
-  and no tool, one request per batch, on your own OpenCode login. Old `#/personal/memory` links
-  open the page.
+  `opencode run` started bare: an empty config and working folder, so no Geneseed plugin, no
+  `AGENTS.md` and no tool, one request per batch, on your own OpenCode login and providers (the
+  npm plugins your config lists stay, for a provider that signs in through one). A model CLI the
+  console's PATH misses is looked for in the usual install folders (`~/.opencode/bin`, Homebrew,
+  npm, bun, Volta), and a failed call says why. Old `#/personal/memory` links open the page.
 
 ### Fixed
 
