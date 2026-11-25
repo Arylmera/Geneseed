@@ -30,13 +30,14 @@ describe('view-level table', () => {
       'page:library': E,
       'page:installs': E,
       'page:personal': E,
+      // Memory is where a user looks for what the agent remembers; the default level is
+      // Essentials, so a higher row would hide the only way to list the facts. It was Personal's
+      // tab at the same level before it became a page.
+      'page:memory': E,
       'page:docs': E,
       'page:settings': E,
       'tab:personal/rules': E,
       'tab:personal/profile': E,
-      // Memory is where a user looks for what the agent remembers; the default level is
-      // Essentials, so a Standard row hid the only way to list the facts.
-      'tab:personal/memory': E,
       'tab:installs/hosts': E,
       'tab:installs/doctor': E,
       'section:library/skills': E,
@@ -76,7 +77,7 @@ describe('view-level table', () => {
     expect(visible('page:loops', 'standard')).toBe(false)
     expect(visible('section:library/wiki', 'standard')).toBe(false)
     expect(visible('tab:installs/doctor', 'essentials')).toBe(true)
-    expect(visible('tab:personal/memory', 'essentials')).toBe(true)
+    expect(visible('page:memory', 'essentials')).toBe(true)
     expect(visible('section:settings/danger', 'standard')).toBe(false)
     expect(visible('section:settings/danger', 'power')).toBe(true)
   })

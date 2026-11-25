@@ -16,7 +16,7 @@
  */
 import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
@@ -199,7 +199,7 @@ export function readFacts(memDir) {
  * Every fact pointer the index holds now, from a flat MEMORY.md and from the topic files:
  * slug -> { title, rest }. `rest` is everything after the link, hook text included.
  */
-function indexedFacts(memDir) {
+export function indexedFacts(memDir) {
   const found = new Map();
   const tdir = path.join(memDir, TOPICS);
   const files = [path.join(memDir, 'MEMORY.md'), ...globMd(tdir).map((f) => path.join(tdir, f))];
@@ -712,6 +712,80 @@ const DRAFT_TITLE_MAX = 100;
 export const MEMORY_DRAFT_HOST = 'memory';
 
 const LEARN_UNSET = 'dormant ($GENESEED_LLM unset)';
+
+// ---- gate log twin: BEGIN
+/**
+ * THE GATE LOG: one JSON line per decision the distil's write took, beside the store it decided for
+ * (`memory/.gate-log.jsonl`). `learn-last.json` keeps only the last run's verdict, so nothing could say how many
+ * candidates a week were accepted, merged or turned away, nor why: the console's memory page charts this file.
+ * Not a `.md`, so no index, no `learn` listing and no change report ever reads it as a fact.
+ *
+ * A decision is `created`, `merged` (an `action: update`), `archived`, `duplicate` (a create the near-duplicate
+ * guard turned away, `of` naming the stored fact), `nothing` (the model said NOTHING, or nothing it said was a
+ * memory file) or `failed` (the call failed: `reason` says how). A run that wrote nothing still logs one line, so
+ * the log counts the runs that were turned away, not only the facts that got in.
+ *
+ * The OpenCode learn plugin's copy is made by `node tests/twins.mjs --write`; edit this one.
+ */
+export const GATE_LOG = '.gate-log.jsonl';
+/** Past this many lines the oldest are dropped: a log a page charts, not an audit trail. */
+export const GATE_LOG_KEEP = 5000;
+const DUPLICATE_LINE_RE = /^(\S+): near-duplicate of (\S+), skipped$/;
+
+/** The log lines of one write: `res` is `writeMemories`'s answer, or null when the call failed (`fail` says how). */
+export function gateEntries(res, { at, source, host, fail = '' }) {
+  const head = { at, source, host };
+  if (!res) return [{ ...head, decision: 'failed', reason: String(fail || 'no reply').slice(0, 200) }];
+  const rows = [];
+  for (const slug of res.created) rows.push({ ...head, decision: 'created', slug });
+  for (const slug of res.updated) rows.push({ ...head, decision: 'merged', slug });
+  for (const slug of res.archived) rows.push({ ...head, decision: 'archived', slug });
+  for (const line of res.skipped) {
+    const m = DUPLICATE_LINE_RE.exec(line);
+    if (m) rows.push({ ...head, decision: 'duplicate', slug: m[1], of: m[2] });
+  }
+  if (!rows.length) rows.push({ ...head, decision: 'nothing', reason: fail ? String(fail).slice(0, 200) : 'nothing stored' });
+  return rows;
+}
+
+/** Keep the newest GATE_LOG_KEEP of a log's lines, or null when it is still within the cap. */
+export function trimGateLog(text) {
+  const lines = text.split('\n').filter((l) => l.trim());
+  return lines.length > GATE_LOG_KEEP ? `${lines.slice(-GATE_LOG_KEEP).join('\n')}\n` : null;
+}
+// ---- gate log twin: END
+
+/**
+ * Append a write's decisions to the store's gate log, and trim it past the cap. Never throws: a log is a favour,
+ * and a hook that cannot write it must still have stored the fact.
+ */
+export function appendGateLog(memDir, entries) {
+  if (!memDir || !entries.length) return;
+  const f = path.join(memDir, GATE_LOG);
+  try {
+    appendFileSync(f, entries.map((e) => `${JSON.stringify(e)}\n`).join(''));
+    // Trim only when the file is large enough to be past the cap, so the common append reads nothing.
+    if (statSync(f).size > GATE_LOG_KEEP * 120) {
+      const kept = trimGateLog(readFileSync(f, 'utf8'));
+      if (kept !== null) writeTextAtomic(f, kept);
+    }
+  } catch { /* the log never fails a write */ }
+}
+
+/** The store's gate log, oldest first; a line that is not a JSON object is skipped. [] with no log. */
+export function readGateLog(memDir) {
+  let text = '';
+  try { text = readFileSync(path.join(memDir, GATE_LOG), 'utf8'); } catch { return []; }
+  const rows = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const v = JSON.parse(line);
+      if (isDict(v) && typeof v.decision === 'string') rows.push(v);
+    } catch { /* a torn line from a killed writer */ }
+  }
+  return rows;
+}
 
 /**
  * The last distil run's verdict, `<machine cache>/learn-last.json`: `{ at, ok, reason, facts }`. The detached

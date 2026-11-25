@@ -14,7 +14,7 @@ import { learnCommandFor } from '../../js/hosts/learn-command.mjs';
 import { leanArgv } from '../../js/hosts/hooks-learn.mjs';
 import { commandOnPath, learnCommandNotes } from '../../js/inspect/doctor.mjs';
 import { learnInstalls } from '../../js/inspect/status.mjs';
-import { learnLastNote, learnState, readLearnLast } from '../../js/hosts/memory-files.mjs';
+import { learnLastNote, learnState, readGateLog, readLearnLast } from '../../js/hosts/memory-files.mjs';
 import { FAKE_LLM } from '../helpers/cli_golden.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
@@ -540,4 +540,32 @@ test('learnState runs the baked command; an old settings_env record alone is no 
   assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{}], recorded: HAIKU, baked: null }]), 'claude: dormant ($GENESEED_LLM unset)');
   assert.equal(learnState({}, [{ host: 'claude', settingsEnv: [{ GENESEED_LLM: 'llm -m x' }], recorded: HAIKU, baked: HAIKU }]),
     'claude: active (set by you)');
+});
+
+// The gate log (memory/.gate-log.jsonl): every worker run leaves at least one line, so the console can count the
+// runs the gate turned away as well as the facts it let in. Rows: what the fake model did, then the decisions logged.
+test('the gate log records each run: a created fact, a failed call, a prose reply, a NOTHING', () => {
+  const r = rig();
+  try {
+    const nothing = path.join(r.sb.path, 'nothing.txt');
+    fs.writeFileSync(nothing, 'NOTHING\n');
+    const prose = path.join(r.sb.path, 'prose.txt');
+    fs.writeFileSync(prose, 'Please run /login to continue\n');
+    workerRun(r, {});
+    workerRun(r, { FAKE_LLM_RC: '1', FAKE_LLM_ERR: 'Invalid API key' });
+    workerRun(r, { FAKE_LLM_OUT: prose });
+    workerRun(r, { FAKE_LLM_OUT: nothing });
+    const rows = readGateLog(path.join(r.inst, 'memory'));
+    assert.deepEqual(rows.map((x) => [x.decision, x.slug ?? null, x.source, x.host]), [
+      ['created', 'alpha-fact', 'learn', 'claude'],
+      ['failed', null, 'learn', 'claude'],
+      ['failed', null, 'learn', 'claude'],
+      ['nothing', null, 'learn', 'claude'],
+    ]);
+    assert.match(rows[1].reason, /exited 1: Invalid API key/);
+    assert.equal(rows[2].reason, 'unparseable reply: Please run /login to continue');
+    assert.equal(rows[3].reason, 'nothing stored');
+    // The log is no fact: the index never lists it.
+    assert.doesNotMatch(fs.readFileSync(path.join(r.inst, 'memory', 'MEMORY.md'), 'utf8'), /gate-log/);
+  } finally { r.sb.cleanup(); }
 });

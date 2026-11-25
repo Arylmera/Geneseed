@@ -51,6 +51,8 @@ export const NAV = [
   // No badge: the overview counts no factories, and a rail count must be what its page lists.
   { group: 'build', hash: '#/factories', page: 'factories', label: 'Factories', icon: 'build' },
   { group: 'govern', hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
+  // No badge yet: the overview counts no facts across installs, and a rail count must be what its page lists.
+  { group: 'govern', hash: '#/memory', page: 'memory', label: 'Memory', icon: 'graph' },
   {
     group: 'run',
     hash: '#/installs',

@@ -51,7 +51,11 @@ const TABLE = [
   ['#/installs/profiles/%7B%22save%22%7D', { page: 'installs', tab: 'profiles', item: '{"save"}' }],
   ['#/installs/server', { page: 'settings' }],
   // Personal's Memory and Notebook tabs carry an entry of their own, URI-decoded.
-  ['#/personal/memory/a%20b', { page: 'personal', tab: 'memory', item: 'a b' }],
+  // Memory was Personal's tab and is a page now: its old addresses open the page, with the fact.
+  ['#/personal/memory/a%20b', { page: 'memory', item: 'a b' }],
+  ['#/personal/memory', { page: 'memory' }],
+  ['#/memory', { page: 'memory' }],
+  ['#/memory/a%20b', { page: 'memory', item: 'a b' }],
   // ...but an item under an unknown tab is dropped with the tab, not attached to rules.
   ['#/personal/bogus/x', { page: 'personal', tab: 'rules' }],
   // Retired pages -> where they live now.
@@ -73,7 +77,7 @@ const TABLE = [
   ['#/section/skills', { page: 'library', section: 'skills' }],
   ['#/section/agents', { page: 'library', section: 'agents' }],
   // Memory and Notebook are Personal's tabs: an old Library address opens them there.
-  ['#/section/memory', { page: 'personal', tab: 'memory' }],
+  ['#/section/memory', { page: 'memory' }],
   ['#/section/notebook', { page: 'personal', tab: 'notebook' }],
   ['#/section', { page: 'library' }],
   // Setup files are a kind of their own now; they no longer fold into the wiki.
@@ -83,7 +87,7 @@ const TABLE = [
   ['#/item/law/process.5', { page: 'laws', section: 'laws', item: 'process.5' }],
   ['#/item/skill/tdd', { page: 'library', section: 'skills', item: 'tdd' }],
   ['#/item/agent/advocate', { page: 'library', section: 'agents', item: 'advocate' }],
-  ['#/item/memory/a%20b', { page: 'personal', tab: 'memory', item: 'a b' }],
+  ['#/item/memory/a%20b', { page: 'memory', item: 'a b' }],
   ['#/item/notebook/n', { page: 'personal', tab: 'notebook', item: 'n' }],
   ['#/item/config/geneseed.jsonc', { page: 'library', section: 'config', item: 'geneseed.jsonc' }],
   ['#/item/wiki/x%2Fy', { page: 'library', section: 'wiki', item: 'x/y' }],
@@ -126,7 +130,7 @@ describe('resolveRoute', () => {
 describe('PAGES', () => {
   // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
   // its route stays #/laws.
-  it('names the twelve pages', () => {
+  it('names the thirteen pages', () => {
     expect(PAGES).toEqual({
       overview: 'Overview',
       laws: 'Constitution',
@@ -136,6 +140,7 @@ describe('PAGES', () => {
       loops: 'Loops',
       factories: 'Factories',
       personal: 'Personal',
+      memory: 'Memory',
       installs: 'Installs',
       docs: 'Docs',
       activity: 'Activity',

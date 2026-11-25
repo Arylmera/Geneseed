@@ -54,24 +54,25 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 34 (the console's model tiers added `/api/agent-models`; the Factories page added `/api/factories/catalog` and
- * `/api/factories/active`; the Installs page's Profiles tab added `/api/profiles`). Trailing `/`
+/** Every GET path the daemon answers — 35 (the console's model tiers added `/api/agent-models`; the Factories page added `/api/factories/catalog` and
+ * `/api/factories/active`; the Installs page's Profiles tab added `/api/profiles`; the Memory page added `/api/memory`). Trailing `/`
  * marks a prefix route. */
 const GET_SURFACE = ['/api/activity', '/api/agent-models', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/factories/active', '/api/factories/catalog',
   '/api/fleet', '/api/installs', '/api/item/',
-  '/api/jobs', '/api/jobs/', '/api/kits', '/api/loadout', '/api/loadout/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/migrate/preview',
-  '/api/overview',
+  '/api/jobs', '/api/jobs/', '/api/kits', '/api/loadout', '/api/loadout/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/memory',
+  '/api/migrate/preview', '/api/overview',
   '/api/ping', '/api/profile', '/api/profiles', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 19 (`/api/agent-models` writes one install's model tiers and pins). `/api/mcp` left it when MCP became read-only, and
+/** Every POST path the daemon answers — 21 (`/api/agent-models` writes one install's model tiers and pins). `/api/mcp` left it when MCP became read-only, and
  * `/api/view` when the console's install selector was retired (each page names its install).
  * `/api/autostart` joined it when Settings began to write the login launcher (2026-11-08), and
- * `/api/backups/list` with the Backup & restore card (2026-11-23). */
+ * `/api/backups/list` with the Backup & restore card (2026-11-23), `/api/memory/decide` and `/api/memory/restore`
+ * with the Memory page (2026-11-25). */
 const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/agent-models', '/api/autostart', '/api/backups/list', '/api/default-install', '/api/excludes',
   '/api/install',
-  '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
+  '/api/jobs/', '/api/loops/preset', '/api/memory/decide', '/api/memory/delete', '/api/memory/restore', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/decide', '/api/rules/promote',
   '/api/shutdown'];
 
@@ -83,8 +84,8 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/agent-models', '/a
  * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
  * raise — so the column has to be checked as a column, below.
  */
-const EXPECT_409 = ['/api/agent-models', '/api/autostart', '/api/backups/list', '/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
-  '/api/rules/decide', '/api/rules/promote'];
+const EXPECT_409 = ['/api/agent-models', '/api/autostart', '/api/backups/list', '/api/default-install', '/api/excludes', '/api/install',
+  '/api/memory/decide', '/api/memory/restore', '/api/profile', '/api/rules', '/api/rules/decide', '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */
 const EXPECT_KINDS = ['about', 'cli', 'concept', 'glossary', 'map', 'markdown'];

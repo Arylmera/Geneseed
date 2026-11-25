@@ -30,13 +30,17 @@ import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs
 import { doneGate } from './hooks-done.mjs';
 import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
-  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson, writeLearnLast,
+  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson, writeLearnLast, appendGateLog, gateEntries,
 } from './memory-files.mjs';
 import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from './spec-feedback.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { pickStored, storedLine } from './memory-search.mjs';
 import { learnCommandFor } from './learn-command.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
+import {
+  AUTO_BATCHES, CONSOLIDATE_VERSION, applyActions, backupStore, consolidatePrompt, consolidationDue, dueBatches,
+  markReviewed, parsePlan, readPlan, writePlan,
+} from './memory-consolidate.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -589,6 +593,16 @@ export function cmdLearn(args) {
       err('[learn] no memory store found \u2014 nothing to consolidate.\n');
       return 0;
     }
+    if (args.merge) {
+      // The cleanup by the model (./memory-consolidate.mjs): a person's run, or the console's job.
+      const llm = process.env.GENESEED_LLM || learnCommandFor(args.host, args.learnModel);
+      if (!llm) {
+        err('[learn] no learn model (--learn off, and $GENESEED_LLM unset) \u2014 nothing can judge the facts.\n');
+        return 1;
+      }
+      cleanStore(memDir, llm, { all: !!args.all, dryRun: !!args.dryRun });
+      return 0;
+    }
     const report = recordOwnWrites(path.dirname(memDir), () => consolidateMemory(memDir));
     err(`[learn] consolidated ${memDir}: +${report.added.length} indexed, `
       + `-${report.pruned.length} pruned, `
@@ -739,14 +753,19 @@ function distil(notes, memDir, llm, hookEvent) {
   const said = output.trim();
   // A zero exit with nothing said is a lapsed login or a swallowed error, never an answer: NOTHING is the answer.
   if (hookEvent && proc.returncode === 0 && !output.trim()) noteFail(`${splitWords(llm)[0]} returned an empty reply`);
+  // Every decision goes to the store's gate log, a run that stored nothing included (`gateEntries`).
+  const logGate = (res, fail = '') => appendGateLog(memDir, gateEntries(res, {
+    at: new Date().toISOString(), source: 'learn', host: run?.host ?? null, fail,
+  }));
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
-    const { created, updated, archived, skipped } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
+    const res = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
+    const { created, updated, archived, skipped } = res;
     if (run) run.facts += created.length + updated.length;
     // Prose is no memory file: a model that answers "Please run /login" exited 0 and stored nothing. A reply with
     // a name: line that merely repeats stored facts is a duplicate, not a failure.
-    if (hookEvent && !created.length && !updated.length && !archived.length && !/^name:\s*\S/m.test(output)) {
-      noteFail(`unparseable reply: ${said.split(/\r?\n/)[0].slice(0, 80)}`);
-    }
+    const unparsed = hookEvent && !created.length && !updated.length && !archived.length && !/^name:\s*\S/m.test(output);
+    if (unparsed) noteFail(`unparseable reply: ${said.split(/\r?\n/)[0].slice(0, 80)}`);
+    logGate(unparsed ? null : res, unparsed ? `unparseable reply: ${said.split(/\r?\n/)[0].slice(0, 80)}` : '');
     if (created.length) {
       err(`[learn] wrote ${created.length} memory file(s) to `
         + `${memDir}: ${created.join(', ')}\n`);
@@ -768,8 +787,65 @@ function distil(notes, memDir, llm, hookEvent) {
     // nothing and is dropped.
     err(output);
   }
+  if (memDir && hookEvent && !(said && said.toUpperCase() !== 'NOTHING')) {
+    // NOTHING, or a call that failed: one line, so the log counts the runs the gate turned away too.
+    const fail = run?.fail || (proc.returncode !== 0 ? `${splitWords(llm)[0]} exited ${proc.returncode}` : (said ? '' : 'empty reply'));
+    logGate(fail ? null : { created: [], updated: [], archived: [], skipped: [] }, fail);
+  }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
   return hookEvent ? 0 : proc.returncode;
+}
+
+/**
+ * THE CLEANUP'S MODEL HALF (./memory-consolidate.mjs holds the rest): each due batch of facts is shown to the model,
+ * its reply parsed into actions; the confident ones are applied at once (after one backup of the whole store), the
+ * doubtful ones wait in the plan for the user. A `dryRun` applies nothing: every action waits, so the console can
+ * show the report and the user confirms it (`geneseed memory apply --all`). Stops after `maxBatches` (the automatic
+ * pass spreads a large store over several sessions) and on the first failed call, which leaves the rest due.
+ * Reports on stderr; returns `{ batches, applied, pending, failed }`.
+ */
+function cleanStore(memDir, llm, { all = false, dryRun = false, maxBatches = Infinity } = {}) {
+  const facts = readFacts(memDir);
+  const plan = readPlan(memDir);
+  if (plan.v !== CONSOLIDATE_VERSION) plan.reviewed = {};
+  const batches = dueBatches(memDir, { all, facts, plan });
+  plan.v = CONSOLIDATE_VERSION;
+  const tally = { batches: 0, applied: 0, pending: 0, failed: false };
+  let backup = null;
+  return recordOwnWrites(path.dirname(memDir), () => {
+    for (const batch of batches.slice(0, maxBatches)) {
+      const proc = runLlm(llm, consolidatePrompt(memDir, batch, facts));
+      if (proc.returncode !== 0 || !proc.stdout.trim()) {
+        err(`[learn] cleanup: the model gave no answer (${proc.returncode !== 0 ? `exit ${proc.returncode}` : 'empty reply'}) \u2014 stopped; the rest stays due.\n`);
+        tally.failed = true;
+        break;
+      }
+      tally.batches += 1;
+      const acts = parsePlan(proc.stdout, batch, memDir);
+      const now = dryRun ? [] : acts.filter((a) => !a.low);
+      // A waiting action carries its fact's mtime: if the fact changes before the user decides, it is stale.
+      const wait = (dryRun ? acts : acts.filter((a) => a.low)).map((a) => ({ ...a, mtime: facts.get(a.slug)?.mtime ?? null }));
+      if (now.length) {
+        backup ??= backupStore(memDir);
+        const res = applyActions(memDir, now);
+        tally.applied += res.updated.length + res.archived.length;
+      }
+      const waiting = new Set(wait.map((a) => a.slug));
+      plan.pending = [...plan.pending.filter((a) => !waiting.has(a.slug)), ...wait];
+      tally.pending += wait.length;
+      markReviewed(memDir, plan, batch.slugs);
+      plan.at = new Date().toISOString();
+      writePlan(memDir, plan);
+    }
+    if (backup) err(`[learn] cleanup: the store was copied to ${backup} first.\n`);
+    const left = Math.max(0, batches.length - tally.batches);
+    err(`[learn] cleanup${dryRun ? ' (dry run)' : ''}: ${tally.batches} batch(es) judged, ${tally.applied} fact(s) merged or archived, `
+      + `${tally.pending} action(s) waiting for you${left ? `, ${left} batch(es) still due` : ''}.\n`);
+    for (const a of plan.pending) {
+      err(`  waiting: ${a.action} ${a.slug}${a.into ? ` into ${a.into}` : ''}${a.reason ? ` (${a.reason})` : ''}\n`);
+    }
+    return tally;
+  });
 }
 
 // ---- the job: what a hook hands the detached worker ------------------------------------------------
@@ -912,10 +988,10 @@ function runJob(job, llm) {
     writeLearnLast(false, '$GENESEED_LLM is not set for the distil worker');
     return 0;
   }
-  run = { fail: null, facts: 0 };
+  run = { fail: null, facts: 0, host: typeof job.host === 'string' ? job.host : null };
   // Marked running BEFORE the model is called, with the latest time the run may end (every call can take the
   // timeout): a hung CLI never reaches the line below, so this mark is what `status` finds.
-  writeLearnLast(null, '', 0, { runningFor: (1 + MAX_LESSON_AGENTS) * llmTimeoutSeconds() + 60 });
+  writeLearnLast(null, '', 0, { runningFor: (1 + MAX_LESSON_AGENTS + AUTO_BATCHES) * llmTimeoutSeconds() + 60 });
   try { return runJobIn(job, llm); } finally {
     const { fail, facts } = run;
     run = null;
@@ -983,6 +1059,9 @@ function runJobIn(job, llm) {
       const notes = tail(readNotes(JSON.stringify(row.payload), row.payload), MAX_NOTES_CHARS);
       if (notes.trim()) learnAgentLesson(agent, notes, memDir, llm);
     }
+    // The automatic cleanup (./memory-consolidate.mjs): a large store never cleaned at this version, or one that
+    // gathered many unjudged facts since, gets AUTO_BATCHES batches judged per session until it is through.
+    if (memDir && consolidationDue(memDir)) cleanStore(memDir, llm, { maxBatches: AUTO_BATCHES });
   } catch (e) {
     err(`[learn] the distil stopped: ${e instanceof Error ? e.message : e}\n`);
     noteFail(`the distil stopped: ${e instanceof Error ? e.message : e}`);

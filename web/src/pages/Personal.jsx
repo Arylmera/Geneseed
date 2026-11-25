@@ -7,103 +7,13 @@ import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Rules from './Rules.jsx'
 import Profile from './Profile.jsx'
-import Library, { installLabel } from './Library.jsx'
+import Library from './Library.jsx'
 import { useInstalls } from '../hooks/useInstalls.js'
-
-const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`
 
 // The catalog lists entries only: a folder's index and README never reach it.
 const countOf = (catalog) => (catalog ? (catalog.items || []).length : null)
 
-// A topic line of the generated memory map, as js/hosts/memory-files.mjs writeMap writes it
-// (js/hosts/hooks-context.mjs reads the same line). An old flat map has none.
-const MAP_TOPIC_RE = /^- \[([^\]]*)\]\(topics\/[^)]+\.md\) — (\d+) facts?$/
-const topicsOf = (body) =>
-  String(body || '')
-    .split('\n')
-    .map((l) => MAP_TOPIC_RE.exec(l.trim()))
-    .filter(Boolean)
-    .map((m) => ({ topic: m[1], n: Number(m[2]) }))
-
-// A topic's family is its slug's first `-` segment: `geneseed`, `geneseed-decisions` and
-// `geneseed-git` are one family. Sorted by family and then by full slug, the family sits together.
-const familyOf = (slug) => slug.split('-')[0]
-const byFamily = (a, b) => {
-  const fa = familyOf(a.topic)
-  const fb = familyOf(b.topic)
-  if (fa !== fb) return fa < fb ? -1 : 1
-  return a.topic < b.topic ? -1 : a.topic > b.topic ? 1 : 0
-}
-
-// The map is one store's. The header states the shared one; a project install's own store (the
-// first that has it, `install`) is named here. Each topic is a pill that narrows the fact list
-// below to it (`picked`, `onPick`); the thin bar under a pill is its count against the largest.
-function Topics({ topics, install, shared, picked, onPick }) {
-  if (!topics.length) return null
-  const sorted = [...topics].sort(byFamily)
-  const max = Math.max(1, ...sorted.map((t) => t.n))
-  return (
-    <section className="panel pm-topics" aria-labelledby="pm-topics">
-      <div className="panel-head">
-        <h2 id="pm-topics">Topics</h2>
-        {install && !shared ? <span className="mono dim">{installLabel(install)}</span> : null}
-        <span className="mono dim">{plural(topics.length, 'topic')}</span>
-      </div>
-      <ul className="pm-chips">
-        {sorted.map((t, i) => (
-          <li
-            key={t.topic}
-            className={i && familyOf(t.topic) !== familyOf(sorted[i - 1].topic) ? 'fam-start' : ''}
-          >
-            <button
-              type="button"
-              className={`chip-f pm-chip${picked === t.topic ? ' on' : ''}`}
-              aria-pressed={picked === t.topic}
-              onClick={() => onPick(picked === t.topic ? null : t.topic)}
-            >
-              <span className="pm-chip-row">
-                <span className="pm-chip-name">{t.topic}</span>
-                <span className="mono pm-chip-n">{plural(t.n, 'fact')}</span>
-              </span>
-              <span className="hbar" aria-hidden="true">
-                <span style={{ width: `${Math.round((t.n / max) * 100)}%` }} />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
 const EMPTY = {
-  memory: {
-    title: 'No facts yet',
-    body: (
-      <div className="pm-first">
-        <p>
-          The agent writes a fact when a session teaches it something durable: a decision, a
-          correction, a trap. Say “remember that…” in any session, and it asks whether that belongs
-          here or in your standing rules.
-        </p>
-        <ul>
-          <li>One fact per file, filed under a topic.</li>
-          <li>Stale facts move to Archived; nothing is deleted without you.</li>
-          <li>The store stays on this machine and out of git.</li>
-        </ul>
-      </div>
-    ),
-    action: (
-      <>
-        <a className="btn ghost" href="#/docs/memory">
-          How memory works
-        </a>
-        <a className="btn ghost" href="#/item/skill/rule">
-          The rule skill
-        </a>
-      </>
-    ),
-  },
   notebook: {
     title: 'No notes yet',
     body: 'The notebook is the agent’s own scratch space: plans and notes it keeps for itself.',
@@ -111,10 +21,10 @@ const EMPTY = {
 }
 
 // Personal: the files that are yours alone and survive every update, reinstall and voice
-// change. Rules and Profile are editors; Memory and Notebook are the Library reader
-// locked to one kind, so an entry opened here keeps its address on this page.
+// change. Rules and Profile are editors; Notebook is the Library reader locked to one kind, so
+// an entry opened here keeps its address on this page. Memory was a tab here and is a page of
+// its own now (pages/Memory.jsx): the old `#/personal/memory` addresses open it.
 export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged, onAction }) {
-  const soft = (p) => Promise.resolve(p).catch(() => null)
   const active = useInstalls(dataRev)
   // Each editor reloads only its own file after a write: the rules for the Overview and the
   // Constitution, which paint that copy, the profile for the tab's "template" badge. Not the
@@ -126,37 +36,21 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
     error: profileError,
     reload: reloadProfile,
   } = useAsync(() => api.profile(), [dataRev])
-  // The same key and deps as Library's own read of each folder, so the count here and the
-  // pane share one fetch, and a delete in the pane moves the count. No `soft`: a cached null
-  // would be served to the pane's next mount instead of a fetch.
-  const { data: memory, reload: reloadMemory } = useAsync(
-    () => api.catalog('memory'),
-    ['memory', dataRev],
-    'catalog',
-  )
+  // The same key and deps as Library's own read of the folder, so the count here and the pane
+  // share one fetch. No `soft`: a cached null would be served to the pane's next mount.
   const { data: notebook } = useAsync(
     () => api.catalog('notebook'),
     ['notebook', dataRev],
     'catalog',
   )
-  const facts = countOf(memory)
-  // The topics come from the map, the store's own tally (the rows' `topic` groups the list). Keyed
-  // on the fact count, so a promote or a forget in the pane (both rewrite the map) refetches it.
-  const { data: map } = useAsync(
-    () => (tab === 'memory' ? soft(api.item('memory', 'MEMORY')) : Promise.resolve(null)),
-    ['memory-map', tab, dataRev, facts],
-  )
-  const [topic, setTopic] = React.useState(null)
   const notes = countOf(notebook)
-  const counts = { memory: facts, notebook: notes }
   // No rules figure: each rules file heads its own list with its count and cost.
   const badges = {
     // The Profile tab itself says why, with a Retry; the badge only says the read failed.
     profile: profileError ? 'read failed' : profile?.seeded ? 'template' : null,
-    memory: facts,
     notebook: notes,
   }
-  const folder = tab === 'memory' || tab === 'notebook'
+  const folder = tab === 'notebook'
   return (
     <>
       <PageHeader
@@ -164,43 +58,27 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
         sub={
           'The only files you write. They survive updates, reinstalls and voice changes.' +
           (active?.some((i) => i.shared)
-            ? ' Global installs share one copy of the rules, profile and memory; a project install keeps its own.'
+            ? ' Global installs share one copy of the rules and profile; a project install keeps its own.'
             : '')
         }
       />
       <Tabs page="personal" current={tab} badges={badges} label="Personal files" />
       {tab === 'rules' && <Rules onChanged={reloadRules} dataRev={dataRev} onAction={onAction} />}
       {tab === 'profile' && <Profile onChanged={reloadProfile} dataRev={dataRev} />}
-      {folder && counts[tab] === 0 && !item ? (
+      {folder && notes === 0 && !item ? (
         <EmptyState title={EMPTY[tab].title} action={EMPTY[tab].action}>
           {EMPTY[tab].body}
         </EmptyState>
       ) : folder ? (
-        <>
-          {tab === 'memory' && (
-            <Topics
-              topics={topicsOf(map?.body)}
-              install={map?.install}
-              shared={map?.shared}
-              picked={topic}
-              onPick={setTopic}
-            />
-          )}
-          <Library
-            key={tab}
-            lock={tab}
-            topic={tab === 'memory' ? topic : null}
-            base={`#/personal/${tab}`}
-            selected={item}
-            dataRev={dataRev}
-            onCountsChanged={onCountsChanged}
-            // A promote deletes the fact it turns into a rule, so both reads move.
-            onRulesChanged={() => {
-              reloadRules()
-              reloadMemory()
-            }}
-          />
-        </>
+        <Library
+          key={tab}
+          lock={tab}
+          base={`#/personal/${tab}`}
+          selected={item}
+          dataRev={dataRev}
+          onCountsChanged={onCountsChanged}
+          onRulesChanged={reloadRules}
+        />
       ) : null}
     </>
   )

@@ -30,6 +30,7 @@ vi.mock('../api/index.js', () => ({
     catalog: vi.fn(),
     item: vi.fn(),
     memoryDelete: vi.fn(),
+    memory: vi.fn(),
     overview: vi.fn(),
     fleet: vi.fn(),
     usage: vi.fn(),
@@ -89,6 +90,7 @@ import Personal from '../pages/Personal.jsx'
 import Ledger from '../pages/Overview/Ledger.jsx'
 import Laws from '../pages/Laws.jsx'
 import Library from '../pages/Library.jsx'
+import Memory from '../pages/Memory.jsx'
 import { api } from '../api/index.js'
 
 beforeEach(() => {
@@ -116,6 +118,20 @@ beforeEach(() => {
   // The read names its entry: Forget and Promote act only on the copy that answers it.
   api.item.mockImplementation((type, name) =>
     Promise.resolve({ name, title: 'fact-a', desc: '', body: 'body', links: [] }),
+  )
+  api.memory.mockImplementation(() =>
+    Promise.resolve({
+      store: '/m',
+      facts: 1,
+      topics: [{ topic: 'misc', n: 1, bytes: 40 }],
+      mapBytes: 20,
+      archivedCount: 0,
+      archived: [],
+      plan: { at: null, reviewed: 0, pending: [] },
+      backups: [],
+      log: [],
+      learn: null,
+    }),
   )
   for (const k of ['overview', 'fleet', 'usage', 'gates', 'update', 'activity']) {
     api[k].mockImplementation(() => Promise.resolve(null))
@@ -233,14 +249,19 @@ describe('user-file writes reload only their own data', () => {
     await slots(2)
   })
 
-  it('a promote from Personal’s own Memory tab updates the cards when it lands on the Rules tab', async () => {
-    // Personal stays mounted across its tabs (App keys the slot by page, not tab), so
-    // dropping the cache alone would leave the mounted cards on the pre-promote copy.
-    const view = render(<Personal tab="memory" item="fact-a" dataRev={0} />)
+  // Memory was a tab of Personal, which stayed mounted across its tabs; it is a page now, so the Rules tab a promote
+  // is read on mounts after it, and must not be served the pre-promote copy.
+  it('a promote from the Memory page drops the cached rules, so the Rules tab shows the promoted rule', async () => {
+    const first = render(<Personal tab="rules" dataRev={0} />)
+    await slots(1)
+    first.unmount()
+    const page = render(<Memory item="fact-a" dataRev={0} />)
     fireEvent.click(await screen.findByText('Promote to rule'))
     await waitFor(() => expect(api.rulesPromote).toHaveBeenCalledTimes(1))
     await act(async () => {})
-    view.rerender(<Personal tab="rules" dataRev={0} />)
+    page.unmount()
+    render(<Personal tab="rules" dataRev={0} />)
+    expect(screen.queryByText(rulesRow(1))).toBeNull()
     await slots(2)
   })
   it('a rules write reaches every mounted consumer of the shared key, not only its own', async () => {

@@ -32,7 +32,9 @@
  * `process.exitCode`.
  *
  * SO THE ARGV IS `node bin/geneseed-cli.mjs <verb>` — or `node bin/build-driver.mjs <build
- * args>` for the three rows that run the GENERATOR, the same program by a different entry.
+ * args>` for the three rows that run the GENERATOR, the same program by a different entry, or
+ * `node bin/geneseed-hook.mjs learn --consolidate --merge` for the memory cleanup, the one entry
+ * allowed to call the learn model (js/web/memory-api.mjs).
  * `process.execPath` is the running interpreter by absolute path, so stripping `node` off
  * PATH cannot change what starts. Nothing here can name `python`.
  *
@@ -416,12 +418,12 @@ const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
  * The actions the dispatcher answers INLINE, without consulting the table above: `restore` is
  * synchronous and returns a result rather than a job id, and `install`/`deploy`/`rebuild` and the
  * two profile jobs (`profile-apply`, `profile-save`, js/web/profiles-api.mjs) and the two backup
- * jobs (`backup`, `backup-restore`, js/web/backup-api.mjs) resolve their argv from the request
- * body first. Declared so the surface check
+ * jobs (`backup`, `backup-restore`, js/web/backup-api.mjs) and the memory cleanup (`memory-clean`,
+ * js/web/memory-api.mjs) resolve their argv from the request body first. Declared so the surface check
  * covers every action the dispatcher answers, not only the table's keys.
  */
 export const INLINE_ACTIONS = ['restore', 'install', 'deploy', 'rebuild', 'profile-apply', 'profile-save', 'backup',
-  'backup-restore'];
+  'backup-restore', 'memory-clean'];
 
 /**
  * ⚠ `doctrines` DEFAULTS TO THE FULL SET, and it is the one axis here whose default is not the

@@ -3203,6 +3203,41 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .reader-when p { margin: 0; }
 .reader-links { display: flex; flex-wrap: wrap; gap: 10px; /* off-scale: 10px between --sp-2 and --sp-3 */ margin-top: var(--sp-3); }
 
+/* ---- Memory page ---- */
+/* Five headline numbers, then the decisions chart beside the cleanup card; both cards stack at phone width. */
+.mem-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-4);
+  margin-bottom: var(--sp-5); }
+.mem-stats .stat { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
+.mem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: var(--sp-5); margin-bottom: var(--sp-5); }
+.mem-card { min-width: 0; }
+.mem-card + .mem-card { margin-top: 0; }
+section.mem-card:not(.mem-grid > *) { margin-bottom: var(--sp-5); }
+.mem-card .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  margin-bottom: var(--sp-3); }
+.mem-card h2, .mem-card h3 { margin: 0; font-size: var(--fs-md); }
+.mem-sub { margin-top: var(--sp-4); }
+.mem-rows { margin-top: var(--sp-4); }
+.mem-rows li { grid-template-columns: 1fr 96px 40px; }
+.mem-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.mem-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); font-size: var(--fs-sm);
+  max-height: 40vh; overflow-y: auto; }
+.mem-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-1) 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.mem-list li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.mem-log li { display: grid; grid-template-columns: 110px 80px 1fr auto; justify-content: stretch; }
+.mem-what { min-width: 0; overflow-wrap: anywhere; }
+.mem-xs { font-size: var(--fs-2xs); }
+.mem-err { color: var(--bad-text); }
+.mem-dec { font-family: var(--font-mono); font-size: var(--fs-2xs); }
+.mem-created { color: var(--good-text); }
+.mem-duplicate { color: var(--warn-text); }
+.mem-failed { color: var(--bad-text); }
+@media (max-width: 640px) {
+  .mem-log li { grid-template-columns: 1fr auto; }
+  .mem-log li > .mem-what { grid-column: 1 / -1; }
+}
+
 /* ---- Personal ---- */
 .hb-n.warn { color: var(--warn-text); }
 .pm-topics { margin-bottom: var(--sp-5); }

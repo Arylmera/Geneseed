@@ -37,6 +37,7 @@ const Loops = lazy(() => import('./pages/Loops.jsx'))
 const Factories = lazy(() => import('./pages/Factories.jsx'))
 const Laws = lazy(() => import('./pages/Laws.jsx'))
 const Personal = lazy(() => import('./pages/Personal.jsx'))
+const Memory = lazy(() => import('./pages/Memory.jsx'))
 const Installs = lazy(() => import('./pages/Installs/index.jsx'))
 const Settings = lazy(() => import('./pages/Settings/index.jsx'))
 const Docs = lazy(() => import('./pages/Docs/index.jsx'))
@@ -271,6 +272,9 @@ export default function App() {
         onAction={runAction}
         onCountsChanged={reload}
       />
+    ),
+    memory: () => (
+      <Memory item={route.item} dataRev={dataRev} onAction={runAction} onCountsChanged={reload} />
     ),
     installs: () => (
       <Installs
