@@ -27,8 +27,12 @@ import { opencodeConfigDir } from './hosts.mjs';
 
 /** The agent the isolated call runs as. Its name is ours, in a config folder that holds nothing else. */
 export const JUDGE_AGENT = 'geneseed-judge';
-/** The keys of the user's config the isolated call keeps: what it needs to reach their model, nothing more. */
-const KEPT_KEYS = ['provider', 'enabled_providers', 'disabled_providers', 'model', 'small_model'];
+/**
+ * The keys of the user's config the isolated call keeps: what it needs to reach their model, nothing more. `plugin`
+ * is among them because a custom provider often signs in through an npm plugin listed there; Geneseed's own plugins
+ * are FILES in the config folder's `plugins/`, which the empty folder leaves out, never entries of this key.
+ */
+const KEPT_KEYS = ['provider', 'enabled_providers', 'disabled_providers', 'model', 'small_model', 'plugin'];
 
 /** A JSONC object file, or null when it is missing, unreadable or not an object. */
 function readObject(p) {

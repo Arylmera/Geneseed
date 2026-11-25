@@ -380,16 +380,37 @@ export function leanArgv(argv, help = helpOf) {
  * lean flags, and a word cmd.exe could still read inside quotes (`"`, `%`, a line break, a trailing
  * backslash) refuses the call instead of being passed on.
  */
+/**
+ * The folders the model CLIs install into when PATH does not name them: OpenCode's own installer, npm's and bun's
+ * user prefixes, Volta, Homebrew on Apple silicon and Intel. Folders of the user or of the system, never the
+ * current one. Exported for the unit tier.
+ */
+export function userBinDirs(env = process.env, platform = process.platform) {
+  const home = env.HOME || env.USERPROFILE || '';
+  if (platform === 'win32') {
+    return [home && path.win32.join(home, '.opencode', 'bin'), env.APPDATA && path.win32.join(env.APPDATA, 'npm'),
+      home && path.win32.join(home, '.bun', 'bin'), home && path.win32.join(home, '.volta', 'bin')].filter(Boolean);
+  }
+  return [...(home ? ['.opencode/bin', '.local/bin', '.bun/bin', '.npm-global/bin', '.volta/bin'].map((d) => path.posix.join(home, d)) : []),
+    '/opt/homebrew/bin', '/usr/local/bin'];
+}
+
 export function spawnPlan(words, prompt, { platform = process.platform, env = process.env, exists = undefined } = {}) {
   // The prompt goes over stdin for `claude`, `openclaude` and `opencode` on every path (`claude -p` and `opencode run`
   // read it there; spec S1):
   // a Windows command line holds 32 767 characters, and a long session's notes overran it (ENOENT/E2BIG, silently).
   // Any other command keeps it as the last argument, which is what `$GENESEED_LLM="llm -m x"` and the CLI cells expect.
   const viaStdin = prompt !== null && ['claude', 'openclaude', 'opencode'].includes(binName(words[0] ?? ''));
-  const direct = { file: words[0], args: [...words.slice(1), ...(prompt === null || viaStdin ? [] : [prompt])],
+  // Not on PATH: the usual install folders of the model CLIs (`userBinDirs`). A console started at login, or by a
+  // launcher, runs with the system's short PATH, which misses Homebrew and `~/.opencode/bin` (seen 2026-11-25: the
+  // cleanup's `opencode run` exited 1 in 0.2 s). Found on PATH, the word runs as it is.
+  const onPath = resolveCommand(words[0], env, exists, platform);
+  const elsewhere = onPath ? null : resolveCommand(words[0], { PATH: userBinDirs(env, platform).join(platform === 'win32' ? ';' : ':'),
+    PATHEXT: env.PATHEXT }, exists, platform);
+  const direct = { file: elsewhere ?? words[0], args: [...words.slice(1), ...(prompt === null || viaStdin ? [] : [prompt])],
     input: viaStdin ? prompt : undefined, verbatim: false, refuse: null };
   if (platform !== 'win32') return direct;
-  const found = resolveCommand(words[0], env, exists, platform);
+  const found = onPath ?? elsewhere;
   // Nothing on PATH: the bare word would be handed to CreateProcess, which looks in the CURRENT folder first, and a
   // `claude.exe` planted in a repository would then run at every session end. So nothing runs.
   if (!found) return { ...direct, refuse: `could not run ${words[0]}: not found on PATH - nothing learned` };
@@ -834,7 +855,11 @@ function cleanStore(memDir, llm, { all = false, dryRun = false, maxBatches = Inf
     for (const batch of batches.slice(0, maxBatches)) {
       const proc = runLlm(llm, consolidatePrompt(memDir, batch, facts));
       if (proc.returncode !== 0 || !proc.stdout.trim()) {
-        err(`[learn] cleanup: the model gave no answer (${proc.returncode !== 0 ? `exit ${proc.returncode}` : 'empty reply'}) \u2014 stopped; the rest stays due.\n`);
+        // The model command's own words say why (a missing command, a login, an unknown model): its first lines.
+        const said = String(proc.stderr ?? '').replace(/\x1b\[[0-9;]*m/g, '').split('\n').map((l) => l.trim()).filter(Boolean)
+          .slice(0, 3).join(' | ').slice(0, 300);
+        err(`[learn] cleanup: the model gave no answer (${proc.returncode !== 0 ? `exit ${proc.returncode}` : 'empty reply'})`
+          + `${said ? `: ${said}` : ''} \u2014 stopped; the rest stays due.\n`);
         tally.failed = true;
         break;
       }
