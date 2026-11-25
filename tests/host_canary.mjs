@@ -142,7 +142,7 @@ function v2Diagnostics(home, listed, logFile) {
 }
 
 function checkOpencode(major) {
-  return ({ exec, home, project, env, work }) => {
+  return ({ exec, home, project, env, work, bin }) => {
     const problems = [];
     const pluginDir = path.join(home, '.config', 'opencode', 'plugins');
     fs.mkdirSync(pluginDir, { recursive: true });
@@ -201,7 +201,9 @@ function checkOpencode(major) {
     // A host that loaded nothing has no guard to ask; its load failure is the finding.
     if (problems.length > 0) return { problems };
     problems.push(...guardDeny(major, { exec, project, env, work }));
-    return { problems, summary: `${IDS.length} plugin(s) loaded, the guard refused a key file and let a plain one through` };
+    problems.push(...cleanupCall(major, { bin, home, env, work }));
+    return { problems, summary: `${IDS.length} plugin(s) loaded, the guard refused a key file and let a plain one through, `
+      + 'the memory cleanup ran as one bare model call' };
   };
 }
 
@@ -283,6 +285,79 @@ function guardDeny(major, { exec, project, env, work }) {
       + `${requests.length} request(s) reached the fake model, ${toolResults.length} distinct tool result(s):\n`
       + `${toolResults.map((t) => `    tool result: ${t.slice(0, 200)}`).join('\n')}\n--- run output\n${out}`);
   }
+  return problems;
+}
+
+/**
+ * THE MEMORY CLEANUP ON OPENCODE, ON THE REAL HOST (js/hosts/opencode-run.mjs). The console's Clean up button runs
+ * `geneseed-hook learn --consolidate --merge --host opencode --learn-model <m>`, which calls `opencode run` once per
+ * batch of facts, isolated so the host is a plain model call. Run here on a two-fact store, `--dry-run`, against a
+ * stub that answers a fixed plan, with Geneseed's plugins installed in the throwaway home (the load check above).
+ *
+ * The rule, and the four expectations it gives:
+ *   One batch is one model request carrying the cleanup prompt and nothing of the user's harness, and its answer
+ *   is read back as the plan.
+ *     1. The hook exits 0.
+ *     2. Exactly one request reached the model: no title request (`--title`), no second turn.
+ *     3. That request offers no tool on V1 and at most one on V2 (a built-in the agent's `"*": false` leaves), and
+ *        carries neither the constitution (`AGENT.md`, loaded from the global config folder) nor a plugin's text.
+ *     4. The plan holds the stub's two actions, waiting (a dry run applies nothing).
+ */
+const CLEANUP_PLAN = '---\nname: keep-me\naction: update\ndescription: merged\ntopic: build\n---\nMerged.\n'
+  + '---FILE---\n---\nname: dup-one\naction: archive\nmerged-into: keep-me\n---\n';
+
+function cleanupCall(major, { bin, home, env, work }) {
+  const store = path.join(work, 'cleanup-memory');
+  fs.mkdirSync(store, { recursive: true });
+  for (const [slug, desc] of [['keep-me', 'the console code page'], ['dup-one', 'the console code page again']]) {
+    fs.writeFileSync(path.join(store, `${slug}.md`), `---\nname: ${slug}\ndescription: ${desc}\ntopic: build\n---\n${desc}.\n`);
+  }
+  const portFile = path.join(work, 'cleanup-model.port');
+  const requestsFile = path.join(work, 'cleanup-model.requests.jsonl');
+  const replyFile = path.join(work, 'cleanup-model.reply.txt');
+  fs.writeFileSync(replyFile, CLEANUP_PLAN);
+  const stub = spawn(process.execPath, [path.join(ROOT, 'tests', 'helpers', 'fake_model.mjs'),
+    '--port-file', portFile, '--requests', requestsFile, '--reply', replyFile, '--ttl', '300'],
+  { detached: true, stdio: 'ignore', windowsHide: true });
+  stub.unref();
+  let r;
+  try {
+    for (let tick = 0; tick < 100 && !fs.existsSync(portFile); tick++) sleep(100);
+    if (!fs.existsSync(portFile)) return ['cleanup: the fake model never listened (no port file after 10 s)'];
+    const port = fs.readFileSync(portFile, 'utf8').trim();
+    // The user's own config, which the isolated call copies its provider from: the stub is the only provider.
+    const cfgDir = path.join(home, '.config', 'opencode');
+    fs.mkdirSync(cfgDir, { recursive: true });
+    fs.writeFileSync(path.join(cfgDir, 'opencode.json'), JSON.stringify({
+      small_model: 'canary/fake', enabled_providers: ['canary'],
+      provider: { canary: { npm: '@ai-sdk/openai-compatible', name: 'canary',
+        options: { baseURL: `http://127.0.0.1:${port}/v1`, apiKey: 'none' }, models: { fake: { name: 'fake' } } } },
+    }, null, 2));
+    // The host binary first on PATH, as `opencode`: learn runs the word, never a path.
+    const runEnv = Object.fromEntries(Object.entries(env).filter(([k]) => !PROVIDER_CREDENTIAL.test(k) && k !== 'GENESEED_LLM'));
+    runEnv.PATH = `${path.dirname(bin)}${path.delimiter}${env.PATH ?? ''}`;
+    r = run(process.execPath, [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn', '--consolidate', '--merge', '--dry-run',
+      '--memory', store, '--host', 'opencode', '--learn-model', 'canary/fake'], { cwd: work, env: runEnv, timeout: 180_000 });
+  } finally {
+    try { process.kill(stub.pid); } catch { /* already gone */ }
+  }
+  const requests = (fs.existsSync(requestsFile) ? fs.readFileSync(requestsFile, 'utf8') : '')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((b) => !b.unhandled);
+  const problems = [];
+  if (r.status !== 0) problems.push(`cleanup: the hook exited ${r.status}${r.error ? ` (${r.error.message})` : ''}`);
+  if (requests.length !== 1) problems.push(`cleanup: ${requests.length} request(s) reached the model, expected exactly 1`);
+  const turn = requests[0];
+  if (turn) {
+    const tools = (turn.tools ?? []).length;
+    if (tools > (major === 'V2' ? 1 : 0)) problems.push(`cleanup: the request offered ${tools} tool(s); the judge agent has none`);
+    const text = JSON.stringify(turn.messages ?? []);
+    if (/AGENT\.md|Constitution|\[geneseed-/.test(text)) problems.push('cleanup: the request carries the harness (AGENT.md or a plugin\'s text)');
+    if (!text.includes('keep-me')) problems.push('cleanup: the request does not carry the facts');
+  }
+  let pending = [];
+  try { pending = JSON.parse(fs.readFileSync(path.join(store, '.consolidate-plan.json'), 'utf8')).pending.map((a) => a.slug); } catch { /* none */ }
+  if (pending.join(',') !== 'keep-me,dup-one') problems.push(`cleanup: the plan waits on [${pending.join(', ')}], expected [keep-me, dup-one]`);
+  if (problems.length > 0) problems.push(`cleanup diagnostics:\n--- hook output\n${(r?.out ?? '').slice(-1500)}`);
   return problems;
 }
 
@@ -379,7 +454,7 @@ function canary(host, work) {
   else delete env.CLAUDE_CODE_GIT_BASH_PATH;
   // A node-script host runs as `node <script>`.
   const exec = (args, o) => (host.node ? run(process.execPath, [found, ...args], o) : run(found, args, o));
-  return { version, ...host.check({ exec, home, project, env, work }) };
+  return { version, ...host.check({ exec, home, project, env, work, bin: found }) };
 }
 
 // An `--only` id that names no host would filter every host out and exit 0 having checked

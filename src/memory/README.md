@@ -187,6 +187,8 @@ creates one.
   batches per session until the store is through. `GENESEED_CONSOLIDATE=off` turns that off. By
   hand: `geneseed-hook learn --consolidate --merge --memory <this dir>`, and `--dry-run` applies
   nothing, so every action waits for you to confirm.
+- **On OpenCode** the console's button runs the cleanup on the model your OpenCode config names (`small_model`,
+  else `model`), through `opencode run` started bare: no plugin, no `AGENTS.md`, no tool, your own login.
 - `geneseed memory consolidate --dry-run` needs no model: it reports what the index rebuild would
   change and the pairs of facts in one topic that look like duplicates.
 

@@ -13,6 +13,8 @@
  *   --writes     `[{"path": "...", "content": "..."}, ...]`, one scripted write per turn
  *   --ttl        seconds until it exits by itself (default 600): a canary that crashed must not
  *                leave a listener behind
+ *   --reply      a file whose text answers EVERY request, with no tool call: the learn cleanup's check,
+ *                where the host is a plain model call and the answer is a plan, not a write
  *
  * ITS OWN PROCESS, because the canary drives its hosts with `spawnSync`, which blocks this
  * process's event loop: a server inside the canary would never answer.
@@ -78,7 +80,7 @@ export function chunks(reply, model) {
   ];
 }
 
-export function serve({ writes, requests }) {
+export function serve({ writes, requests, replyText = null }) {
   return http.createServer((req, res) => {
     let raw = '';
     req.setEncoding('utf8');
@@ -98,7 +100,7 @@ export function serve({ writes, requests }) {
       let body;
       try { body = JSON.parse(raw); } catch { return json(400, { error: { message: 'fake model: body is not JSON' } }); }
       if (requests) fs.appendFileSync(requests, `${JSON.stringify(body)}\n`);
-      const reply = replyTo(body, writes);
+      const reply = replyText !== null ? { text: replyText } : replyTo(body, writes);
       const model = body.model ?? 'fake';
       if (!body.stream) {
         return json(200, { id: 'chatcmpl-canary', object: 'chat.completion', created: 0, model,
@@ -120,12 +122,13 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(new 
   const portFile = arg('--port-file');
   const requests = arg('--requests');
   if (!portFile || !requests) {
-    console.error('usage: fake_model.mjs --port-file <f> --requests <f> --writes <json> [--ttl <s>]');
+    console.error('usage: fake_model.mjs --port-file <f> --requests <f> [--writes <json> | --reply <file>] [--ttl <s>]');
     process.exit(2);
   }
   const writes = JSON.parse(arg('--writes', '[]'));
+  const replyFile = arg('--reply');
   fs.writeFileSync(requests, '');
-  const server = serve({ writes, requests });
+  const server = serve({ writes, requests, replyText: replyFile ? fs.readFileSync(replyFile, 'utf8') : null });
   server.listen(0, '127.0.0.1', () => {
     // Written whole under another name, then renamed: a reader never sees half a port.
     fs.writeFileSync(`${portFile}.tmp`, String(server.address().port));

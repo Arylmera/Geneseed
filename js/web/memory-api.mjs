@@ -9,9 +9,9 @@
  * holds no memory logic of its own.
  *
  * THE CLEANUP IS A JOB, because it calls the learn model: the hook binary's `learn --consolidate --merge`, the one
- * entry allowed to spawn a model (ADR 0002). Its model is the install's own: the command its emit baked
- * (`learn_command` in the manifest), passed as `--host` and `--learn-model`, unless the daemon itself runs with
- * `$GENESEED_LLM`, which the hook reads first. Everything else here is filesystem work through the same functions
+ * entry allowed to spawn a model (ADR 0002). Its model is the install's own (`learnOf`): the command a Claude-family
+ * emit baked (`learn_command` in the manifest), or an OpenCode install's configured model, passed as `--host` and
+ * `--learn-model`, unless the daemon itself runs with `$GENESEED_LLM`, which the hook reads first. Everything else here is filesystem work through the same functions
  * `geneseed memory` calls.
  */
 import { readdirSync, statSync } from 'node:fs';
@@ -19,6 +19,8 @@ import path from 'node:path';
 
 import { consolidateMemory, readFacts, readGateLog } from '../hosts/memory-files.mjs';
 import { rankFacts } from '../hosts/memory-search.mjs';
+import { opencodeModelOf, opencodeUserConfig } from '../hosts/opencode-run.mjs';
+import { learnCommandFor } from '../hosts/learn-command.mjs';
 import { BACKUP_DIR, decidePending, readPlan, restoreFact } from '../hosts/memory-consolidate.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { claudeCfg, claudeReadManifest, installTargets } from '../hosts/installs.mjs';
@@ -104,27 +106,40 @@ const commandAt = (cfg) => {
   return typeof cmd === 'string' && cmd.trim() ? cmd : null;
 };
 
+/** An OpenCode install's model, read from its own config (`small_model`, else `model`), as a model triple. */
+function opencodeAt(cfgDir) {
+  const m = opencodeModelOf(opencodeUserConfig({}, cfgDir));
+  const command = m ? learnCommandFor('opencode', m) : null;
+  return command ? { host: 'opencode', model: m, command } : null;
+}
+
 /**
- * The learn model the cleanup job runs on: `{ model }` or `{ why }`. The viewed install's own, as its emit recorded
- * it (`learn_command` in the manifest); else the first active Claude Code or OpenClaude install that records one,
- * since every global install reads one shared store and any model can judge it. `why` says, in the user's words,
- * what to do when no install records a model: an OpenCode install distils inside its plugin and records none, and
- * a build from before the recorded command (or `--learn off`) records none either.
+ * The learn model the cleanup job runs on: `{ model }` or `{ why }`. The viewed install's own: a Claude Code or
+ * OpenClaude install's as its emit recorded it (`learn_command` in the manifest), an OpenCode install's from its
+ * own config, run as an isolated `opencode run` (js/hosts/opencode-run.mjs). Else the first active install of
+ * another host that has one, since every global install reads one shared store and any model can judge it. `why`
+ * says, in the user's words, what to do when none does.
  */
 function learnOf(state, targets = installTargets()) {
   const host = String(state.emit ?? '').split('-')[0];
-  const own = CLAUDE_FAMILY.includes(host) ? commandAt(state.target) : null;
-  if (own) return { model: modelOf(host, own) };
+  const ownCmd = CLAUDE_FAMILY.includes(host) ? commandAt(state.target) : null;
+  if (ownCmd) return { model: modelOf(host, ownCmd) };
+  const ownOc = host === 'opencode' ? opencodeAt(state.target) : null;
+  if (ownOc) return { model: ownOc };
   for (const [h, scope, root] of targets) {
-    if (!CLAUDE_FAMILY.includes(h)) continue;
-    let cmd = null;
-    try { cmd = commandAt(claudeCfg(root, scope, h)); } catch { /* not readable: next */ }
-    if (cmd) return { model: { ...modelOf(h, cmd), from: String(root) } };
+    let found = null;
+    try {
+      if (CLAUDE_FAMILY.includes(h)) {
+        const cmd = commandAt(claudeCfg(root, scope, h));
+        found = cmd ? modelOf(h, cmd) : null;
+      } else if (h === 'opencode' && scope === 'global') found = opencodeAt(root);
+    } catch { /* not readable: next */ }
+    if (found) return { model: { ...found, from: String(root) } };
   }
   return {
-    why: CLAUDE_FAMILY.includes(host)
-      ? 'No install records a learn model. Run geneseed rebuild-all: a build from before the learn model was recorded, or one built with --learn off, records none.'
-      : 'This install distils inside its OpenCode plugin and records no command, and no Claude Code or OpenClaude install records one. Install one with --learn light, or start the console with $GENESEED_LLM set.',
+    why: host === 'opencode'
+      ? 'Set a model in your OpenCode config (small_model, or model) for the cleanup to run on, or start the console with $GENESEED_LLM set.'
+      : 'No install records a learn model. Run geneseed rebuild-all: a build from before the learn model was recorded, or one built with --learn off, records none.',
   };
 }
 

@@ -36,6 +36,7 @@ import { captureSpecFeedback, projectNotesDir, subagentReport, turnReply } from 
 import { gitRootOf } from './gitref.mjs';
 import { pickStored, storedLine } from './memory-search.mjs';
 import { learnCommandFor } from './learn-command.mjs';
+import { opencodeIsolation, opencodeUserConfig } from './opencode-run.mjs';
 import { recordAgentRun } from './agent-runs.mjs';
 import {
   AUTO_BATCHES, CONSOLIDATE_VERSION, applyActions, backupStore, consolidatePrompt, consolidationDue, dueBatches,
@@ -380,10 +381,11 @@ export function leanArgv(argv, help = helpOf) {
  * backslash) refuses the call instead of being passed on.
  */
 export function spawnPlan(words, prompt, { platform = process.platform, env = process.env, exists = undefined } = {}) {
-  // The prompt goes over stdin for `claude` and `openclaude` on every path (`claude -p` reads it there; spec S1):
+  // The prompt goes over stdin for `claude`, `openclaude` and `opencode` on every path (`claude -p` and `opencode run`
+  // read it there; spec S1):
   // a Windows command line holds 32 767 characters, and a long session's notes overran it (ENOENT/E2BIG, silently).
   // Any other command keeps it as the last argument, which is what `$GENESEED_LLM="llm -m x"` and the CLI cells expect.
-  const viaStdin = prompt !== null && ['claude', 'openclaude'].includes(binName(words[0] ?? ''));
+  const viaStdin = prompt !== null && ['claude', 'openclaude', 'opencode'].includes(binName(words[0] ?? ''));
   const direct = { file: words[0], args: [...words.slice(1), ...(prompt === null || viaStdin ? [] : [prompt])],
     input: viaStdin ? prompt : undefined, verbatim: false, refuse: null };
   if (platform !== 'win32') return direct;
@@ -409,6 +411,16 @@ export function spawnPlan(words, prompt, { platform = process.platform, env = pr
 let run = null;
 function noteFail(reason) { if (run && !run.fail) run.fail = reason; }
 
+/** The child's environment: ours, marked as a learn child, with an OpenCode isolation's variables set or removed. */
+function childEnv(oc) {
+  const env = { ...process.env, GENESEED_LEARN_CHILD: '1' };
+  for (const [k, v] of Object.entries(oc?.env ?? {})) {
+    if (v === undefined) delete env[k];
+    else env[k] = v;
+  }
+  return env;
+}
+
 /**
  * `prompt` null runs the words as they are (the `--help` probe above); a string is appended after the
  * lean flags. The ONE `spawnSync` call site of this module: the test that pins it reads this line.
@@ -423,8 +435,16 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {
   // `learn` — one recursion per nested session, stopped only by the host's 600 s timeout
   // killing the outermost call. The marker rides in the child's own environment (inherited by
   // every grandchild too), and `cmdLearn`'s first line stands down the instant it sees it.
-  const plan = spawnPlan(prompt === null ? argv : leanArgv(argv), prompt);
+  // The scratch folder holds the prompt (transcript text), so every exit, a throw included, removes it.
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'geneseed-learn-'));
+  // `opencode run` is a whole agent session: run it isolated, as a plain model call (./opencode-run.mjs).
+  const oc = prompt !== null && binName(argv[0] ?? '') === 'opencode'
+    ? opencodeIsolation(argv, { scratch, help: helpOf(`${argv[0]} run`), user: opencodeUserConfig(), role: DISTIL_ROLE })
+    : null;
+  if (oc) mkdirSync(oc.cwd, { recursive: true });
+  const plan = spawnPlan(prompt === null ? argv : oc ? oc.argv : leanArgv(argv), prompt);
   if (plan.refuse) {
+    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* the OS temp sweep gets it */ }
     if (track) noteFail(plan.refuse);
     return { stdout: '', stderr: `[learn] ${plan.refuse}\n`, returncode: 1, error: null };
   }
@@ -433,8 +453,6 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {
   // a hung CLI held the wait for as long as it lived (measured: 15.7 s for a 2 s timeout). A file has no reader to
   // wait for: `spawnSync` returns when cmd.exe is gone. The prompt comes from a file for the same reason (an orphan
   // would hold a stdin pipe too).
-  // The scratch folder holds the prompt (transcript text), so every exit, a throw included, removes it.
-  const scratch = mkdtempSync(path.join(os.tmpdir(), 'geneseed-learn-'));
   const outFile = path.join(scratch, 'out');
   const errFile = path.join(scratch, 'err');
   const inFile = path.join(scratch, 'in');
@@ -447,7 +465,7 @@ function runLlm(llm, prompt, { seconds = llmTimeoutSeconds(), track = true } = {
     try {
       proc = spawnSync(plan.file, plan.args,
         { windowsVerbatimArguments: plan.verbatim, stdio: [...fds], timeout: seconds * 1000, killSignal: 'SIGKILL',
-          env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+          env: childEnv(oc), ...(oc ? { cwd: oc.cwd } : {}), ...NO_WINDOW });
     } finally {
       closeAll();
     }
