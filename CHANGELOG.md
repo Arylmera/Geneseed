@@ -36,8 +36,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   now, then Apply or Reject each waiting action), and the archive. The archive is not listed until you
   search it or pick a topic, since it grows with every merge and cleanup: matches come grouped by
   topic, at most 100, each with a Restore button. The cleanup runs on the viewed install's learn
-  model, else on any Claude Code or OpenClaude install that records one, and says why when none
-  does. Old `#/personal/memory` links open the page.
+  model, else on any other install's, and says why when there is none. On an OpenCode install
+  that is the model your OpenCode config names (`small_model`, else `model`), called through
+  `opencode run` started bare: an empty config and working folder, so no plugin, no `AGENTS.md`
+  and no tool, one request per batch, on your own OpenCode login. Old `#/personal/memory` links
+  open the page.
 
 ### Fixed
 

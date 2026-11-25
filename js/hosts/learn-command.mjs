@@ -26,17 +26,23 @@ export const LEARN_SESSION = 'session';
  */
 export const LEARN_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,199}$/;
 
-/** The CLI a Claude-family host runs its learn child with, or null for a host that does not learn this way. */
-const cliOf = (host) => (host === 'openclaude' ? 'openclaude' : host === 'claude' || !host ? 'claude' : null);
+/** The CLI a host runs its learn child with, or null for a host that does not learn this way. */
+const cliOf = (host) => (host === 'openclaude' ? 'openclaude' : host === 'opencode' ? 'opencode'
+  : host === 'claude' || !host ? 'claude' : null);
 
 /**
  * The model command for `host` and a `--learn-model` value: `<cli> -p --model <m>`, `<cli> -p` for `session`,
  * null when the value is absent (learning off) or not a safe model id. The lean flags are not here: learn adds
  * them at run time to any command whose first word is the CLI (`leanArgv`, js/hosts/hooks-learn.mjs).
+ *
+ * OpenCode's is `opencode run --model <provider/model>`, and plain `opencode run` for `session` (the user's own
+ * default). No settings file wires it: OpenCode distils inside its plugin. The console's cleanup job names it
+ * (`--host opencode --learn-model <m>`), and learn runs it isolated (./opencode-run.mjs).
  */
 export function learnCommandFor(host, learnModel) {
   const cli = cliOf(host);
   if (!cli || typeof learnModel !== 'string' || !learnModel) return null;
-  if (learnModel === LEARN_SESSION) return `${cli} -p`;
-  return LEARN_MODEL_RE.test(learnModel) ? `${cli} -p --model ${learnModel}` : null;
+  const head = cli === 'opencode' ? 'opencode run' : `${cli} -p`;
+  if (learnModel === LEARN_SESSION) return head;
+  return LEARN_MODEL_RE.test(learnModel) ? `${head} --model ${learnModel}` : null;
 }

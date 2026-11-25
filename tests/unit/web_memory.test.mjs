@@ -86,8 +86,15 @@ test('memory-clean: the argv, the dry run, and the refusal', () => {
     const lent = memoryCleanCmd(none.state, {}, {}, [['opencode', 'global', '/nowhere'], ['openclaude', 'global', other]]).cmd;
     assert.deepEqual(lent.slice(-4), ['--host', 'openclaude', '--learn-model', 'session']);
     assert.equal(apiMemory(none.state, '', [['openclaude', 'global', other]]).learn.from, other);
-    // An OpenCode install with no Claude-family model anywhere: the reason names the plugin.
-    assert.match(apiMemory({ ...none.state, emit: 'opencode-global' }, '', []).learnWhy, /inside its OpenCode plugin/);
+    // An OpenCode install runs the cleanup on its own config's model (small_model, else model), through an isolated
+    // `opencode run` (js/hosts/opencode-run.mjs); with no model in its config, the reason says where to set one.
+    const oc = path.join(none.sb.path, 'opencode');
+    fs.mkdirSync(path.join(oc, 'memory'), { recursive: true });
+    const ocState = { target: oc, emit: 'opencode-global', refresh: () => {} };
+    assert.match(apiMemory(ocState, '', []).learnWhy, /^Set a model in your OpenCode config \(small_model, or model\)/);
+    fs.writeFileSync(path.join(oc, 'opencode.json'), JSON.stringify({ model: 'p/big', small_model: 'p/small' }));
+    assert.deepEqual(apiMemory(ocState, '', []).learn, { host: 'opencode', model: 'p/small', command: 'opencode run --model p/small' });
+    assert.deepEqual(memoryCleanCmd(ocState, {}, {}, []).cmd.slice(-4), ['--host', 'opencode', '--learn-model', 'p/small']);
   } finally { none.sb.cleanup(); }
 });
 
