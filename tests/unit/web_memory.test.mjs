@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { apiMemory, apiMemoryDecide, apiMemoryRestore, memoryCleanCmd } from '../../js/web/memory-api.mjs';
+import { ARCHIVE_HITS, apiMemory, apiMemoryArchive, apiMemoryDecide, apiMemoryRestore, memoryCleanCmd } from '../../js/web/memory-api.mjs';
 import { writePlan } from '../../js/hosts/memory-consolidate.mjs';
 import { NotFound } from '../../js/web/catalog.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -38,19 +38,22 @@ function rig({ learnCommand = 'claude -p --model haiku' } = {}) {
 }
 
 // The read: counts, topics largest first with their file size (0 when the topic file is missing), the map's
-// size, the archive, the plan without the update texts, and the gate log's parseable lines.
+// size, the archive counted (in total and per topic, never listed), the plan without the update texts, and the
+// gate log's parseable lines.
 test('GET /api/memory: the store\'s state as the page reads it', () => {
   const r = rig();
   try {
     writePlan(r.mem, { v: 1, at: '2026-11-25T08:00:00.000Z', reviewed: { 'a-fact': 1 },
       pending: [{ slug: 'b-fact', action: 'update', text: '---\nname: b-fact\n---\nx', low: true }] });
-    const m = apiMemory(r.state);
+    const m = apiMemory(r.state, '', []);
     assert.equal(m.store, r.mem);
     assert.equal(m.facts, 3);
     assert.deepEqual(m.topics.map((t) => [t.topic, t.n, t.bytes > 0]), [['build', 2, true], ['release', 1, false]]);
     assert.equal(m.mapBytes, '# Memory Index\n'.length);
     assert.equal(m.archivedCount, 1);
-    assert.deepEqual(m.archived.map((a) => [a.name, a.desc]), [['old-fact', 'an archived one']]);
+    assert.deepEqual(m.archivedTopics, [{ topic: 'build', n: 1 }]);
+    assert.equal(m.archived, undefined, 'the archive is never listed whole');
+    assert.equal(m.learnWhy, null);
     assert.deepEqual(m.plan, { at: '2026-11-25T08:00:00.000Z', reviewed: 1, pending: [{ slug: 'b-fact', action: 'update', low: true }] });
     assert.deepEqual(m.log.map((e) => e.decision), ['created']);
     assert.deepEqual(m.learn, { host: 'claude', model: 'haiku', command: 'claude -p --model haiku' });
@@ -58,7 +61,7 @@ test('GET /api/memory: the store\'s state as the page reads it', () => {
   const gone = rig();
   try {
     fs.rmSync(gone.mem, { recursive: true });
-    assert.throws(() => apiMemory(gone.state), NotFound);
+    assert.throws(() => apiMemory(gone.state, '', []), NotFound);
   } finally { gone.sb.cleanup(); }
 });
 
@@ -68,14 +71,23 @@ test('memory-clean: the argv, the dry run, and the refusal', () => {
   const r = rig();
   try {
     const hook = path.join(ROOT, 'bin', 'geneseed-hook.mjs');
-    assert.deepEqual(memoryCleanCmd(r.state, {}, {}).cmd,
+    assert.deepEqual(memoryCleanCmd(r.state, {}, {}, []).cmd,
       [process.execPath, hook, 'learn', '--consolidate', '--merge', '--memory', r.mem, '--host', 'claude', '--learn-model', 'haiku']);
-    assert.deepEqual(memoryCleanCmd(r.state, { dryRun: true }, {}).cmd.slice(-1), ['--dry-run']);
+    assert.deepEqual(memoryCleanCmd(r.state, { dryRun: true }, {}, []).cmd.slice(-1), ['--dry-run']);
   } finally { r.sb.cleanup(); }
   const none = rig({ learnCommand: null });
   try {
-    assert.match(memoryCleanCmd(none.state, {}, {}).error, /no learn model/);
-    assert.deepEqual(memoryCleanCmd(none.state, {}, { GENESEED_LLM: 'llm -m x' }).cmd.slice(-2), ['--memory', none.mem]);
+    assert.match(memoryCleanCmd(none.state, {}, {}, []).error, /^No install records a learn model\. Run geneseed rebuild-all/);
+    assert.deepEqual(memoryCleanCmd(none.state, {}, { GENESEED_LLM: 'llm -m x' }, []).cmd.slice(-2), ['--memory', none.mem]);
+    // Another active Claude-family install that records a model lends it: the store is the one this page shows.
+    const other = path.join(none.sb.path, 'other-claude');
+    fs.mkdirSync(other);
+    fs.writeFileSync(path.join(other, '.geneseed-manifest.json'), JSON.stringify({ managed: { learn_command: 'openclaude -p' } }));
+    const lent = memoryCleanCmd(none.state, {}, {}, [['opencode', 'global', '/nowhere'], ['openclaude', 'global', other]]).cmd;
+    assert.deepEqual(lent.slice(-4), ['--host', 'openclaude', '--learn-model', 'session']);
+    assert.equal(apiMemory(none.state, '', [['openclaude', 'global', other]]).learn.from, other);
+    // An OpenCode install with no Claude-family model anywhere: the reason names the plugin.
+    assert.match(apiMemory({ ...none.state, emit: 'opencode-global' }, '', []).learnWhy, /inside its OpenCode plugin/);
   } finally { none.sb.cleanup(); }
 });
 
@@ -98,5 +110,27 @@ test('POST /api/memory/decide and /api/memory/restore', () => {
     assert.deepEqual(apiMemoryRestore(r.state, { name: '../x' }), { ok: false, error: 'not an archived fact name' });
     assert.deepEqual(apiMemoryRestore(r.state, { name: 'old-fact' }), { ok: true, restored: 'old-fact' });
     assert.match(fs.readFileSync(path.join(r.mem, 'topics', 'build.md'), 'utf8'), /\(\.\.\/old-fact\.md\)/);
+  } finally { r.sb.cleanup(); }
+});
+
+// The archive answers a search only: no words and no topic is no fact; words rank by BM25 over every archived fact;
+// a topic lists that topic newest first, or narrows the words' matches; at most ARCHIVE_HITS facts come back.
+test('GET /api/memory/archive: search only, by words, by topic, capped', () => {
+  const r = rig();
+  try {
+    const arch = path.join(r.mem, 'archive');
+    fs.writeFileSync(path.join(arch, 'cp-page.md'), fact('cp-page', 'the windows console code page is cp1252', 'windows'));
+    fs.writeFileSync(path.join(arch, 'release-notes.md'), fact('release-notes', 'release notes fold from fragments', 'release'));
+    const t = new Date(Date.now() - 60000);
+    fs.utimesSync(path.join(arch, 'old-fact.md'), t, t);
+    const q = (query) => apiMemoryArchive(r.state, `/api/memory/archive?${query}`);
+    assert.deepEqual(q(''), { q: '', topic: '', total: 0, hits: [] });
+    assert.deepEqual(q('q=code+page').hits.map((h) => [h.name, h.topic]), [['cp-page', 'windows']]);
+    assert.deepEqual(q('topic=build').hits.map((h) => h.name), ['old-fact']);
+    assert.deepEqual(q('q=code+page&topic=release').hits, []);
+    for (let i = 0; i < ARCHIVE_HITS + 5; i += 1) fs.writeFileSync(path.join(arch, `bulk-${i}.md`), fact(`bulk-${i}`, `bulk fact ${i}`, 'bulk'));
+    const many = q('topic=bulk');
+    assert.equal(many.total, ARCHIVE_HITS + 5);
+    assert.equal(many.hits.length, ARCHIVE_HITS);
   } finally { r.sb.cleanup(); }
 });

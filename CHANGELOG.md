@@ -33,8 +33,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   of the index loaded at session start, the largest topic file), the learn decisions of the last
   30 days per kind (created, merged, archived, turned away as a duplicate, nothing stored, failed),
   the recent decisions with their reasons, the cleanup (Preview, which applies nothing, or Clean up
-  now, then Apply or Reject each waiting action), and the archive with a Restore button per fact.
-  Old `#/personal/memory` links open the page.
+  now, then Apply or Reject each waiting action), and the archive. The archive is not listed until you
+  search it or pick a topic, since it grows with every merge and cleanup: matches come grouped by
+  topic, at most 100, each with a Restore button. The cleanup runs on the viewed install's learn
+  model, else on any Claude Code or OpenClaude install that records one, and says why when none
+  does. Old `#/personal/memory` links open the page.
 
 ### Fixed
 

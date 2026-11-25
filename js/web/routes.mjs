@@ -27,7 +27,7 @@ import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem, apiLoadout } from './cat
 import { apiUsage } from './usage-api.mjs';
 import { apiProfiles } from './profiles-api.mjs';
 import { apiBackupsList } from './backup-api.mjs';
-import { apiMemory, apiMemoryDecide, apiMemoryRestore } from './memory-api.mjs';
+import { apiMemory, apiMemoryArchive, apiMemoryDecide, apiMemoryRestore } from './memory-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
 import { apiAgentModels, apiAgentModelsFull, apiAgentModelsSave } from './agent-models-api.mjs';
@@ -232,7 +232,9 @@ export const STATE_ROUTES = {
   '/api/update': apiUpdate,
   '/api/usage': apiUsage,
   // The Memory page's one read: counts, topic sizes, the gate log, the cleanup's plan, the archive.
-  '/api/memory': apiMemory,
+  '/api/memory': (state, url) => apiMemory(state, url),
+  // The archive answers a search only (`?q=` words, `?topic=`): it grows without bound, so it is never listed whole.
+  '/api/memory/archive': (state, url) => apiMemoryArchive(state, url),
   '/api/gates': apiGates,
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,

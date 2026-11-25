@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import Stat from '../components/Stat.jsx'
+import FilterInput from '../components/FilterInput.jsx'
 import StackBar from '../components/StackBar.jsx'
 import { Spark } from '../lib/activity.jsx'
 import Library from './Library.jsx'
@@ -110,8 +111,8 @@ function Cleanup({ m, onAction, onDecided }) {
       </div>
       <p className="dim">
         {m.learn
-          ? `Runs on this install's learn model (${m.learn.command}).`
-          : 'This install bakes no learn model: rebuild it with --learn light to clean up from here.'}{' '}
+          ? `Runs on the learn model ${m.learn.from ? `of the install at ${m.learn.from} ` : ''}(${m.learn.command}).`
+          : m.learnWhy || 'No install records a learn model.'}{' '}
         Preview judges the facts and changes nothing: every action then waits below for you.
       </p>
       <div className="mem-actions">
@@ -228,8 +229,30 @@ function Recent({ log }) {
   )
 }
 
+// The archive grows with every merge and cleanup, so nothing of it is listed until the user asks: words to search
+// for, or a topic chip. The matches come back grouped under their topic, at most 100 (js/web/memory-api.mjs).
 function Archived({ m, onDecided }) {
+  const [q, setQ] = React.useState('')
+  const [topic, setTopic] = React.useState(null)
+  const [found, setFound] = React.useState(null)
   const [err, setErr] = React.useState('')
+  const asked = q.trim() || topic
+  React.useEffect(() => {
+    // No search: the card shows its prompt (below), whatever an earlier search found.
+    if (!asked) return undefined
+    let live = true
+    // A short pause, so a search is sent when the typing stops, not on every key.
+    const t = setTimeout(() => {
+      api
+        .memoryArchive({ q: q.trim(), topic: topic ?? '' })
+        .then((r) => live && setFound(r))
+        .catch((e) => live && setErr(e.message))
+    }, 250)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [q, topic, asked, m.archivedCount])
   if (!m.archivedCount) return null
   const restore = async (name) => {
     setErr('')
@@ -241,30 +264,80 @@ function Archived({ m, onDecided }) {
     }
     onDecided()
   }
+  const groups = new Map()
+  for (const h of found?.hits ?? []) {
+    if (!groups.has(h.topic)) groups.set(h.topic, [])
+    groups.get(h.topic).push(h)
+  }
   return (
-    <section className="card pad-md mem-card" aria-labelledby="mem-arch-h">
+    <section className="card pad-md mem-card mem-archive" aria-labelledby="mem-arch-h">
       <div className="panel-head">
         <h2 id="mem-arch-h">Archived</h2>
         <span className="mono dim">{plural(m.archivedCount, 'fact')}</span>
       </div>
+      <FilterInput
+        className="lib-filter mem-search"
+        value={q}
+        onChange={setQ}
+        label="Search the archive"
+        placeholder="Search the archive"
+      />
+      <ul className="pm-chips mem-arch-topics" aria-label="Archived topics">
+        {m.archivedTopics.map((t) => (
+          <li key={t.topic}>
+            <button
+              type="button"
+              className={`chip-f pm-chip${topic === t.topic ? ' on' : ''}`}
+              aria-pressed={topic === t.topic}
+              onClick={() => setTopic(topic === t.topic ? null : t.topic)}
+            >
+              <span className="pm-chip-row">
+                <span className="pm-chip-name">{t.topic}</span>
+                <span className="mono pm-chip-n">{t.n}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
       {err ? (
         <p className="mem-err" role="alert">
           {err}
         </p>
       ) : null}
-      <ul className="mem-list">
-        {m.archived.map((a) => (
-          <li key={a.name}>
-            <span>
-              <span className="mono">{a.name}</span>
-              {a.desc ? <span className="dim"> · {a.desc}</span> : null}
-            </span>
-            <button type="button" className="btn ghost" onClick={() => restore(a.name)}>
-              Restore
-            </button>
-          </li>
-        ))}
-      </ul>
+      {!asked ? (
+        <p className="dim">Search, or pick a topic, to list archived facts.</p>
+      ) : found && !found.hits.length ? (
+        <p className="dim">No archived fact matches.</p>
+      ) : found ? (
+        <>
+          {found.total > found.hits.length ? (
+            <p className="dim mem-xs">
+              The first {found.hits.length} of {found.total} matches: narrow the search to see the
+              rest.
+            </p>
+          ) : null}
+          {[...groups].map(([t, rows]) => (
+            <div key={t} className="mem-arch-group">
+              <h3 className="mem-group-h">
+                {t} <span className="mono dim">{rows.length}</span>
+              </h3>
+              <ul className="mem-list">
+                {rows.map((a) => (
+                  <li key={a.name}>
+                    <span>
+                      <span className="mono">{a.name}</span>
+                      {a.desc ? <span className="dim"> · {a.desc}</span> : null}
+                    </span>
+                    <button type="button" className="btn ghost" onClick={() => restore(a.name)}>
+                      Restore
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </>
+      ) : null}
     </section>
   )
 }
@@ -329,15 +402,17 @@ export default function Memory({ item, dataRev, onAction, onCountsChanged }) {
         picked={topic}
         onPick={setTopic}
       />
-      <Library
-        lock="memory"
-        topic={topic}
-        base="#/memory"
-        selected={item}
-        dataRev={dataRev + rev}
-        onCountsChanged={bump}
-        onRulesChanged={bump}
-      />
+      <div className="mem-facts">
+        <Library
+          lock="memory"
+          topic={topic}
+          base="#/memory"
+          selected={item}
+          dataRev={dataRev + rev}
+          onCountsChanged={bump}
+          onRulesChanged={bump}
+        />
+      </div>
       <Recent log={m.log} />
       <Archived m={m} onDecided={bump} />
     </>

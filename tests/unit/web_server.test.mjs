@@ -54,13 +54,13 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 35 (the console's model tiers added `/api/agent-models`; the Factories page added `/api/factories/catalog` and
- * `/api/factories/active`; the Installs page's Profiles tab added `/api/profiles`; the Memory page added `/api/memory`). Trailing `/`
+/** Every GET path the daemon answers — 36 (the console's model tiers added `/api/agent-models`; the Factories page added `/api/factories/catalog` and
+ * `/api/factories/active`; the Installs page's Profiles tab added `/api/profiles`; the Memory page added `/api/memory` and `/api/memory/archive`). Trailing `/`
  * marks a prefix route. */
 const GET_SURFACE = ['/api/activity', '/api/agent-models', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/factories/active', '/api/factories/catalog',
   '/api/fleet', '/api/installs', '/api/item/',
-  '/api/jobs', '/api/jobs/', '/api/kits', '/api/loadout', '/api/loadout/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/memory',
+  '/api/jobs', '/api/jobs/', '/api/kits', '/api/loadout', '/api/loadout/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/memory', '/api/memory/archive',
   '/api/migrate/preview', '/api/overview',
   '/api/ping', '/api/profile', '/api/profiles', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];

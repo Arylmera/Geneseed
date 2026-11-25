@@ -11,6 +11,7 @@ vi.mock('../api/index.js', () => ({
     memory: vi.fn(),
     memoryDecide: vi.fn(),
     memoryRestore: vi.fn(),
+    memoryArchive: vi.fn(),
     rules: vi.fn(),
     rulesPromote: vi.fn(),
     catalog: vi.fn(),
@@ -33,7 +34,11 @@ const state = (over = {}) => ({
   ],
   mapBytes: 400,
   archivedCount: 1,
-  archived: [{ name: 'old-fact', desc: 'an old one', mtime: 1 }],
+  archivedTopics: [
+    { topic: 'release', n: 1 },
+    { topic: 'web', n: 1 },
+  ],
+  learnWhy: null,
   plan: { at: null, reviewed: 0, pending: [] },
   backups: [],
   log: [],
@@ -109,7 +114,7 @@ describe('Memory', () => {
   })
 
   it('an empty store shows "No facts yet" and links to the docs and the rule skill', async () => {
-    current = state({ facts: 0, topics: [], archivedCount: 0, archived: [], log: [] })
+    current = state({ facts: 0, topics: [], archivedCount: 0, archivedTopics: [], log: [] })
     const { container } = page()
     expect(await screen.findByText('No facts yet')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'How memory works' }).getAttribute('href')).toBe(
@@ -196,11 +201,17 @@ describe('Memory', () => {
   })
 
   it('without a learn model the cleanup buttons are off', async () => {
-    current = state({ learn: null })
+    current = state({
+      learn: null,
+      learnWhy: 'No install records a learn model. Run geneseed rebuild-all.',
+    })
     page()
     expect((await screen.findByText('Preview cleanup')).disabled).toBe(true)
     expect(screen.getByText('Clean up now').disabled).toBe(true)
-    expect(screen.getByText(/rebuild it with --learn light/)).toBeTruthy()
+    // The card says why, in the server's words.
+    expect(
+      screen.getByText(/No install records a learn model\. Run geneseed rebuild-all\./),
+    ).toBeTruthy()
   })
 
   it('decides what waits: one by one, or all', async () => {
@@ -223,13 +234,52 @@ describe('Memory', () => {
     await waitFor(() => expect(api.memoryDecide).toHaveBeenCalledWith({ all: true, reject: true }))
   })
 
+  // The archive is never listed until asked: a search or a topic chip. The matches come grouped by topic.
+  it('lists archived facts only for a search or a topic, grouped by topic', async () => {
+    api.memoryArchive.mockImplementation(({ q, topic }) =>
+      Promise.resolve({
+        q,
+        topic,
+        total: 2,
+        hits: [
+          { name: 'old-fact', desc: 'an old one', topic: 'release' },
+          { name: 'web-fact', desc: 'a web one', topic: 'web' },
+        ],
+      }),
+    )
+    page()
+    const card = (await screen.findByText('Archived', { selector: 'h2' })).closest('section')
+    expect(within(card).getByText('Search, or pick a topic, to list archived facts.')).toBeTruthy()
+    expect(api.memoryArchive).not.toHaveBeenCalled()
+    fireEvent.change(within(card).getByRole('textbox', { name: 'Search the archive' }), {
+      target: { value: 'old' },
+    })
+    await waitFor(() => expect(api.memoryArchive).toHaveBeenCalledWith({ q: 'old', topic: '' }))
+    await within(card).findByText('old-fact')
+    expect([...card.querySelectorAll('.mem-group-h')].map((h) => h.textContent)).toEqual([
+      'release 1',
+      'web 1',
+    ])
+    fireEvent.click(within(card).getByRole('button', { name: /^web/ }))
+    await waitFor(() => expect(api.memoryArchive).toHaveBeenCalledWith({ q: 'old', topic: 'web' }))
+  })
+
   it('restores an archived fact, and says why when it cannot', async () => {
+    api.memoryArchive.mockImplementation(() =>
+      Promise.resolve({
+        q: '',
+        topic: 'release',
+        total: 1,
+        hits: [{ name: 'old-fact', desc: '', topic: 'release' }],
+      }),
+    )
     api.memoryRestore.mockImplementation(() =>
       Promise.resolve({ ok: false, error: 'a live fact old-fact already holds that name' }),
     )
     page()
     const card = (await screen.findByText('Archived', { selector: 'h2' })).closest('section')
-    fireEvent.click(within(card).getByText('Restore'))
+    fireEvent.click(within(card).getByRole('button', { name: /^release/ }))
+    fireEvent.click(await within(card).findByText('Restore'))
     await waitFor(() => expect(api.memoryRestore).toHaveBeenCalledWith('old-fact'))
     expect(await within(card).findByRole('alert')).toHaveProperty(
       'textContent',
