@@ -145,7 +145,7 @@ export function emitOpencodeRender(cfg, job) {
   } = job;
   const oc = path.join(root, '.opencode');
 
-  build(cfg, _theme, out, { footprint, nativeCatalog });
+  build(cfg, _theme, out, { footprint, nativeCatalog, host: 'opencode' });
 
   // OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
   // plain names (the portable build keeps them). A deliberate de-link, not a fix.

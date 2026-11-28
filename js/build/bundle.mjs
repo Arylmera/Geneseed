@@ -201,9 +201,9 @@ export function phaseLog(phase) {
  * verbatim: it is backslash-separated on Windows, and re-deriving it here would differ by
  * separator in every message.
  */
-export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog = false } = {}) {
+export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog = false, host = '' } = {}) {
   phaseLog('RENDER');
-  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog });
+  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog, host });
   assertSourceComplete(cfg, `theme '${themeName}'`);
   mkdirSync(out, { recursive: true });
 
