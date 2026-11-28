@@ -208,6 +208,15 @@ test("session files: the rules seed explanation above the first rule is skipped,
   assert.ok(own.includes(`----- user-rules.md -----\n# Mine\nRead me.\n\n${rules}`), own)
 })
 
+test("session files: a rule's source metadata is not injected, scope and trial date stay", async () => {
+  const rule = (meta) => `## R1 — Credit\n${meta}\nRecord where it came from.\n`
+  const text = await tierBlock("rule-source", { emit: "opencode", host: { "user-rules.md":
+    `${rule('(scope: global | source: user 2026-10-19 "quote")')}\n${rule('(scope: global | source: m | trial until: 2026-12-18)')}` } })
+  assert.ok(text.includes(rule("(scope: global)")), text)
+  assert.ok(text.includes(rule("(scope: global | trial until: 2026-12-18)")), text)
+  assert.ok(!text.includes("source:"), text)
+})
+
 test("the rules preamble twin block is byte-identical to js/hosts/hooks-context.mjs", async () => {
   const cut = (s) => {
     const b = s.indexOf("// ---- rules preamble twin: BEGIN"), e = s.indexOf("// ---- rules preamble twin: END")
