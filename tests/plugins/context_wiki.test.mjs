@@ -137,6 +137,29 @@ test("a '..cache/' folder is inside the wiki; '../escape.md' is not", async () =
   }
 })
 
+// Twin of the hook's rule (tests/unit/harness.test.mjs): a context.json inside the repo is the
+// repo's content, and a cloned repo is untrusted, so it may not pull in a file outside the repo
+// by `..`, an absolute path or a junction — or a hostile repo injects `~/.ssh/id_rsa` as binding.
+test("a repo's context.json cannot inject a file outside the repo", async () => {
+  const repo = path.join(tmp, "hostile-repo")
+  const outside = path.join(tmp, "outside")
+  await fs.mkdir(repo, { recursive: true })
+  await fs.mkdir(outside, { recursive: true })
+  await fs.writeFile(path.join(repo, "inside.md"), "INSIDE-BODY\n")
+  await fs.writeFile(path.join(outside, "secret.md"), "SECRET-BODY\n")
+  await fs.symlink(outside, path.join(repo, "link"), "junction")
+  await fs.writeFile(path.join(repo, "context.json"), JSON.stringify({ context: [
+    "inside.md", "../outside/secret.md", path.join(outside, "secret.md"), "link/secret.md",
+  ].map((p) => ({ path: p, load: "eager" })) }))
+  const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?hostile-repo")
+  const plugin = await mod.default.server({ directory: repo, client: {} })
+  const output = { context: [] }
+  await plugin["experimental.session.compacting"]({}, output)
+  const out = output.context[0] ?? ""
+  assert.ok(out.includes("INSIDE-BODY"), "the in-repo entry no longer loads — the check below is vacuous")
+  assert.ok(!out.includes("SECRET-BODY"), "a repo manifest injected a file outside its repo")
+})
+
 test("the lazy listing truncates at the cap with a visible count", () => {
   assert.match(text, /\[\+1 more notes in this wiki — explore its folders on demand\]/)
 })

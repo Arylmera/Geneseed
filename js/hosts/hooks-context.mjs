@@ -582,6 +582,22 @@ export function resolveContextSets(root, hookRoot = null, host = 'claude') {
     return [e, l, `auto-discovery [${root}] (empty ${path.basename(manifest)})`];
   }
 
+  // A manifest inside the repo is the repo's content, and a cloned repo is untrusted: its
+  // entries may not leave the repo root, or a hostile `context.json` prints `~/.ssh/id_rsa`
+  // into the model's context as binding text. The check runs on the resolved path, so `..`,
+  // an absolute path and a symlink or junction out of the repo are all caught. A manifest the
+  // user chose — `$GENESEED_CONTEXT`, or the install's own outside the repo — names any path.
+  const rootReal = resolvePath(root);
+  const inside = (p) => {
+    const rel = path.relative(rootReal, p);
+    return !(rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel));
+  };
+  // `fromEnv`, not `env`: a `$GENESEED_CONTEXT` naming no file falls through to the repo's
+  // manifest, which must stay confined.
+  const fromEnv = Boolean(env && isFile(env));
+  const confined = !fromEnv && inside(resolvePath(manifest));
+  const withinRoot = (p) => inside(resolvePath(p));
+
   const recs = new Map();
   const put = (pathStr, load, desc) => {
     const prev = recs.get(pathStr);
@@ -608,6 +624,10 @@ export function resolveContextSets(root, hookRoot = null, host = 'claude') {
       continue;
     }
     const abs = path.isAbsolute(raw) ? raw : resolvePath(path.join(root, raw));
+    if (confined && !withinRoot(abs)) {
+      err(`[context] ${manifest}: skipped ${raw} — a repo's manifest may only name files inside the repo\n`);
+      continue;
+    }
     put(abs, load, desc);
   }
 
