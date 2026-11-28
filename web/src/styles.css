@@ -191,7 +191,8 @@ button { font-family: inherit; }
    Chromium 121+; the -webkit- rules catch older Chromium. scrollbar-color is
    inherited and computed on .app, so flavour skins and light mode retint every
    scrollbar for free. */
-.app { scrollbar-color: var(--line-2) transparent; }
+.app { scrollbar-color: var(--line-2) transparent; color-scheme: dark; }
+.app.light { color-scheme: light; }
 .app, .app * { scrollbar-width: thin; }
 .app ::-webkit-scrollbar { width: 9px; height: 9px; }
 .app ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 999px; }

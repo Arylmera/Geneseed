@@ -1,0 +1,1 @@
+- The web console follows the OS light/dark preference until you pick a mode, and sets `color-scheme` so native scrollbars and form controls match it.
