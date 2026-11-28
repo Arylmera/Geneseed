@@ -223,6 +223,77 @@ test('a re-emit prunes a stale owned file, write-before-delete', () => {
   });
 });
 
+// THE PRUNE REMOVES THE DIRECTORIES IT EMPTIES, ALL THE WAY UP. It used to rmdir one level, so a
+// stale `skills/<n>/references/x.md` left an empty `skills/<n>/` behind forever. The walk stops at
+// the first directory that still holds anything, and never reaches the install root.
+test('a re-emit prunes a stale nested file and every directory it empties, up to the root', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    emitOpencode('neutral', out, d);
+    const oc = path.join(d, '.opencode');
+    const leaf = path.join(oc, 'skills', 'ghost-skill', 'references', 'x.md');
+    mkdirSync(path.dirname(leaf), { recursive: true });
+    writeFileSync(leaf, 'from an older harness', 'utf8');
+    const mp = path.join(oc, GLOBAL_MANIFEST);
+    const data = JSON.parse(readFileSync(mp, 'utf8'));
+    data.owned = [...new Set([...data.owned, 'skills/ghost-skill/references/x.md'])].sort();
+    writeFileSync(mp, JSON.stringify(data), 'utf8');
+
+    emitOpencode('neutral', out, d);
+    assert.ok(!existsSync(leaf), 'the stale nested file was not pruned');
+    assert.ok(!existsSync(path.join(oc, 'skills', 'ghost-skill')),
+      'skills/ghost-skill/ was left behind empty: the prune removed one directory level only');
+    assert.ok(existsSync(path.join(oc, 'skills', 'commit', 'SKILL.md')),
+      'a real skill was removed along with the ghost');
+    assert.ok(existsSync(oc), 'the walk went up as far as the install root and removed it');
+  });
+});
+
+test('a re-emit keeps a directory that still holds another file after pruning a nested one', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    emitOpencode('neutral', out, d);
+    const oc = path.join(d, '.opencode');
+    const stale = path.join(oc, 'skills', 'half-ghost', 'references', 'x.md');
+    const mine = path.join(oc, 'skills', 'half-ghost', 'mine.md');
+    mkdirSync(path.dirname(stale), { recursive: true });
+    writeFileSync(stale, 'from an older harness', 'utf8');
+    writeFileSync(mine, 'the user\'s own note', 'utf8');
+    const mp = path.join(oc, GLOBAL_MANIFEST);
+    const data = JSON.parse(readFileSync(mp, 'utf8'));
+    data.owned = [...new Set([...data.owned, 'skills/half-ghost/references/x.md'])].sort();
+    writeFileSync(mp, JSON.stringify(data), 'utf8');
+
+    emitOpencode('neutral', out, d);
+    assert.ok(!existsSync(stale), 'the stale nested file was not pruned');
+    assert.ok(!existsSync(path.join(oc, 'skills', 'half-ghost', 'references')),
+      'the emptied references/ directory was left behind');
+    assert.equal(readFileSync(mine, 'utf8'), 'the user\'s own note',
+      'a user file beside the pruned directory was disturbed');
+    assert.ok(existsSync(path.join(oc, 'skills', 'half-ghost')),
+      'a directory that still holds a file was removed');
+  });
+});
+
+// THE MANIFEST GOES THROUGH THE SHARED ATOMIC WRITER, so a failed rename leaves no scratch file
+// beside it. It had its own writer with a fixed `<file>.tmp` name that was left behind on failure.
+// A non-empty DIRECTORY at the manifest path makes the rename fail on both platforms (the same
+// fixture `atomic_config.test.mjs` uses) after the temp file was written. On Windows the shared
+// writer retries the rename for about 2 s before it gives up.
+test('a manifest write that fails to rename leaves no scratch file beside it', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    const oc = path.join(d, '.opencode');
+    const mp = path.join(oc, GLOBAL_MANIFEST);
+    mkdirSync(mp, { recursive: true });
+    writeFileSync(path.join(mp, 'keep-me'), 'x', 'utf8');
+    assert.throws(() => emitOpencode('neutral', out, d), /E[A-Z]+/,
+      'a rename onto a non-empty directory did not fail, so this cell never reached the cleanup');
+    const litter = readdirSync(oc).filter((n) => n.startsWith(GLOBAL_MANIFEST) && n !== GLOBAL_MANIFEST);
+    assert.deepEqual(litter, [], 'the manifest writer left its scratch file beside the manifest');
+  });
+});
+
 test('a user-authored file survives a re-emit, with a warning and no claim', () => {
   // A pre-existing file under `.opencode/` that was never in the manifest is the USER's — a
   // hand-added agent. Claim-on-create leaves it untouched and says so, where the old full-wipe

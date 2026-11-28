@@ -253,6 +253,28 @@ test('writeTextAtomic waits out a reader holding the target open, instead of thr
     } finally { sb.cleanup(); }
   });
 
+// ONE ATOMIC WRITER, so its failure path is one path: the temp file is written, the rename over a
+// non-empty DIRECTORY fails on both platforms (Windows retries it for about 2 s first), and nothing
+// of the scratch file may remain beside the target. The directory is not disturbed, and a plain
+// successful write lands exactly the bytes asked for (text mode: LF becomes CRLF on Windows).
+test('writeTextAtomic leaves no scratch file when the rename fails, and writes exact bytes when it works', () => {
+  const sb = makeSandbox('atomic-fail-');
+  try {
+    const target = path.join(sb.path, 'target');
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(target, 'keep-me'), 'x');
+    assert.throws(() => writeTextAtomic(target, 'new\n'), /E[A-Z]+/);
+    assert.deepEqual(fs.readdirSync(sb.path), ['target'], 'a scratch file survived the failed rename');
+    assert.deepEqual(fs.readdirSync(target), ['keep-me'], 'the target was disturbed');
+
+    const f = path.join(sb.path, 'ok.json');
+    writeTextAtomic(f, '{\n  "a": 1\n}\n');
+    const eol = process.platform === 'win32' ? '\r\n' : '\n';
+    assert.equal(fs.readFileSync(f, 'utf8'), `{${eol}  "a": 1${eol}}${eol}`);
+    assert.deepEqual(fs.readdirSync(sb.path).sort(), ['ok.json', 'target']);
+  } finally { sb.cleanup(); }
+});
+
 // `writeBytes` is the raw half of the newline rule: a restored file must come back byte for
 // byte, so an LF file stays LF on Windows. `exclusive` is create-if-absent: an existing file is
 // refused with EEXIST and left as it was, the restore's "never overwrite".
