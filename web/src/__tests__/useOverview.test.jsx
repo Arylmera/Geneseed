@@ -6,7 +6,8 @@ import { api } from '../api/index.js'
 vi.mock('../api/index.js', () => ({ api: { overview: vi.fn(), themes: vi.fn() } }))
 
 // A cold daemon answers `doctor: null` while its warm-up runs: the hook asks again until the
-// verdict lands, says so once, then stops asking.
+// verdict lands (waits of 1500, 2250, 3375 ms: see useOverviewWarmup.test.jsx), says so once, then
+// stops asking.
 describe('useOverview and a pending doctor', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -31,7 +32,7 @@ describe('useOverview and a pending doctor', () => {
     expect(onVerdict).not.toHaveBeenCalled()
     await tick(1500)
     expect(api.overview).toHaveBeenCalledTimes(2)
-    await tick(1500)
+    await tick(2250)
     expect(result.current.overview.doctor.ok).toBe(true)
     expect(onVerdict).toHaveBeenCalledTimes(1)
     await tick(6000)
@@ -50,8 +51,8 @@ describe('useOverview and a pending doctor', () => {
     const { result } = renderHook(() => useOverview(onError, onVerdict))
     await tick(0)
     await tick(1500)
-    await tick(1500)
-    await tick(1500)
+    await tick(2250)
+    await tick(3375)
     expect(result.current.overview.doctor.ok).toBe(true)
     expect(onVerdict).toHaveBeenCalledTimes(1)
     expect(onError).not.toHaveBeenCalled()

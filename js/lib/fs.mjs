@@ -24,7 +24,7 @@
  */
 import {
   appendFileSync, writeFileSync, readFileSync, copyFileSync, statSync, utimesSync,
-  openSync, fstatSync, readSync, closeSync, renameSync,
+  openSync, fstatSync, readSync, closeSync, renameSync, rmSync,
 } from 'node:fs';
 import { EOL } from 'node:os';
 import { resolve } from 'node:path';
@@ -106,19 +106,30 @@ export function writeBytes(path, data, { exclusive = false } = {}) {
  * `learn-last.json` (`status`, a test) made the learn worker's final verdict vanish: the rename threw,
  * the verdict writer swallowed it, and a run that had succeeded read as `running` until it read as stuck.
  * The wait buffer is made only on a refusal: the hook path pays nothing for it.
+ *
+ * THE ONE ATOMIC WRITER. `atomicWriteJson` (settings, `opencode.json`, MCP configs) and the build
+ * driver's manifest writes delegate here, so the temp name, the retry and the failure path exist
+ * once. They had three: a fixed `<p>.geneseed-tmp` with no retry, a fixed `<f>.tmp` with no retry
+ * that was left behind on failure, and this one. On ANY failure the scratch file is removed before
+ * the error is rethrown, so nothing of a half-made write stays in a directory the user reads.
  */
 const RENAME_RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
 const RENAME_RETRY_MS = 2000;
 export function writeTextAtomic(path, text) {
   const tmp = `${path}.${process.pid}.tmp`;
-  writeText(tmp, text);
-  const end = Date.now() + RENAME_RETRY_MS;
-  for (let wait = 5, sleeper = null; ; wait = Math.min(wait * 2, 100)) {
-    try { renameSync(tmp, path); return; } catch (e) {
-      if (process.platform !== 'win32' || !RENAME_RETRY_CODES.has(e?.code) || Date.now() >= end) throw e;
+  try {
+    writeText(tmp, text);
+    const end = Date.now() + RENAME_RETRY_MS;
+    for (let wait = 5, sleeper = null; ; wait = Math.min(wait * 2, 100)) {
+      try { renameSync(tmp, path); return; } catch (e) {
+        if (process.platform !== 'win32' || !RENAME_RETRY_CODES.has(e?.code) || Date.now() >= end) throw e;
+      }
+      sleeper ??= new Int32Array(new SharedArrayBuffer(4));
+      Atomics.wait(sleeper, 0, 0, wait);
     }
-    sleeper ??= new Int32Array(new SharedArrayBuffer(4));
-    Atomics.wait(sleeper, 0, 0, wait);
+  } catch (e) {
+    rmSync(tmp, { force: true });
+    throw e;
   }
 }
 
