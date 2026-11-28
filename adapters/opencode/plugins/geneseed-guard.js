@@ -354,7 +354,7 @@ const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
 // block below. `.env*` is exempt (SECRET_WARN_RE above already names it as where a
 // secret may legitimately live) via the same path check used for the WARN tier.
 const SECRET_CONTENT_RE =
-  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{40,}|AIza[0-9A-Za-z_-]{35}|npm_[A-Za-z0-9]{36,}|[sr]k_live_[A-Za-z0-9]{24,})/
 
 // Catastrophic, effectively irreversible shell → BLOCK. Both Unix and Windows shells,
 // since OpenCode runs natively on Windows and the agent may emit cmd / PowerShell.

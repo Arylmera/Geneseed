@@ -136,9 +136,10 @@ export const DONE_LIST = '.geneseed/done-checks.txt';
 // entropy" scan would fire on every hash and lockfile, and a gate that cries wolf gets
 // allow-listed. `sk-ant-` takes `_`: Anthropic keys are base64url, and a key whose first `_`
 // fell inside the first 20 characters slipped through. GitHub's classic `ghp_` tokens really are
-// alphanumeric only.
+// alphanumeric only. The second group (OpenAI `sk-proj-`/`sk-`, Google `AIza`, npm, Stripe live) has no
+// trailing `\b`: these keys may end in `-` or `_`, and each is bounded by its length instead.
 export const SECRET_RE =
-  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{40,}|AIza[0-9A-Za-z_-]{35}|npm_[A-Za-z0-9]{36,}|[sr]k_live_[A-Za-z0-9]{24,})/;
 
 // ---- test-weakening twin: BEGIN — adapters/opencode/plugins/geneseed-context.js carries everything
 // down to the END marker verbatim, with `export ` dropped (tests/plugins/context_done.test.mjs diffs the two).
