@@ -315,7 +315,7 @@ export function renderedProblems(bundle) {
     // and wrong for exactly this one. Buffered and replayed on success, so a WARN the render
     // legitimately emits still reaches the user, and discarded with the refusal it belongs to.
     ({ items } = withDiscardableStderr(() => renderAll(cfg, themeName, {
-      footprint: footprintOfDir(bundle), nativeCatalog: hostCatalogsNatively(host),
+      footprint: footprintOfDir(bundle), nativeCatalog: hostCatalogsNatively(host), host,
       // The bundle's own root, like its theme and footprint: `renderedPathNotes` judges that value,
       // and a second verdict here would call every file stale for one moved directory.
       sharedRoot: scope === 'global' ? renderedTier(bundle, host).root : null,

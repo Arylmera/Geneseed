@@ -19,11 +19,11 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   `[skill:{{SKILL_NAME}}]`, or `[skill:{{SKILL_NAME}}:general]` for a fix other {{SKILLS}} need
   too. Only here: `[skill:{{SKILL_NAME}}:project]`, or `[skill:{{SKILL_NAME}}:general:project]`.
   When the turn ends, the harness hook copies the line, dated, into the notes —
-  no model call, so do not write the notes file yourself. On Bob, whose hook never
+  no model call, so do not write the notes file yourself.<!-- HOST:begin bob --> On Bob, whose hook never
   sees your reply, append it yourself: `- [skill] <the fix> … (<date>)` to the machine
   or the project `skill-notes/{{SKILL_NAME}}.md` above, or `- [general] <the fix> … ({{SKILL_NAME}}, <date>)` to
   that scope's `skill-notes/_general.md`; amend or delete a stale line before adding one, and keep
-  each file under about twenty lines.
+  each file under about twenty lines.<!-- HOST:end -->
   Never edit this file: it is a rendered copy, a rebuild overwrites it. A bundled
   script that is broken is the one exception: fix it in place, and tell the user
   which file you changed. `geneseed diff` carries the notes back to the source;
@@ -46,10 +46,10 @@ trigger is a flaw in this file — end your reply with one line, at a line start
 True in any repo, or only here? Any repo: `[skill:{{SKILL_NAME}}]`, or `[skill:{{SKILL_NAME}}:general]`
 for a fix other {{SKILLS}} need too; only here: `[skill:{{SKILL_NAME}}:project]`, or
 `[skill:{{SKILL_NAME}}:general:project]`. The hook copies it into
-the notes when the turn ends; do not write them yourself, except on Bob, whose hook never
+the notes when the turn ends; do not write them yourself<!-- HOST:begin bob -->, except on Bob, whose hook never
 sees the reply: there append `- [skill] <the fix> … (<date>)` to the machine or the project
 `skill-notes/{{SKILL_NAME}}.md`, or `- [general] <the fix> … ({{SKILL_NAME}}, <date>)` to that scope's
-`skill-notes/_general.md`, pruning stale lines first. Never edit this rendered file; a broken bundled script is the one
+`skill-notes/_general.md`, pruning stale lines first<!-- HOST:end -->. Never edit this rendered file; a broken bundled script is the one
 exception: fix it in place, and tell the user which file you changed. Folding a note
 into the source is the user's call ({{LAW:one-intent-one-act}}). A lesson that is not
 about this file goes to {{MEMORY}} only if it clears {{DOCTRINE:persist-insight}}'s bar.

@@ -14,6 +14,7 @@
  */
 import path from 'node:path';
 import { EFFORT_MARKER_RE, PLUGIN_SRC, SRC, TIER_MARKER_RE } from '../build/source.mjs';
+import { HOST_BLOCK_RE } from '../build/render.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
@@ -49,6 +50,8 @@ const ALLOWED_COMMENT_RES = [
   /^note:[\s\S]*$/,                          // the author-note prefix itself
   /^LEAN:(begin|else|end)$/,                 // js/build/render.mjs LEAN_BLOCK_RE
   /^CATALOG:(begin (agents|skills)|else|end)$/, // js/build/render.mjs CATALOG_BLOCK_RE
+  // js/build/render.mjs HOST_BLOCK_RE: a host id the render knows, or a typo fails here, loudly.
+  new RegExp(`^HOST:(?:begin (?:${HARNESS_IDS})|end)$`),
   /^INCLUDE:\s*\S+$/,                        // js/build/render.mjs INCLUDE_RE
   /^invocation:\s*user$/,                    // js/hosts/native.mjs: disable-model-invocation
   /^aliases:\s*\S.*$/,                       // js/build/source.mjs ALIASES_RE
@@ -90,6 +93,8 @@ export function authorNoteProblems(src = SRC) {
     try { raw = readText(p); } catch { continue; }
     const scan = blankCodeSpans(raw);
     const rel = `src/${path.relative(src, p).split(path.sep).join('/')}`;
+    let hostBegins = 0;
+    let hostEnds = 0;
     for (const m of scan.matchAll(/<!--([\s\S]*?)-->/g)) {
       const body = m[1].trim();
       const line = scan.slice(0, m.index).split('\n').length;
@@ -103,11 +108,22 @@ export function authorNoteProblems(src = SRC) {
           continue;
         }
       }
+      if (/^HOST:begin/.test(body)) hostBegins++;
+      if (/^HOST:end$/.test(body)) hostEnds++;
       if (ALLOWED_COMMENT_RES.some((re) => re.test(body))) continue;
       problems.push(`[authoring] ${rel}:${line} has an HTML comment that is neither the `
         + "'note:' author-note prefix nor a known functional marker (" + JSON.stringify(body) + ') — '
         + "prefix it with 'note:' if it is maintainer-only, or the doctor's allow-list if the "
         + 'agent must read it literally');
+    }
+    // A HOST block that never closes, closes twice or nests would leak its markers, or the text of
+    // another host, into the render: `HOST_BLOCK_RE` only pairs a begin with the next end.
+    const paired = [...scan.matchAll(HOST_BLOCK_RE)];
+    if (hostBegins !== hostEnds || paired.length !== hostBegins
+        || paired.some((m) => m.groups.body.includes('HOST:begin'))) {
+      problems.push(`[authoring] ${rel} has ${hostBegins} HOST:begin and ${hostEnds} HOST:end `
+        + `marker(s), ${paired.length} well-formed block(s) — each block opens and closes once, `
+        + 'and does not nest');
     }
   }
   return problems;

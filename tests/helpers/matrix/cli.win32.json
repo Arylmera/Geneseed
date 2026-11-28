@@ -4414,7 +4414,7 @@
           ],
           "cwd": "repo",
           "seed": {
-            "bp/Harness/.geneseed-emit": "claude-global\n"
+            "bp/Harness/.geneseed-emit": "bob-global\n"
           }
         }
       ],

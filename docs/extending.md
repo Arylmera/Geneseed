@@ -499,6 +499,26 @@ because a code span is not a link. Measured on 2026-10-08, with the neutral them
 footprint: debug's SKILL.md went from 1.64k to 1.18k tokens and rule's from 2.33k to 1.83k
 (chars/4).
 
+### 3ter — Text for one host: a HOST block
+
+Text that only one host acts on is dead weight in every other host's install, and a shared include
+renders into ~60 files. Wrap it:
+
+```
+…do not write the notes file yourself.<!-- HOST:begin bob --> On Bob, append it yourself.<!-- HOST:end -->
+```
+
+The block is **kept** in a render for its host (`bob`, `claude`, `openclaude`, `opencode`), **dropped**
+from a render for any other, and **kept** with no host at all (the plain `files` bundle, a bare
+`renderAll`), so the bundle's bytes do not move. It is inline, so it can close a sentence the other
+hosts still read whole, and it works inside either LEAN half. It does not nest. `resolveHostBlocks`
+in `js/build/render.mjs` runs before CATALOG and LEAN; the host arrives as `renderAll`'s `host`
+option, which each emitter sets. Doctor refuses an unknown host id, an unclosed block and a nested
+one (`authorNoteProblems`). Before marking text as one host's, confirm that every other host's hook
+or plugin really does what the text asks of the model: the first use is the self-improvement
+include's Bob clause, because Claude Code and OpenClaude copy a `spec-feedback:` line in the
+`learn` hook and OpenCode in `geneseed-learn.js`, while Bob's hook never sees the reply.
+
 ---
 
 ## 3bis — Adding a KIT

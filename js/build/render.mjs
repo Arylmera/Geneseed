@@ -129,6 +129,19 @@ const CATALOG_BLOCK_RE =
 export const LEAN_BLOCK_RE =
   /[ \t]*<!-- LEAN:begin -->\n(?<full>[\s\S]*?)[ \t]*<!-- LEAN:else -->\n(?<lean>[\s\S]*?)[ \t]*<!-- LEAN:end -->\n/g;
 
+// Text for ONE host, kept there and dropped from every other: `<!-- HOST:begin bob -->…<!-- HOST:end -->`.
+// Inline on purpose, so a block can close a sentence a dropped block leaves whole. Does not nest.
+export const HOST_BLOCK_RE = /<!-- HOST:begin (?<host>[a-z]+) -->(?<body>[\s\S]*?)<!-- HOST:end -->/g;
+
+/**
+ * HOST blocks — the block's text for its own host, nothing for another. `host` falsy is the plain
+ * `files` bundle (no host at all): every block is kept, markers stripped, so the bundle reads as
+ * it did before the marker. Runs before LEAN so a block may sit inside either half.
+ */
+export function resolveHostBlocks(text, host) {
+  return text.replace(HOST_BLOCK_RE, (_m, h, body) => (!host || h === host ? body : ''));
+}
+
 /**
  * A file suffix, `PurePath.suffix` style. Not `path.extname`: it is '' for a name whose only dot is
  * leading (`.gitignore`) or trailing (`foo.`), where `extname` returns '' and '.'
@@ -498,6 +511,7 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
   // was run under. On the top-level file only, once the includes are flattened into it; any
   // other file (the include itself, the template) keeps the `<name>` placeholder.
   if (!visiting.size) text = text.replaceAll('{{SKILL_NAME}}', skillIdOf(here) ?? '<name>');
+  text = resolveHostBlocks(text, theme.RENDER_HOST);
   text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? [], cfg);
   text = resolveLean(text, footprint);
   if (footprint === 'lean') text = leanVoice(text, cfg.src);
@@ -701,12 +715,14 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
  * parity harnesses, which drive this module directly.
  */
 export function effectiveTheme(cfg, themeName, {
-  footprint = 'full', lawsPrefix = '', sharedRoot = null, pluginHost = '',
+  footprint = 'full', lawsPrefix = '', sharedRoot = null, pluginHost = '', host = '',
 } = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
   // The host whose plugin stands in for a kit that is off (`replacedBy.hosts`): '' on a host with
   // none (Bob, OpenClaude, the plain bundle). PLUGIN_PREFIX is how that host spells a plugin skill.
   theme.PLUGIN_HOST = pluginHost;
+  // The host a HOST block is kept for ('' = the plain bundle: every block stays).
+  theme.RENDER_HOST = host;
   theme.PROVIDER_HEADING = WORKFLOW_PROVIDER_HEADING;
   theme.PLUGIN_PREFIX = pluginHost === 'claude' ? 'superpowers:' : '';
   // Neither notes path takes `lawsPrefix`: the machine one is the tier's, and the project one is
@@ -835,12 +851,12 @@ export function destRel(rel) {
  * @param {any} cfg
  * @param {string} themeName
  * `sharedRoot` is the tier's root on a global emit (`sharedRootFor`): see `pathTokens`.
- * @param {{ footprint?: string, lawsPrefix?: string, sharedRoot?: string | null, pluginHost?: string, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
+ * @param {{ footprint?: string, lawsPrefix?: string, sharedRoot?: string | null, pluginHost?: string, host?: string, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
  */
 export function renderAll(cfg, themeName, {
-  footprint = 'full', lawsPrefix = '', nativeCatalog = false, sharedRoot = null, pluginHost = '',
+  footprint = 'full', lawsPrefix = '', nativeCatalog = false, sharedRoot = null, pluginHost = '', host = '',
 } = {}) {
-  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix, sharedRoot, pluginHost });
+  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix, sharedRoot, pluginHost, host });
   const items = [];
   const skipped = new Set(cfg.excludeSkills ?? []);
   // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.
