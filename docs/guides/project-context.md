@@ -44,7 +44,10 @@ Add a manifest only when the convention does not fit your repo. Put it at `.harn
 }
 ```
 
-- `path` is absolute, relative to the repo, or a glob.
+- `path` is absolute, relative to the repo, or a glob. A manifest inside the repo may only name
+  files inside the repo: an entry that leaves it, through `..`, an absolute path or a symlink, is
+  skipped, because a cloned repo is not trusted. Use `$GENESEED_CONTEXT` for a manifest that must
+  reach outside the repo.
 - `load` is `eager`, `lazy` or `exclude`.
 - `"extend": true` keeps automatic discovery running and adds your entries on top. Without it, the manifest replaces discovery entirely.
 

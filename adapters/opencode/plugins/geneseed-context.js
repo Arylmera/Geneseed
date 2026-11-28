@@ -670,8 +670,18 @@ async function discover(root) {
 // a glob (a glob only reclassifies files already discovered). With "extend": true,
 // auto-discovery runs first and entries add to / override / exclude its results;
 // otherwise the manifest is the complete list (legacy semantics).
-async function fromManifest(manifestFile, root) {
+async function fromManifest(manifestFile, root, explicit = false) {
   const data = await readJson(manifestFile)
+  // Twin of resolveContextSets (js/hosts/hooks-context.mjs): a manifest inside the repo is the
+  // repo's content, and a cloned repo is untrusted, so its entries may not leave the repo root
+  // (checked on the resolved path: `..`, absolute, symlink, junction). A manifest the user
+  // chose — $GENESEED_CONTEXT, or the install's own outside the repo — names any path.
+  const rootReal = resolvePath(root)
+  const inside = (p) => {
+    const rel = path.relative(rootReal, resolvePath(p))
+    return !(rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel))
+  }
+  const confined = !explicit && inside(manifestFile)
   const entries = Array.isArray(data?.context) ? data.context : []
   const recs = new Map()   // abs -> { rel, abs, load, desc }
 
@@ -701,6 +711,7 @@ async function fromManifest(manifestFile, root) {
     // stub's documented "relative to the repo root" — important when the manifest
     // lives in .harness/, whose dir is not the root).
     const abs = path.isAbsolute(raw) ? raw : path.resolve(root, raw)
+    if (confined && !inside(abs)) continue
     put(abs, load, desc)
   }
 
@@ -715,7 +726,7 @@ async function fromManifest(manifestFile, root) {
 
 async function resolveSource(root, harness = null) {
   const explicit = process.env.GENESEED_CONTEXT
-  if (explicit && (await isFile(explicit))) return { mode: "manifest", file: explicit }
+  if (explicit && (await isFile(explicit))) return { mode: "manifest", file: explicit, explicit: true }
   // The harness dir last: a repo's own manifest outranks the one seeded beside the install.
   const cands = [path.join(root, ".harness", "context.json"), path.join(root, "context.json")]
   if (harness) cands.push(path.join(harness, "context.json"))
@@ -980,7 +991,7 @@ async function resolveBlock(root, judged = true) {
   const harness = await harnessDir()
   const src = await resolveSource(root, harness)
   const sets = src.mode === "manifest"
-    ? await fromManifest(src.file, root)
+    ? await fromManifest(src.file, root, src.explicit)
     : await discover(root)
   const wikis = await wikiSets()
   const commands = await discoverCommands(root)
