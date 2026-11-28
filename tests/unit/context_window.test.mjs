@@ -333,6 +333,21 @@ test('a global 1m install: a new project with no flag is 1m and leaves the cap t
   });
 });
 
+// The update path is re-running the same command. A new project on a 1m machine took 1m without
+// being told; the same bare build again must take it again, not fall back to 200k and have the
+// preserve guard refuse a change nobody asked for ("context-window: 1m -> 200k").
+test('a bare re-run of a project that took the machine window builds again, unchanged', () => {
+  withUserLevel(() => {
+    oneMachine();
+    const d = sandbox('gscw-rerun-');
+    for (const pass of [1, 2]) {
+      const r = build('--emit', 'claude', '--out', d, '--theme', 'neutral');
+      assert.equal(r.value, 0, `pass #${pass}: ${r.err}`);
+      assert.equal(contextWindowOfDir(d, 'claude'), '1m', `pass #${pass}`);
+    }
+  });
+});
+
 test('a hand-set user-level cap is not undercut; the project still writes the key the user left', () => {
   withUserLevel((dir) => {
     fs.mkdirSync(dir, { recursive: true });

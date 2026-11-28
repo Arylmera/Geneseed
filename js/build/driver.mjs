@@ -74,7 +74,7 @@ import { migrateCouncilKit } from '../maintain/kit-migration.mjs';
 // maintainer pair that needs nothing this driver is banned from having.
 import { syncThemes } from './themes.mjs';
 import { configDefaults, die, parseArgs } from './args.mjs';
-import { guardTarget, preserveRefusal, preserveRefusalText } from './profile.mjs';
+import { guardTarget, installProfile, preserveRefusal, preserveRefusalText } from './profile.mjs';
 
 export { parseDriverArgs } from './args.mjs';
 
@@ -895,9 +895,20 @@ function run(argv) {
   // NOT UNDER `--reset`: a replay (profile apply, the console, the wizard) is a whole selection
   // that has already resolved the window, and `setupBuildArgs` elides `200k` as the default, so
   // its silence there means 200k, not "no opinion".
-  if (!args.reset && !args.given.has('contextWindow') && args.emit !== 'files' && !args.emit.endsWith('-global')
-    && !guardTarget(args, out)) {
-    try { args.contextWindow = installedDefaults().contextWindow; } catch { /* default */ }
+  //
+  // An existing install that holds the machine's window took it this way, so the same bare
+  // build takes it again: re-running the command is how an install is updated, and without this
+  // the second run fell back to 200k and the guard refused a change nobody asked for. One whose
+  // window differs from the machine's (set by hand, or older than the machine's) still keeps the
+  // default rule.
+  if (!args.reset && !args.given.has('contextWindow') && args.emit !== 'files' && !args.emit.endsWith('-global')) {
+    try {
+      const machine = installedDefaults().contextWindow;
+      const target = guardTarget(args, out);
+      if (!target || installProfile(target.host, target.scope, target.root).contextWindow === machine) {
+        args.contextWindow = machine;
+      }
+    } catch { /* default */ }
   }
   // The preserve guard, before anything is written: a build over an existing install that would
   // change a setting it was not given refuses, naming each change and the command that keeps
