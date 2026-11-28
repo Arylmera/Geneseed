@@ -163,6 +163,8 @@ export default function App() {
       if (custom) applyAccent(el, custom, mode)
       else applyCuratedAccent(el, flavour, mode)
     }
+    // Native controls and the page scrollbar (which belongs to <html>, outside .app) follow the mode.
+    document.documentElement.style.colorScheme = mode
     // The browser chrome (a phone's address bar) follows the active flavour and mode; it was
     // fixed at the dark ground, so light mode showed a black bar over a pale page.
     document
