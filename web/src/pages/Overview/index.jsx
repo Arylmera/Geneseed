@@ -5,6 +5,7 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import Seg from '../../components/Seg.jsx'
 import StaleBanner from '../../components/StaleBanner.jsx'
+import DoctorWarmup from '../../components/DoctorWarmup.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
 import Ledger, { OverviewHead } from './Ledger.jsx'
 import { docsHostOf } from '../../hooks/useHarness.js'
@@ -105,6 +106,8 @@ export default function Overview({
   overview,
   overviewError,
   onRetry,
+  warmup,
+  onRecheck,
   themes,
   setup,
   runs,
@@ -139,7 +142,12 @@ export default function Overview({
   const live = instData ? instData.installs?.some((i) => i.state === 'active') : overview.deployed
   if (!live) return instLoading && !instData ? <Loading /> : <Onboarding onAction={onAction} />
 
-  const banner = <NewHere harness={docsHostOf(overview.emit)} />
+  const banner = (
+    <>
+      <DoctorWarmup warmup={warmup} onRecheck={onRecheck} />
+      <NewHere harness={docsHostOf(overview.emit)} />
+    </>
+  )
   const view = onLayout ? <ViewSeg layout={layout} onLayout={onLayout} /> : null
   if (layout === 'overview') {
     return (

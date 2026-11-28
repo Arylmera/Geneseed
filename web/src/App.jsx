@@ -115,6 +115,8 @@ export default function App() {
     error: overviewError,
     themes,
     reload,
+    warmup,
+    recheck,
   } = useOverview(onError, () => setDataRev((v) => v + 1))
   // Soft refresh after a mutation: refetch the overview and bump a revision every panel
   // depends on. No full page reload, so nothing flashes.
@@ -233,6 +235,8 @@ export default function App() {
         overview={overview}
         overviewError={overviewError}
         onRetry={reload}
+        warmup={warmup}
+        onRecheck={recheck}
         themes={themes}
         setup={setup}
         runs={runs}
