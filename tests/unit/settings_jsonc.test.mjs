@@ -119,6 +119,9 @@ const LOAD_STATES = [
   { name: 'an object', seed: '{"a": 1}', state: 'ok', comments: false, data: '{"a": 1}' },
   { name: 'a commented object', seed: '// mine\n{"a": 1,}', state: 'ok', comments: true,
     data: '{"a": 1}', strictState: 'invalid' },
+  // Windows PowerShell 5 `Set-Content -Encoding UTF8` writes a BOM; the JSON under it is valid.
+  { name: 'an object behind a UTF-8 BOM', seed: '﻿{"a": 1}', state: 'ok', comments: false,
+    data: '{"a": 1}' },
 ];
 
 test('loadJsonObject classifies every state, row for row', () => {

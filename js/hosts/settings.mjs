@@ -586,6 +586,12 @@ export function loadJsonObject(p, { strict = false } = {}) {
     if (!isOsError(e)) throw e;
     return { state: 'unreadable', data: null, hadComments: false, error: e };
   }
+  // A leading UTF-8 BOM is not content: Windows PowerShell 5 `Set-Content -Encoding UTF8` writes
+  // one, `readText` keeps it (a Python-port decode with no BOM rule), and neither JSON parser
+  // accepts it — a valid file read `invalid`, so the emit refused to rewrite it and wired no hooks.
+  // Stripped HERE, where user JSON is parsed, not in `readText`, which every text reader shares.
+  // The merge writes back through `jsonDumps` without a BOM, so a rewrite drops it; the file stays valid.
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   let data;
   let hadComments = false;
   if (strict) {
