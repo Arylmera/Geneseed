@@ -31,7 +31,7 @@
  * every gate that calls the functions directly stayed green.
  */
 import {
-  existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync,
+  existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync,
   unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -40,7 +40,7 @@ import { emitClaudeRender } from './emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from './emit-opencode.mjs';
 import { loadJsonObject, settingsIntegrityCheck } from '../hosts/settings.mjs';
 import { hookRunnerEntry } from '../hosts/shim.mjs';
-import { writeText, withPlatformNewlines, isFile, withWriteRecord } from '../lib/fs.mjs';
+import { writeText, writeTextAtomic, withPlatformNewlines, isFile, withWriteRecord } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
@@ -192,7 +192,9 @@ function relUnder(out, root) {
  * `_build_global._write_manifest_atomic` — temp + rename, so a torn manifest can never make
  * the next emit treat every owned file as the user's own.
  *
- * `writeText`, not `writeFileSync`: the whole document is CRLF on Windows, as it always was.
+ * `writeTextAtomic` (js/lib/fs.mjs: the one atomic writer, with a pid-tagged temp, the Windows
+ * rename retry, and the temp removed on failure), not `writeFileSync`: the whole document is CRLF
+ * on Windows, as it always was.
  *
  * `jsonDumpsIndent`, not `JSON.stringify`: `json.dumps` defaults to `ensure_ascii=True` and
  * escapes every non-ASCII character, where `JSON.stringify` emits it raw. This was
@@ -203,9 +205,7 @@ function relUnder(out, root) {
  * one place.
  */
 function writeManifestAtomic(file, data) {
-  const tmp = `${file}.tmp`;
-  writeText(tmp, `${jsonDumpsIndent(data)}\n`);
-  renameSync(tmp, file);
+  writeTextAtomic(file, `${jsonDumpsIndent(data)}\n`);
 }
 
 /**
@@ -256,8 +256,12 @@ function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = [], force
     try {
       if (isFile(victim)) {
         unlinkSync(victim);
-        const parent = path.dirname(victim);
-        if (parent !== oc && readdirSync(parent).length === 0) rmdirSync(parent);
+        // Walk up while the directory is empty: a stale `skills/<n>/references/x.md` empties
+        // `references/` and then `<n>/`. It stops at the first non-empty one and never removes
+        // `oc` (`victim` is `oc` + a contained rel, so the walk reaches `oc` before any root).
+        for (let parent = path.dirname(victim);
+          parent !== oc && parent !== path.dirname(parent) && readdirSync(parent).length === 0;
+          parent = path.dirname(parent)) rmdirSync(parent);
       }
     } catch (e) {
       // Deliberately divergent and deliberately unreachable in the gates: `str(OSError)`

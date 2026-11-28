@@ -34,10 +34,10 @@
  * Fixing it means parsing into a Map and threading that through every accessor, which is a
  * much larger change than the defect.
  */
-import { existsSync, mkdirSync, renameSync, rmSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { blockDelimiters, blockSpan } from '../lib/managed-block.mjs';
-import { readText, writeText, isOsError } from '../lib/fs.mjs';
+import { readText, writeText, writeTextAtomic, isOsError } from '../lib/fs.mjs';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
   indexOfDeepEqual, get, has, isDict, readJsonc,
@@ -653,25 +653,19 @@ function warnCommentedJsonc(target, agentPath, permission,
 }
 
 /**
- * `_build_settings._atomic_write_json` — the ONE atomic JSON writer: pretty JSON through a
- * sibling temp file and a rename, creating the parent directory first. Throws on failure, as
- * the Python does, and never leaves the temp file behind.
+ * `_build_settings._atomic_write_json` — pretty JSON, parent directory created first, written
+ * through `writeTextAtomic` (js/lib/fs.mjs), which is the ONE atomic writer: a pid-tagged
+ * sibling temp file and a rename that Windows retries for about 2 s. Throws on failure, as the
+ * Python does, and never leaves the temp file behind.
  *
- * Every config this codebase rewrites goes through it — settings, `opencode.json`, MCP
- * configs, the install manifest — because a plain write that dies half-way through leaves a
- * truncated file where the user's config was.
+ * The user-owned configs this codebase rewrites go through it — settings, `opencode.json`, MCP
+ * configs, the global install manifest at uninstall — because a plain write that dies half-way
+ * through leaves a truncated file where the user's config was. The build driver's manifest
+ * writes use `writeTextAtomic` with the same `jsonDumpsIndent` text.
  */
 export function atomicWriteJson(p, config) {
   mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.geneseed-tmp`;
-  writeText(tmp, `${jsonDumpsIndent(config)}\n`);
-  try {
-    renameSync(tmp, p);
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    rmSync(tmp, { force: true });
-    throw e;
-  }
+  writeTextAtomic(p, `${jsonDumpsIndent(config)}\n`);
 }
 
 /** `_build_settings._merge_opencode_json`. Returns the resolved target path.
