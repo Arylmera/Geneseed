@@ -18,7 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseJson, jsonDumpsIndent, jsonDumpsCompact, isDict } from '../../js/lib/json.mjs';
-import { isDir, isFile, writeBytes, writeTextAtomic } from '../../js/lib/fs.mjs';
+import { isDir, isFile, textWrites, withWriteRecord, writeBytes, writeText, writeTextAtomic } from '../../js/lib/fs.mjs';
 import { which, within } from '../../js/lib/paths.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -252,6 +252,37 @@ test('writeTextAtomic waits out a reader holding the target open, instead of thr
       assert.deepEqual(fs.readdirSync(sb.path).filter((n) => n.endsWith('.tmp')), [], 'no temp file is left beside it');
     } finally { sb.cleanup(); }
   });
+
+// `writeText` SKIPS A WRITE WHOSE BYTES ARE ALREADY ON DISK. A re-emit rewrote every rendered file
+// for nothing, and each rewrite moved the mtime a watcher (the web daemon, an editor) listens to.
+// The mtime is pinned to 2001 first: a skipped write leaves it there, a real write moves it to now.
+// Text mode applies first, so the comparison is against the CRLF bytes a Windows write would make.
+// The write record (`textWrites`) must hold the same entry either way: the unchanged file's own
+// translated text and its own stat, because `ownedHashes` trusts that entry while size and mtime match.
+test('writeText leaves an identical file untouched, rewrites a different one, and records both alike', () => {
+  const sb = makeSandbox('wt-skip-');
+  try {
+    const f = path.join(sb.path, 'a.md');
+    const old = new Date('2001-01-01T00:00:00Z');
+    const eol = process.platform === 'win32' ? '\r\n' : '\n';
+    writeText(f, 'one\ntwo\n');
+    fs.utimesSync(f, old, old);
+    writeText(f, 'one\ntwo\n');
+    assert.equal(fs.statSync(f).mtimeMs, old.getTime(), 'an identical write moved the mtime');
+    assert.equal(fs.readFileSync(f, 'utf8'), `one${eol}two${eol}`);
+
+    writeText(f, 'one\nthree\n');
+    assert.ok(fs.statSync(f).mtimeMs > old.getTime(), 'a different write left the old mtime');
+    assert.equal(fs.readFileSync(f, 'utf8'), `one${eol}three${eol}`);
+
+    // The record: what an identical write stores equals what a real write stores.
+    fs.utimesSync(f, old, old);
+    const rec = withWriteRecord(() => { writeText(f, 'one\nthree\n'); return textWrites.map.get(path.resolve(f)); });
+    const st = fs.statSync(f);
+    assert.deepEqual(rec, { text: `one${eol}three${eol}`, size: st.size, mtimeMs: old.getTime() });
+    assert.equal(st.mtimeMs, old.getTime(), 'the identical write under record moved the mtime');
+  } finally { sb.cleanup(); }
+});
 
 // `writeBytes` is the raw half of the newline rule: a restored file must come back byte for
 // byte, so an LF file stays LF on Windows. `exclusive` is create-if-absent: an existing file is

@@ -66,7 +66,13 @@ export function withWriteRecord(fn) {
  */
 export function writeText(path, text) {
   const out = EOL === '\n' ? text : text.replaceAll('\n', EOL);
-  writeFileSync(path, out, 'utf8');
+  // An identical file is left alone: a re-emit rewrote every rendered file for nothing, and each
+  // rewrite moved the mtime a watcher listens to. The record below still runs, from the unchanged
+  // file's own stat, so a caller that relies on "written" sees the same entry either way.
+  const bytes = Buffer.from(out, 'utf8');
+  let same = false;
+  try { same = readFileSync(path).equals(bytes); } catch { /* absent, a directory, unreadable: write */ }
+  if (!same) writeFileSync(path, bytes);
   if (textWrites.map) {
     const st = statSync(path);
     textWrites.map.set(resolve(path), { text: out, size: st.size, mtimeMs: st.mtimeMs });
