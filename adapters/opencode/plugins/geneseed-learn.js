@@ -603,7 +603,7 @@ function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NO
 // Law I's credential pattern: a hand twin of js/hosts/hooks-prims.mjs SECRET_RE (two lines there,
 // so no tool-kept line twin); tests/plugins/learn.test.mjs holds the two sources equal.
 const FEEDBACK_SECRET_RE =
-  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{40,}|AIza[0-9A-Za-z_-]{35}|npm_[A-Za-z0-9]{36,}|[sr]k_live_[A-Za-z0-9]{24,})/
 
 // The two notes roots, `{ machine, project }`: the twin of js/hosts/hooks-learn.mjs `notesRootsOf`,
 // which says why. MACHINE is the tier's notes/ for every install. PROJECT is <project>/notebook:

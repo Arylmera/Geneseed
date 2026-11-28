@@ -641,7 +641,12 @@ test('a credential-shaped write asks under Sealed Secrets', () => {
     // base64url: an `_` inside the first 20 characters once cut the match short.
     'sk-ant-api03-abcdefghij_klmnopqrstuvwxyz-0123',
     'xoxb-1234567890-abcdefghij',
-    '-----BEGIN RSA PRIVATE KEY-----'];
+    '-----BEGIN RSA PRIVATE KEY-----',
+    // OpenAI project / service-account keys, the legacy 48-character key, a Google API key,
+    // an npm token and Stripe live keys: each a fixed vendor prefix plus a minimum length.
+    `sk-proj-${'A'.repeat(40)}`, `sk-proj-${'Ab_-'.repeat(20)}`, `sk-svcacct-${'A'.repeat(40)}`,
+    `sk-${'a1B2'.repeat(12)}`, `AIza${'A'.repeat(35)}`, `AIza${'Ab_-'.repeat(8)}Abc`,
+    `npm_${'A'.repeat(36)}`, `sk_live_${'a'.repeat(24)}`, `rk_live_${'a'.repeat(24)}`];
   for (const s of shapes) {
     const dec = askDecision(hookRun('rule-gate',
       { stdin: contentPayload('src/config.js', `const k = "${s}";`) }), s);
@@ -650,6 +655,20 @@ test('a credential-shaped write asks under Sealed Secrets', () => {
   // Edit sends `new_string`, not `content`.
   askDecision(hookRun('rule-gate',
     { stdin: contentPayload('src/a.py', 'AKIAIOSFODNN7EXAMPLE', 'new_string') }), 'new_string');
+});
+
+test('prose and identifiers that merely resemble a key prefix do not ask', () => {
+  // A loose `sk-` or `AIza` would flag these; the minimum length and the word boundary before
+  // the prefix are what keep the gate quiet on ordinary text.
+  const benign = ['the sk- prefix marks a secret key', 'risk-assessment-for-the-whole-deployment-pipeline',
+    'task-1234567890123456789012345678901234567890', 'sk-learn', 'sk-proj-short', `disk-${'a'.repeat(48)}`,
+    'AIza is a prefix', `AIza${'A'.repeat(20)}`, 'npm_config_registry', `npm_${'A'.repeat(20)}`,
+    'sk_live_short', 'task_live_' + 'a'.repeat(30), '.sk-container-fluid-layout-wrapper-element-x',
+    `ask-${'a'.repeat(50)}`];
+  for (const s of benign) {
+    assertDefers(hookRun('rule-gate',
+      { stdin: contentPayload('src/config.js', `const k = "${s}";`) }), s);
+  }
 });
 
 test('MultiEdit and NotebookEdit carrying a credential ask too', () => {
