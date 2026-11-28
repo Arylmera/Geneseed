@@ -480,3 +480,21 @@ test('the inventory carries a status for every entity', () => {
       + `${ENTITY_STATUSES.join(', ')}`);
   }
 });
+
+// HOST blocks (js/build/render.mjs HOST_BLOCK_RE): the doctor names a block that never closes, a
+// nested one, and a host id the render does not know — each would leak markers or another host's
+// text into the render — and stays quiet on a well-formed block, in any of the four hosts.
+test('a HOST block is checked: well-formed passes; unclosed, nested and unknown-host are named', () => {
+  withFault('src/zz-note.md', 'a<!-- HOST:begin bob -->b<!-- HOST:end -->c\n<!-- HOST:begin opencode -->d<!-- HOST:end -->\n', () => {
+    assert.deepEqual(F.authoring.authorNoteProblems(), []);
+  });
+  withFault('src/zz-note.md', 'a<!-- HOST:begin bob -->b\n', () => {
+    assert.ok(some(F.authoring.authorNoteProblems(), 'src/zz-note.md', '1 HOST:begin and 0 HOST:end'));
+  });
+  withFault('src/zz-note.md', '<!-- HOST:begin bob -->a<!-- HOST:begin claude -->b<!-- HOST:end --><!-- HOST:end -->\n', () => {
+    assert.ok(some(F.authoring.authorNoteProblems(), 'src/zz-note.md', 'does not nest'));
+  });
+  withFault('src/zz-note.md', 'a<!-- HOST:begin bobb -->b<!-- HOST:end -->\n', () => {
+    assert.ok(some(F.authoring.authorNoteProblems(), 'src/zz-note.md', 'HOST:begin bobb'));
+  });
+});

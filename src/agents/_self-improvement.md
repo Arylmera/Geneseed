@@ -20,8 +20,8 @@ files (in a linked worktree, the main checkout's) — no model call, and never i
 a rebuild overwrites. Step 0 reads those notes at every later dispatch of this {{AGENT}}, machine
 first; the project notes win where they disagree. When a step-0 read is refused, or the brief
 forbids that path, skip it, say so in one line of the report, and go on. The caller writes no
-note itself, except on a host with no subagent-finished hook (Bob), where it copies the line
-into the machine or the project file, in the same form. The caller
+note itself<!-- HOST:begin bob -->, except on a host with no subagent-finished hook (Bob), where it copies the line
+into the machine or the project file, in the same form<!-- HOST:end -->. The caller
 weighs the line, and folding a note into the source is the user's call, after the
 skill-forge {{SKILL}}'s probe. The caller records the feedback to {{MEMORY}} only if it
 clears {{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

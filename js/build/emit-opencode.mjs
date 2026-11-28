@@ -157,7 +157,7 @@ export function emitOpencodeRender(cfg, job) {
   }
 
   const owned = [];
-  const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog, pluginHost: 'opencode' });
+  const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog, pluginHost: 'opencode', host: 'opencode' });
 
   const {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept, keptHashes,
@@ -220,7 +220,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // pointer's relative `laws/universal.md` resolves with no prefix.
   // A re-render of a deployed install sends that install's root, null included.
   const { sharedRoot = sharedRootFor(cfgDir, 'opencode') } = job;
-  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog, sharedRoot, pluginHost: 'opencode' });
+  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog, sharedRoot, pluginHost: 'opencode', host: 'opencode' });
   assertSourceComplete(cfg, 'opencode-global');
   mkdirSync(cfgDir, { recursive: true });
 
