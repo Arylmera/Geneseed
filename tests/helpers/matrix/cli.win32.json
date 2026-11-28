@@ -552,8 +552,10 @@
     },
     {
       "expect": [
-        "# Handbook",
-        "outside the repo"
+        "may only name files inside the repo"
+      ],
+      "expect_absent": [
+        "# Handbook"
       ],
       "id": "context/absolute-path-entry",
       "steps": [
