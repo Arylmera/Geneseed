@@ -35,7 +35,7 @@ import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
   cmdContext, discoverContext, SEED_SHA256, SESSION_FILES, sessionFiles, sessionStartSize,
-  CURATE_NUDGE, memoryNudge, RULES_PREAMBLE_SHA256,
+  CURATE_NUDGE, memoryNudge, RULES_PREAMBLE_SHA256, withoutRuleSources,
 } from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
@@ -2254,6 +2254,32 @@ for (const [name, file, want] of [
     assert.deepEqual(sessionFiles(t.cfg).map((s) => [s.rel, s.text]), [[RULES, want]]);
   }));
 }
+
+// A rule's `source:` is audit metadata (who said it, when, in their words) the model does not need
+// to obey the rule; `scope:` and `trial until:` change how it applies, so they stay. Injection only:
+// the user's file keeps the whole line.
+const PROV_RULE = (meta) => `## R2 — Credit what you import\n${meta}\nWhen you import content, record where it came from.`;
+for (const [name, meta, want] of [
+  ['a quoted source goes', '(scope: global | source: user 2026-10-19 "give credit to the author")', '(scope: global)'],
+  ['a trial date stays', '(scope: global | source: feedback_kill_by_pid_only | trial until: 2026-12-18)',
+    '(scope: global | trial until: 2026-12-18)'],
+  ['a project scope stays', '(scope: project | source: user, 2026-10-17)', '(scope: project)'],
+  ['parentheses and bars inside the quote go with it',
+    '(scope: global | source: user 2026-11-08 "a (b) | c" | trial until: 2026-12-01)', '(scope: global | trial until: 2026-12-01)'],
+  ['a line without that shape is untouched', '(scope: global)', '(scope: global)'],
+  ['prose that mentions a source is untouched', 'Cite the (source: the user) always.', 'Cite the (source: the user) always.'],
+]) {
+  test(`rule provenance in the injected text: ${name}`, () => {
+    assert.equal(withoutRuleSources(PROV_RULE(meta)), PROV_RULE(want));
+  });
+}
+
+test('the rules file on disk keeps its source line; only the injection drops it', () => withTier((t) => {
+  const file = PROV_RULE('(scope: global | source: user 2026-10-19 "quote")');
+  t.put(path.join(t.cfg, RULES), file);
+  assert.deepEqual(sessionFiles(t.cfg).map((s) => s.text), [PROV_RULE('(scope: global)')]);
+  assert.equal(fs.readFileSync(path.join(t.cfg, RULES), 'utf8'), file);
+}));
 
 test('the rules preamble hash is the user-rules seed\'s', () => {
   assert.equal(RULES_PREAMBLE_SHA256,

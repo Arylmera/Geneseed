@@ -311,6 +311,22 @@ function withoutRulesPreamble(text) {
   return head !== null && createHash('sha256').update(head).digest('hex') === RULES_PREAMBLE_SHA256
     ? text.slice(rule.index) : text;
 }
+
+// A rule's metadata line, at column 0: `(scope: … | source: … [| trial until: DATE])`. Lazy `.*?`
+// then an optional trial tail then `)` at line end, so a `)` or `|` inside the quoted words of a
+// source cannot end the match early.
+const RULE_META_RE = /^\(scope: ([^|\n]*?) \| source: .*?( \| trial until: [^|)\n]*)?\)$/gm;
+
+/**
+ * `text` with each rule's `source: …` dropped from its metadata line. `scope:` decides which
+ * repositories the rule binds and `trial until:` when it lapses, so both change how the rule
+ * applies and stay. `source:` is audit metadata (who said it, when, in their words) that the user's
+ * file keeps and the model does not need to obey the rule: it was 12% of a real rules file.
+ * Only the injected rendering is shortened, never the file.
+ */
+function withoutRuleSources(text) {
+  return text.replace(RULE_META_RE, (_, scope, trial) => `(scope: ${scope}${trial ?? ''})`);
+}
 // ---- rules preamble twin: END
 
 // A session file's text, CRLF-folded and trimmed; null when missing, unreadable or still its seed.
@@ -319,7 +335,8 @@ async function sessionText(abs) {
   let text
   try { text = (await fs.readFile(abs, "utf8")).replace(/\r\n/g, "\n") } catch { return null }
   if (SEED_SHA256.has(createHash("sha256").update(text).digest("hex"))) return null
-  return withoutRulesPreamble(text).replace(/\n+$/, "")
+  const body = withoutRulesPreamble(text)
+  return (path.basename(abs) === "user-rules.md" ? withoutRuleSources(body) : body).replace(/\n+$/, "")
 }
 
 // Session files in force for the harness dir, changed from their seed: [{ rel, abs, text, label }],
