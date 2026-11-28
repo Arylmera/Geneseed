@@ -1859,6 +1859,51 @@ test('a manifest with extend layers on top of discovery', () => {
   });
 });
 
+// A manifest that lives IN the repo is the repo's content, and a cloned repo is untrusted:
+// its entries are confined to the repo root. Without this, a hostile `context.json` named
+// `../x`, an absolute path or a junction out of the repo, and the session-start hook printed
+// that file into the model's context as "binding" — `~/.ssh/id_rsa` included. A manifest the
+// user chose (`$GENESEED_CONTEXT`, or the one beside the install) may still name any path.
+test('a repo manifest cannot name a file outside the repo', () => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const outside = path.join(d, 'outside');
+    fs.mkdirSync(repo);
+    fs.mkdirSync(outside);
+    contextFixture(repo);
+    fs.writeFileSync(path.join(repo, 'inside.md'), '# inside', 'utf8');
+    fs.writeFileSync(path.join(outside, 'secret.md'), 'secret', 'utf8');
+    // A junction needs no privilege on Windows, and is a plain symlink elsewhere.
+    fs.symlinkSync(outside, path.join(repo, 'link'), 'junction');
+    const entries = ['inside.md', '../outside/secret.md', path.join(outside, 'secret.md'), 'link/secret.md'];
+    const manifest = JSON.stringify({ context: entries.map((p) => ({ path: p, load: 'eager' })) });
+    fs.writeFileSync(path.join(repo, 'context.json'), manifest, 'utf8');
+    const [eager, lazy] = resolveContextSets(repo);
+    const names = [...eager, ...lazy].map((e) => path.basename(e.path));
+    assert.deepEqual(names, ['inside.md'], 'a repo manifest reached outside its repo');
+    // A `$GENESEED_CONTEXT` that names no file falls through to the repo's manifest: still confined.
+    const saved = process.env.GENESEED_CONTEXT;
+    process.env.GENESEED_CONTEXT = path.join(d, 'missing.json');
+    try {
+      const [e2, l2] = resolveContextSets(repo);
+      assert.deepEqual([...e2, ...l2].map((e) => path.basename(e.path)), ['inside.md'],
+        'a dangling $GENESEED_CONTEXT lifted the confinement');
+    } finally {
+      if (saved === undefined) delete process.env.GENESEED_CONTEXT; else process.env.GENESEED_CONTEXT = saved;
+    }
+
+    // The install's own manifest is the user's: an absolute path there still loads.
+    const install = path.join(d, 'install');
+    fs.mkdirSync(install);
+    fs.rmSync(path.join(repo, 'context.json'));
+    fs.writeFileSync(path.join(install, 'context.json'),
+      JSON.stringify({ context: [{ path: path.join(outside, 'secret.md'), load: 'eager' }] }), 'utf8');
+    const [trusted] = resolveContextSets(repo, install);
+    assert.deepEqual(trusted.map((e) => path.basename(e.path)), ['secret.md'],
+      'the install manifest lost its absolute paths');
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // doctor's claude/bob per-repo check — the blind spot that let dead links ship.
 //
