@@ -488,6 +488,24 @@ test('Law IV fails closed with the `unverified` text when it cannot read the sta
   } finally { ws.cleanup(); }
 });
 
+// A path or an escape in front of the program is still that program: `progOf` strips both, but
+// the prefilter in front of the parser only knew `rm` after whitespace or an operator, so
+// `/bin/rm`, `\rm` and `sudo /usr/bin/rm` on a modified tracked file never reached it and ran
+// unasked. The plain `rm` row is the control: if it stops asking, the rows below prove nothing.
+test('Law IV reads a path-qualified or escaped rm the way it reads rm', () => {
+  const ws = makeLossWorkspace();
+  try {
+    fs.writeFileSync(path.join(ws.repo, 'tracked.txt'), 'changed\n');
+    const run = (command) => hookRun('git-gate', { env: ws.env, extra: ['--no-consent'],
+      stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: ws.repo }) });
+    for (const cmd of ['rm tracked.txt', '/bin/rm tracked.txt', '\\rm tracked.txt',
+      'sudo /usr/bin/rm -f tracked.txt', 'C:\\Windows\\System32\\del.exe tracked.txt']) {
+      const dec = askDecision(run(cmd), cmd);
+      assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), `${cmd}: ${dec.permissionDecisionReason}`);
+    }
+  } finally { ws.cleanup(); }
+});
+
 // A gate that has not answered when the host's hook timeout fires lets the call run unjudged, so
 // the command readers must be linear and an oversized command must ask, not defer. On 5.2.0 the
 // git-verb scans rescanned the line from every `git`: 270 KB of `git -C x ` took 9.8 s, 540 KB

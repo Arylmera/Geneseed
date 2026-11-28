@@ -69,9 +69,13 @@ import { currentBranch, gitRootOf, protectedBranches, stashExists } from './gitr
  * first `git` alone, which matches whenever any later `git` would. `\bgit\b[^\n]*\b(?:…)` from
  * every `git` was quadratic: a 270 KB `git -C x …` took seconds, and a hook past its timeout
  * lets the call through. `(?<![\s\S])`, not `^`: under `m`, `^` also starts after `\r`.
+ *
+ * A `/` or `\` before the program counts as a boundary too: `/bin/rm`, `\rm` and
+ * `C:\…\del.exe` are the same programs once `progOf` strips the path, and without it they never
+ * reached the parse. `src/rm x` matching as well costs one parse, never a wrong ask.
  */
 export const LOSS_CANDIDATE_RE =
-  /(?:(?<![\s\S])|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'`])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
+  /(?:(?<![\s\S])|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'`/\\])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
 
 class Unverified extends Error {}
 const unverified = (why) => { throw new Unverified(why); };
