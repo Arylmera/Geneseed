@@ -167,6 +167,8 @@ export const LOSS_ROWS = [
   // whatever its target (SHELL_BLOCK_RE, unchanged by this calibration).
   { cmd: 'Remove-Item -Recurse build', state: 'clean', stop: false },
   { cmd: 'rm tracked.txt', state: 'dirty', stop: true },
+  { cmd: 'shred -u tracked.txt', state: 'dirty', stop: true },   // a removal program like rm
+  { cmd: 'shred -u -n 3 tracked.txt', state: 'clean', stop: false },   // git restores a clean tracked file
   { cmd: 'rm -f untracked.txt', state: 'untracked', stop: true },
   { cmd: 'ri untracked.txt', state: 'untracked', stop: true },
   { cmd: 'del /q untracked.txt', state: 'untracked', stop: true },
@@ -205,6 +207,25 @@ export const LOSS_ROWS = [
   { cmd: 'git checkout -B main', state: 'clean', stop: false },   // main is on origin
   { cmd: 'git branch -f develop main', state: 'clean', stop: false },   // develop is on origin
   { cmd: 'git branch -f unpushed main', state: 'clean', stop: false },   // not protected
+  // A forced rename or copy ONTO a protected branch is the same force-move, read the same way;
+  // the unforced forms refuse an existing target on their own.
+  { cmd: 'git branch -M pushed master', state: 'clean', stop: true },
+  { cmd: 'git branch -C pushed master', state: 'clean', stop: true },
+  { cmd: 'git branch -M unpushed master', state: 'clean', stop: false },   // unpushed holds master's tip
+  { cmd: 'git branch -c master copy', state: 'clean', stop: false },   // a copy adds a branch
+  // Renaming a protected branch away deletes it under its name (Law IV: "deleting main"), even
+  // though its commits live on under the new one. Renaming any other branch passes.
+  { cmd: 'git branch -m master renamed', state: 'clean', stop: true },
+  { cmd: 'git branch -m renamed', state: 'clean', stop: true },   // renames the checked-out main
+  { cmd: 'git branch -m pushed renamed', state: 'clean', stop: false },
+  // The plumbing that writes a branch ref directly is the same delete or force-move.
+  { cmd: 'git update-ref -d refs/heads/main', state: 'clean', stop: true },
+  { cmd: 'git update-ref refs/heads/master main', state: 'clean', stop: true },
+  { cmd: 'git update-ref -m why refs/heads/master main', state: 'clean', stop: true },
+  { cmd: 'git update-ref --stdin', state: 'clean', stop: true },   // reads its updates from stdin
+  { cmd: 'git update-ref refs/heads/master unpushed', state: 'clean', stop: false },   // the tip stays reachable
+  { cmd: 'git update-ref refs/heads/unpushed main', state: 'clean', stop: false },   // not protected
+  { cmd: 'git update-ref -d refs/tags/v1', state: 'clean', stop: false },   // not a branch
   // Additive forms pass on any branch.
   { cmd: 'git checkout -b feature', state: 'dirty', stop: false },
   { cmd: 'git switch -c feature', state: 'dirty', stop: false },

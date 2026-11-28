@@ -401,8 +401,13 @@ const LOSS = [
   ['`git push :main` would delete the protected branch main', 'branch-delete', 'main'],
   ['`git push` would delete the protected branch main', 'branch-delete', 'main'],
   ['`git branch -D main` deletes the protected branch main', 'branch-delete', 'main'],
+  // A rename takes the protected name away; `update-ref -d` is `branch -D` in plumbing.
+  ['`git branch -m main` deletes the protected branch main', 'branch-delete', 'main'],
+  ['`git update-ref -d refs/heads/main` deletes the protected branch main', 'branch-delete', 'main'],
   ['`git push` would force-push the protected branch release/1', 'force-push', 'release/1'],
   ['`git branch -f` main would strand commits no remote and not HEAD~1 holds', 'lose-commits'],
+  ['`git branch -M` main would strand commits no remote and not topic holds', 'lose-commits'],
+  ['`git update-ref` main would strand commits no remote and not HEAD~1 holds', 'lose-commits'],
   ['`git branch -D topic` deletes commits no remote and no HEAD holds', 'lose-commits'],
   ['`git reset --hard HEAD~2` would abandon commits no remote and not HEAD~2 holds', 'lose-commits'],
   ['`git reflog expire` deletes the reflog recovery depends on', 'drop-recovery'],
@@ -442,12 +447,12 @@ test('a redirected loss says so, in the words of both modes', () => {
   assert.ok(!gateText(facts.id, 'ask', { name: 'x' }).includes(elsewhere));
 });
 
-// Twenty places in js/hosts/loss.mjs write a sentence. A twenty-first has no row above until someone
+// Twenty-two places in js/hosts/loss.mjs write a sentence. A twenty-third has no row above until someone
 // adds one, so this count goes red first. The sentences all say what is lost with one of these verbs.
 test('every sentence loss.mjs can write has a row', () => {
   const src = readFileSync(path.resolve('js/hosts/loss.mjs'), 'utf8').split(/\r?\n/)
     .filter((l) => !/^\s*(?:\*|\/\*|\/\/)/.test(l) && /\b(?:deletes|would|force-pushes)\b/.test(l));
-  assert.equal(src.length, 20, src.join('\n'));
+  assert.equal(src.length, 22, src.join('\n'));
 });
 
 // The lists feed a gate only at the repo root. Anything else with that name is an ordinary listed

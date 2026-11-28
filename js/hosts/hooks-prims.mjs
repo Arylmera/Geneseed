@@ -482,7 +482,7 @@ const GATE_LOSS_REASONS = [
   [/^the gate could not verify /, 'unverified'],
   [/^`git push --(?:mirror|prune)` |^a forced `git push --all` /, 'remote-branches'],
   [/^`git push` would force-push the protected branch (.+)$/, 'force-push'],
-  [/^`git (?:push|branch -D)\b.* (?:would delete|deletes) the protected branch (.+)$/, 'branch-delete'],
+  [/^`git (?:push|branch -[Dm]|update-ref -d)\b.* (?:would delete|deletes) the protected branch (.+)$/, 'branch-delete'],
   [/^`git clean` would delete untracked files | which (?:nothing could|git cannot) restore$| deletes git's own data$| deletes a whole repository or worktree$/, 'delete-files'],
   [/ would discard uncommitted changes \(.*\)$| deletes stashed work$/, 'discard-work'],
   [/ recovery depends on$/, 'drop-recovery'],

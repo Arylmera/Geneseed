@@ -470,12 +470,12 @@ function stashExists(root) {
  * reached the parse. `src/rm x` matching as well costs one parse, never a wrong ask.
  */
 const LOSS_CANDIDATE_RE =
-  /(?:(?<![\s\S])|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'`/\\])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
+  /(?:(?<![\s\S])|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push|update-ref)\b|(?:^|[\s;&|("'`/\\])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd|shred)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
 
 class Unverified extends Error {}
 const unverified = (why) => { throw new Unverified(why); };
 
-const RM_PROGS = new Set(['rm', 'rmdir', 'unlink', 'del', 'erase', 'remove-item', 'ri', 'rd']);
+const RM_PROGS = new Set(['rm', 'rmdir', 'unlink', 'del', 'erase', 'remove-item', 'ri', 'rd', 'shred']);
 // cmd.exe's own removal verbs take `/s` `/q` switches, which are not paths.
 const CMD_SWITCH_PROGS = new Set(['rmdir', 'del', 'erase', 'rd']);
 const CD_PROGS = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
@@ -712,18 +712,62 @@ function checkoutAct(rest, dir) {
   return onProtected(cur, dirty(dir, paths, '`git checkout <paths>`'));
 }
 
+/**
+ * `git branch -m|-M|-c|-C [<old>] <new>` (no `<old>`: the checked-out branch). A move takes the
+ * protected name away, which deletes that branch under its name; a forced move or copy onto a
+ * protected branch is a force-move of it to `<old>`. An unforced one refuses an existing target.
+ */
+function renameAct(dir, names, move, forced) {
+  if (!names.length) return null;   // git refuses the command on its own
+  const [src, dst] = names.length === 1 ? [currentBranch(dir), names[0]] : names;
+  const protectedSet = protectedBranches(repoRoot(dir));
+  for (const n of [src, dst]) {
+    if (n && n.includes(OPAQUE)) unverified(`the branch name \`${n.replace(OPAQUE, '')}\` expands in the shell`);
+  }
+  if (move && !src) unverified('HEAD is detached or unreadable, so the renamed branch is unknown');
+  if (move && protectedSet.has(src)) return `\`git branch -m ${src}\` deletes the protected branch ${src}`;
+  return forced ? forceMove(dir, dst, src || 'HEAD', `\`git branch -${move ? 'M' : 'C'}\``) : null;
+}
+
+/**
+ * `git update-ref` writes a ref directly, so on `refs/heads/<protected>` it is `branch -D` (`-d`)
+ * or `branch -f` (a new value), read the same way. `--stdin` names its refs where the gate cannot
+ * read them. Any other ref (a tag, a remote-tracking ref) is not a branch Law IV guards.
+ */
+function updateRefAct(rest, dir) {
+  const pos = [];
+  let del = false;
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '--stdin') unverified('`git update-ref --stdin` reads the refs it writes from stdin');
+    if (a === '-d') { del = true; continue; }
+    if (a === '-m') { i += 1; continue; }
+    if (a === '--') continue;
+    if (!a.startsWith('-')) pos.push(a);
+  }
+  const ref = pos[0];
+  if (ref === undefined) return null;
+  if (ref.includes(OPAQUE)) unverified(`the ref \`${ref.replace(OPAQUE, '')}\` expands in the shell`);
+  const name = ref === 'HEAD' ? currentBranch(dir) : ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : null;
+  if (ref === 'HEAD' && !name) return null;   // a detached HEAD moves no branch
+  if (!name || !protectedBranches(repoRoot(dir)).has(name)) return null;
+  if (del) return `\`git update-ref -d ${ref}\` deletes the protected branch ${name}`;
+  if (pos[1] === undefined) return null;   // git refuses the command on its own
+  return forceMove(dir, name, pos[1], '`git update-ref`');
+}
+
 /** `git branch` — a forced delete asks for a protected branch or one whose commits live nowhere else. */
 function branchAct(rest, dir) {
   const opts = rest.filter((a) => a.startsWith('-'));
   const del = opts.some((a) => a === '--delete' || a === '-D' || hasShort(a, 'd') || hasShort(a, 'D'));
   const force = opts.some((a) => a === '--force' || a === '-D' || hasShort(a, 'f') || hasShort(a, 'D'));
-  if (!force) return null;   // an un-forced delete refuses an unmerged branch on its own
   const names = rest.filter((a) => !a.startsWith('-'));
-  if (!del) {
-    // `branch -f <name> [<start>]`; a forced rename or copy (-M, -C) is another form.
-    if (opts.some((a) => a === '--move' || a === '--copy' || [...'mMcC'].some((c) => hasShort(a, c)))) return null;
-    return forceMove(dir, names[0], names[1], '`git branch -f`');
-  }
+  const move = opts.some((a) => a === '--move' || hasShort(a, 'm') || hasShort(a, 'M'));
+  const copy = opts.some((a) => a === '--copy' || hasShort(a, 'c') || hasShort(a, 'C'));
+  if (!del && (move || copy)) return renameAct(dir, names, move,
+    force || opts.some((a) => hasShort(a, 'M') || hasShort(a, 'C')));
+  if (!force) return null;   // an un-forced delete refuses an unmerged branch on its own
+  if (!del) return forceMove(dir, names[0], names[1], '`git branch -f`');
   if (opts.some((a) => a === '-r' || a === '--remotes')) return null;   // a remote-tracking ref; `fetch` restores it
   const root = repoRoot(dir);
   const protectedSet = protectedBranches(root);
@@ -852,6 +896,8 @@ function gitAct(args, dir, always) {
           ? '`git gc --prune` deletes the unreachable commits recovery depends on' : null;
       case 'branch':
         return branchAct(rest, d);
+      case 'update-ref':
+        return updateRefAct(rest, d);
       case 'push':
         return pushAct(rest, d);
       default:
@@ -1415,7 +1461,7 @@ const GATE_LOSS_REASONS = [
   [/^the gate could not verify /, 'unverified'],
   [/^`git push --(?:mirror|prune)` |^a forced `git push --all` /, 'remote-branches'],
   [/^`git push` would force-push the protected branch (.+)$/, 'force-push'],
-  [/^`git (?:push|branch -D)\b.* (?:would delete|deletes) the protected branch (.+)$/, 'branch-delete'],
+  [/^`git (?:push|branch -[Dm]|update-ref -d)\b.* (?:would delete|deletes) the protected branch (.+)$/, 'branch-delete'],
   [/^`git clean` would delete untracked files | which (?:nothing could|git cannot) restore$| deletes git's own data$| deletes a whole repository or worktree$/, 'delete-files'],
   [/ would discard uncommitted changes \(.*\)$| deletes stashed work$/, 'discard-work'],
   [/ recovery depends on$/, 'drop-recovery'],
